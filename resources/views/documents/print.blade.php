@@ -135,7 +135,7 @@
                         </button>
                         <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-danger btn-sm" target="_blank">
                             <i class="fas fa-file-pdf"></i> Export PDF
-                        </a>
+                        </button>
                         <button onclick="window.close()" class="btn btn-secondary btn-sm">
                             <i class="fas fa-times"></i> Close
                         </button>

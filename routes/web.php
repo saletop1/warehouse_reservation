@@ -82,4 +82,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/export/pdf', [ReservationDocumentController::class, 'exportPdf'])->name('export.pdf');
         Route::get('/check-flask-endpoint', [ReservationController::class, 'checkFlaskEndpoint'])->name('checkFlaskEndpoint');
     });
+    // Documents routes
+Route::get('/documents', [ReservationDocumentController::class, 'index'])->name('documents.index');
+Route::get('/documents/{id}', [ReservationDocumentController::class, 'show'])->name('documents.show');
+Route::get('/documents/{id}/print', [ReservationDocumentController::class, 'print'])->name('documents.print');
+Route::get('/documents/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('documents.pdf');
+Route::get('/documents/export/{type}', [ReservationDocumentController::class, 'export'])->name('documents.export');
+Route::post('/documents/export/selected/excel', [ReservationDocumentController::class, 'exportSelectedExcel'])->name('documents.export.selected.excel');
+Route::post('/documents/export/selected/pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('documents.export.selected.pdf');
 });

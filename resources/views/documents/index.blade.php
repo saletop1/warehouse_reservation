@@ -13,9 +13,6 @@
 
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2>Reservation Documents</h2>
-                <a href="{{ route('reservations.create') }}" class="btn btn-primary">
-                    <i class="fas fa-plus-circle"></i> Create New
-                </a>
             </div>
 
             @if(session('success'))
@@ -25,11 +22,6 @@
                         <div>
                             <strong class="d-block">Success!</strong>
                             <small class="d-block mt-1">{{ session('success') }}</small>
-                            <small class="d-block mt-1">
-                                <a href="{{ route('reservations.create') }}" class="btn btn-sm btn-success mt-2">
-                                    <i class="fas fa-plus-circle"></i> Go to Create Reservation
-                                </a>
-                            </small>
                         </div>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -55,69 +47,6 @@
                 </div>
             @endif
 
-            {{-- Filter Form --}}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Filter Documents</h5>
-                </div>
-                <div class="card-body">
-                    <form method="GET" action="{{ route('documents.index') }}">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <div class="mb-3">
-                                    <label for="document_no" class="form-label">Document No</label>
-                                    <input type="text" class="form-control" id="document_no"
-                                           name="document_no" value="{{ request('document_no') }}"
-                                           placeholder="RSMG000001">
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="mb-3">
-                                    <label for="plant" class="form-label">Plant</label>
-                                    <select class="form-control" id="plant" name="plant">
-                                        <option value="">All Plants</option>
-                                        <option value="3000" {{ request('plant') == '3000' ? 'selected' : '' }}>3000</option>
-                                        <option value="4000" {{ request('plant') == '4000' ? 'selected' : '' }}>4000</option>
-                                        <option value="5000" {{ request('plant') == '5000' ? 'selected' : '' }}>5000</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="mb-3">
-                                    <label for="status" class="form-label">Status</label>
-                                    <select class="form-control" id="status" name="status">
-                                        <option value="">All Status</option>
-                                        <option value="created" {{ request('status') == 'created' ? 'selected' : '' }}>Created</option>
-                                        <option value="posted" {{ request('status') == 'posted' ? 'selected' : '' }}>Posted</option>
-                                        <option value="cancelled" {{ request('status') == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="mb-3">
-                                    <label for="date_from" class="form-label">Date From</label>
-                                    <input type="date" class="form-control" id="date_from"
-                                           name="date_from" value="{{ request('date_from') }}">
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="mb-3">
-                                    <label for="date_to" class="form-label">Date To</label>
-                                    <input type="date" class="form-control" id="date_to"
-                                           name="date_to" value="{{ request('date_to') }}">
-                                </div>
-                            </div>
-                            <div class="col-md-1">
-                                <div class="mb-3">
-                                    <label class="form-label">&nbsp;</label>
-                                    <button type="submit" class="btn btn-primary w-100">Filter</button>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
             {{-- Documents Table --}}
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -126,21 +55,40 @@
                         <small class="text-muted">Total: {{ $documents->total() }} documents</small>
                     </div>
                     <div>
-                        <a href="{{ route('documents.export', ['type' => 'csv']) }}" class="btn btn-sm btn-success">
-                            <i class="fas fa-file-csv"></i> Export CSV
-                        </a>
-                        <a href="{{ route('documents.export.pdf') }}"
-                           class="btn btn-sm btn-danger"
-                           onclick="return confirm('PDF export will generate CSV instead. Continue?')">
-                            <i class="fas fa-file-pdf"></i> Export as CSV
-                        </a>
+                        <form id="exportPdfForm" action="{{ route('documents.export.selected.pdf') }}" method="POST" class="d-inline" target="_blank">
+                            @csrf
+                            <input type="hidden" name="document_ids" id="selectedDocumentsPdfInput">
+                            <button type="submit" class="btn btn-sm btn-danger" id="exportPdfBtn" disabled>
+                                <i class="fas fa-file-pdf"></i> Export Selected PDF
+                            </button>
+                        </form>
+                        <form id="exportExcelForm" action="{{ route('documents.export.selected.excel') }}" method="POST" class="d-inline">
+                            @csrf
+                            <input type="hidden" name="document_ids" id="selectedDocumentsExcelInput">
+                            <button type="submit" class="btn btn-sm btn-success" id="exportExcelBtn" disabled>
+                                <i class="fas fa-file-excel"></i> Export Selected Excel
+                            </button>
+                        </form>
                     </div>
                 </div>
                 <div class="card-body">
+                    {{-- Live Search --}}
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" class="form-control" id="liveSearch" placeholder="Search by Document No, Plant, Status, or Created By...">
+                        </div>
+                    </div>
+
                     <div class="table-responsive">
-                        <table class="table table-bordered table-striped table-hover">
+                        <table class="table table-bordered table-striped table-hover" id="documentsTable">
                             <thead class="table-dark">
                                 <tr>
+                                    <th width="40">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="selectAll">
+                                        </div>
+                                    </th>
                                     <th>Document No</th>
                                     <th>Plant</th>
                                     <th>Status</th>
@@ -148,16 +96,21 @@
                                     <th>Total Qty</th>
                                     <th>Created By</th>
                                     <th>Created At</th>
-                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @forelse($documents as $document)
                                     <tr>
                                         <td>
-                                            <strong class="{{ $document->plant == '3000' ? 'text-primary' : 'text-success' }}">
+                                            <div class="form-check">
+                                                <input class="form-check-input document-checkbox" type="checkbox" value="{{ $document->id }}">
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <a href="{{ route('documents.show', $document->id) }}"
+                                               class="{{ $document->plant == '3000' ? 'text-primary' : 'text-success' }} fw-bold">
                                                 {{ $document->document_no }}
-                                            </strong>
+                                            </a>
                                         </td>
                                         <td>
                                             <span class="badge bg-info">{{ $document->plant }}</span>
@@ -175,27 +128,12 @@
                                         <td class="text-end">{{ \App\Helpers\NumberHelper::formatQuantity($document->total_qty) }}</td>
                                         <td>{{ $document->created_by_name }}</td>
                                         <td>{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</td>
-                                        <td>
-                                            <a href="{{ route('documents.show', $document->id) }}"
-                                               class="btn btn-sm btn-info" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            <a href="{{ route('documents.print', $document->id) }}"
-                                               class="btn btn-sm btn-secondary" title="Print" target="_blank">
-                                                <i class="fas fa-print"></i>
-                                            </a>
-                                            <a href="{{ route('documents.pdf', $document->id) }}"
-                                               class="btn btn-sm btn-danger" title="Export PDF" target="_blank">
-                                                <i class="fas fa-file-pdf"></i>
-                                            </a>
-                                        </td>
                                     </tr>
                                 @empty
                                     <tr>
                                         <td colspan="8" class="text-center text-muted py-5">
                                             <i class="fas fa-file-alt fa-3x mb-3"></i>
                                             <h5>No documents found</h5>
-                                            <p>Click "Create New" to create your first reservation document.</p>
                                         </td>
                                     </tr>
                                 @endforelse
@@ -219,4 +157,118 @@
         </div>
     </div>
 </div>
+
+<style>
+    .selected-count {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-left: 10px;
+    }
+    .export-actions {
+        display: none;
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Live Search Functionality
+    const liveSearch = document.getElementById('liveSearch');
+    const documentsTable = document.getElementById('documentsTable');
+    const rows = documentsTable.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+    liveSearch.addEventListener('keyup', function() {
+        const searchTerm = this.value.toLowerCase();
+
+        for (let row of rows) {
+            const cells = row.getElementsByTagName('td');
+            let found = false;
+
+            for (let i = 1; i < cells.length; i++) { // Skip checkbox column only
+                const cell = cells[i];
+                if (cell.textContent.toLowerCase().includes(searchTerm)) {
+                    found = true;
+                    break;
+                }
+            }
+
+            row.style.display = found ? '' : 'none';
+        }
+    });
+
+    // Select All Checkbox
+    const selectAll = document.getElementById('selectAll');
+    const documentCheckboxes = document.querySelectorAll('.document-checkbox');
+    const exportPdfBtn = document.getElementById('exportPdfBtn');
+    const exportExcelBtn = document.getElementById('exportExcelBtn');
+    const selectedDocumentsPdfInput = document.getElementById('selectedDocumentsPdfInput');
+    const selectedDocumentsExcelInput = document.getElementById('selectedDocumentsExcelInput');
+    const exportPdfForm = document.getElementById('exportPdfForm');
+    const exportExcelForm = document.getElementById('exportExcelForm');
+
+    selectAll.addEventListener('change', function() {
+        const isChecked = this.checked;
+        documentCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        updateExportButtons();
+    });
+
+    documentCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateExportButtons);
+    });
+
+    function updateExportButtons() {
+        const checkedBoxes = Array.from(documentCheckboxes).filter(cb => cb.checked);
+        const documentIds = checkedBoxes.map(cb => cb.value);
+
+        if (documentIds.length > 0) {
+            exportPdfBtn.disabled = false;
+            exportExcelBtn.disabled = false;
+            // Format as comma-separated string for easier handling
+            selectedDocumentsPdfInput.value = documentIds.join(',');
+            selectedDocumentsExcelInput.value = documentIds.join(',');
+        } else {
+            exportPdfBtn.disabled = true;
+            exportExcelBtn.disabled = true;
+            selectedDocumentsPdfInput.value = '';
+            selectedDocumentsExcelInput.value = '';
+        }
+    }
+
+    // Confirm before export
+    exportPdfForm.addEventListener('submit', function(e) {
+        const documentIds = selectedDocumentsPdfInput.value;
+        if (!documentIds) {
+            e.preventDefault();
+            alert('Please select at least one document to export.');
+            return false;
+        }
+
+        const count = documentIds.split(',').length;
+        if (!confirm(`Are you sure you want to export ${count} selected document(s) to PDF?`)) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    exportExcelForm.addEventListener('submit', function(e) {
+        const documentIds = selectedDocumentsExcelInput.value;
+        if (!documentIds) {
+            e.preventDefault();
+            alert('Please select at least one document to export.');
+            return false;
+        }
+
+        const count = documentIds.split(',').length;
+        if (!confirm(`Are you sure you want to export ${count} selected document(s) to Excel?`)) {
+            e.preventDefault();
+            return false;
+        }
+    });
+});
+</script>
 @endsection

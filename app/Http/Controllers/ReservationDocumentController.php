@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\ReservationDocument;
 use Illuminate\Http\Request;
+use App\Exports\ReservationDocumentsSelectedExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ReservationDocumentController extends Controller
 {
@@ -90,10 +92,6 @@ class ReservationDocumentController extends Controller
 
     public function export($type = 'csv')
     {
-        $documents = ReservationDocument::with('items')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
         if ($type === 'csv') {
             $filename = 'reservation_documents_' . date('Ymd_His') . '.csv';
             $headers = [
@@ -101,7 +99,11 @@ class ReservationDocumentController extends Controller
                 'Content-Disposition' => 'attachment; filename="' . $filename . '"',
             ];
 
-            $callback = function() use ($documents) {
+            $callback = function() {
+                $documents = ReservationDocument::with('items')
+                    ->orderBy('created_at', 'desc')
+                    ->get();
+
                 $file = fopen('php://output', 'w');
 
                 // Header CSV
@@ -179,34 +181,50 @@ class ReservationDocumentController extends Controller
     }
 
     /**
-     * Bulk PDF Export
+     * Export Selected Documents to Excel
      */
-    public function exportPdf(Request $request)
+    public function exportSelectedExcel(Request $request)
     {
-        // Apply the same filters as index method
-        $query = ReservationDocument::query();
+        $request->validate([
+            'document_ids' => 'required|string'
+        ]);
 
-        if ($request->filled('document_no')) {
-            $query->where('document_no', 'like', '%' . $request->document_no . '%');
+        // Convert comma-separated string to array
+        $documentIds = explode(',', $request->document_ids);
+
+        // Validate each ID exists
+        foreach ($documentIds as $id) {
+            if (!ReservationDocument::where('id', $id)->exists()) {
+                return redirect()->back()->with('error', 'Invalid document ID selected.');
+            }
         }
 
-        if ($request->filled('plant')) {
-            $query->where('plant', $request->plant);
+        $filename = 'selected_reservation_documents_' . date('Ymd_His') . '.xlsx';
+        return Excel::download(new ReservationDocumentsSelectedExport($documentIds), $filename);
+    }
+
+    /**
+     * Export Selected Documents to PDF
+     */
+    public function exportSelectedPdf(Request $request)
+    {
+        $request->validate([
+            'document_ids' => 'required|string'
+        ]);
+
+        // Convert comma-separated string to array
+        $documentIds = explode(',', $request->document_ids);
+
+        // Validate each ID exists
+        foreach ($documentIds as $id) {
+            if (!ReservationDocument::where('id', $id)->exists()) {
+                return redirect()->back()->with('error', 'Invalid document ID selected.');
+            }
         }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
-        }
-
-        if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
-        }
-
-        $documents = $query->orderBy('created_at', 'desc')->get();
+        $documents = ReservationDocument::whereIn('id', $documentIds)
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         // Add WIB formatted date to each document
         $documents->transform(function ($document) {
