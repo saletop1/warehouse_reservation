@@ -94,6 +94,25 @@
 
                         <!-- Step 2: Material Type -->
                         <div class="tab-pane fade" id="step2">
+                            <div class="alert alert-info p-2 mb-2">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <small>Material Type Descriptions:
+                                    <strong>FERT</strong> = Finished Product,
+                                    <strong>HALB</strong> = Semifinished Product,
+                                    <strong>HALM</strong> = Semifinished Prod. Metal,
+                                    <strong>VERP</strong> = Packaging,
+                                    <strong>ZR01</strong> = Wood Material,
+                                    <strong>ZR02</strong> = Metal Material,
+                                    <strong>ZR03</strong> = Hardware Material,
+                                    <strong>ZR04</strong> = Accessories Material,
+                                    <strong>ZR05</strong> = Paint Material,
+                                    <strong>ZR06</strong> = Upholstery Material,
+                                    <strong>ZR07</strong> = Packaging Material,
+                                    <strong>ZR08</strong> = Glass Material,
+                                    <strong>ZR09</strong> = Chemical Material
+                                </small>
+                            </div>
+
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
@@ -572,6 +591,23 @@
     let proNumbers = [];
     let loadedMaterials = [];
 
+    // Material Type descriptions mapping
+    const materialTypeDescriptions = {
+        'FERT': 'Finished Product',
+        'HALB': 'Semifinished Product',
+        'HALM': 'Semifinished Prod. Metal',
+        'VERP': 'Packaging',
+        'ZR01': 'Wood Material',
+        'ZR02': 'Metal Material',
+        'ZR03': 'Hardware Material',
+        'ZR04': 'Accessories Material',
+        'ZR05': 'Paint Material',
+        'ZR06': 'Upholstery Material',
+        'ZR07': 'Packaging Material',
+        'ZR08': 'Glass Material',
+        'ZR09': 'Chemical Material'
+    };
+
     // ============================
     // NOTIFICATION SYSTEM
     // ============================
@@ -632,6 +668,10 @@
             return proNumber.padStart(12, '0');
         }
         return proNumber;
+    }
+
+    function getMaterialTypeDescription(type) {
+        return materialTypeDescriptions[type] || 'No description available';
     }
 
     // ============================
@@ -993,13 +1033,20 @@
                     if (materialTypes.length > 0) {
                         materialTypes.forEach(function(type) {
                             const isChecked = selectedMaterialTypes.includes(type);
+                            const description = getMaterialTypeDescription(type);
+
                             containerHtml += `
                                 <div class="checkbox-item" data-type="${type}">
                                     <div class="form-check">
                                         <input class="form-check-input material-type-checkbox" type="checkbox"
                                                id="type_${type}" value="${type}" ${isChecked ? 'checked' : ''}>
                                         <label class="form-check-label" for="type_${type}">
-                                            <div class="material-type-name small">${type}</div>
+                                            <div class="d-flex flex-column">
+                                                <div class="d-flex justify-content-between">
+                                                    <span class="fw-bold">${type}</span>
+                                                    <small class="text-muted">${description}</small>
+                                                </div>
+                                            </div>
                                         </label>
                                     </div>
                                 </div>
@@ -1044,7 +1091,8 @@
         } else {
             let html = '<div class="d-flex flex-wrap gap-1">';
             selectedMaterialTypes.forEach(function(type) {
-                html += `<span class="badge bg-success badge-sm">${type}</span>`;
+                const description = getMaterialTypeDescription(type);
+                html += `<span class="badge bg-success badge-sm" title="${description}">${type}</span>`;
             });
             html += '</div>';
             container.html(html);
@@ -1080,6 +1128,7 @@
                         allMaterials.forEach(function(material) {
                             const displayMatnr = formatMaterialCodeForUI(material.matnr);
                             const isChecked = selectedMaterials.includes(material.matnr);
+                            const typeDescription = getMaterialTypeDescription(material.mtart);
 
                             containerHtml += `
                                 <div class="checkbox-item ${isChecked ? 'selected' : ''}" data-material="${material.matnr}">
@@ -1087,9 +1136,21 @@
                                         <input class="form-check-input material-checkbox" type="checkbox"
                                                id="mat_${material.matnr}" value="${material.matnr}" ${isChecked ? 'checked' : ''}>
                                         <label class="form-check-label" for="mat_${material.matnr}">
-                                            <div class="material-code">${displayMatnr}</div>
-                                            <div class="material-desc" title="${material.maktx}">${material.maktx}</div>
-                                            <small class="text-muted">Type: ${material.mtart}</small>
+                                            <div class="d-flex flex-column">
+                                                <div class="d-flex justify-content-between">
+                                                    <div class="material-code">${displayMatnr}</div>
+                                                    <small class="text-muted">${material.mtart}</small>
+                                                </div>
+                                                <div class="material-desc" title="${material.maktx}">${material.maktx}</div>
+                                                <div class="d-flex justify-content-between mt-1">
+                                                    <small class="text-muted">
+                                                        <strong>Type:</strong> ${typeDescription}
+                                                    </small>
+                                                    <small class="text-muted">
+                                                        <strong>Additional Info:</strong> ${material.sortf || '-'}
+                                                    </small>
+                                                </div>
+                                            </div>
                                         </label>
                                     </div>
                                 </div>
@@ -1138,8 +1199,12 @@
             const materialCode = $(this).data('material').toLowerCase();
             const materialDesc = $(this).find('.material-desc').text().toLowerCase();
             const displayMatnr = formatMaterialCodeForUI(materialCode).toLowerCase();
+            const additionalInfo = $(this).find('small:contains("Additional Info")').text().toLowerCase();
 
-            if (materialCode.includes(searchTerm) || materialDesc.includes(searchTerm) || displayMatnr.includes(searchTerm)) {
+            if (materialCode.includes(searchTerm) ||
+                materialDesc.includes(searchTerm) ||
+                displayMatnr.includes(searchTerm) ||
+                additionalInfo.includes(searchTerm)) {
                 $(this).show();
             } else {
                 $(this).hide();
@@ -1158,13 +1223,24 @@
                 const material = allMaterials.find(m => m.matnr === materialCode);
                 const desc = material ? material.maktx : 'Unknown material';
                 const displayMatnr = formatMaterialCodeForUI(materialCode);
-                const type = material ? material.mtart : '';
+                const typeDescription = material ? getMaterialTypeDescription(material.mtart) : '';
+                const additionalInfo = material ? material.sortf || '-' : '-';
 
                 html += `
                     <div class="selected-materials-item">
-                        <strong>${displayMatnr}</strong>
-                        <small class="float-end">${type}</small><br>
-                        <small>${desc.substring(0, 35)}${desc.length > 35 ? '...' : ''}</small>
+                        <div class="d-flex justify-content-between">
+                            <strong>${displayMatnr}</strong>
+                            <small class="text-muted">${material ? material.mtart : ''}</small>
+                        </div>
+                        <small class="text-muted">${desc.substring(0, 35)}${desc.length > 35 ? '...' : ''}</small>
+                        <div class="d-flex justify-content-between mt-1">
+                            <small class="text-muted">
+                                <strong>Type:</strong> ${typeDescription}
+                            </small>
+                            <small class="text-muted">
+                                <strong>Additional:</strong> ${additionalInfo}
+                            </small>
+                        </div>
                     </div>
                 `;
             });
