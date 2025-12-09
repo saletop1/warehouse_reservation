@@ -73,11 +73,15 @@
             border: 1px solid #000 !important;
             padding: 5px !important;
             font-weight: bold;
+            text-align: center !important;
+            vertical-align: middle !important;
         }
 
         .table-print td {
             border: 1px solid #000 !important;
             padding: 5px !important;
+            text-align: center !important;
+            vertical-align: middle !important;
         }
 
         .signature-section {
@@ -87,7 +91,12 @@
         .signature-line {
             border-top: 1px solid #000;
             width: 180px;
-            margin-top: 25px;
+            margin-top: 50px;
+        }
+
+        .signature-name {
+            margin-top: 5px;
+            font-size: 8pt;
         }
 
         /* Compact styling for print */
@@ -118,6 +127,18 @@
             margin-bottom: 5px !important;
             padding-bottom: 3px !important;
         }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .section-title {
+            font-size: 10pt;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -135,7 +156,7 @@
                         </button>
                         <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-danger btn-sm" target="_blank">
                             <i class="fas fa-file-pdf"></i> Export PDF
-                        </button>
+                        </a>
                         <button onclick="window.close()" class="btn btn-secondary btn-sm">
                             <i class="fas fa-times"></i> Close
                         </button>
@@ -184,6 +205,14 @@
                                             @endif
                                         </td>
                                     </tr>
+                                    <tr>
+                                        <td style="padding: 1px;"><strong>Created By:</strong></td>
+                                        <td style="padding: 1px;">{{ $document->created_by_name }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 1px;"><strong>Created At:</strong></td>
+                                        <td style="padding: 1px;">{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</td>
+                                    </tr>
                                 </table>
                             </div>
                         </div>
@@ -194,58 +223,54 @@
                 <div class="row mb-3 compact-margin">
                     <div class="col-6">
                         <table class="table table-sm table-borderless compact-text">
-                            <tr>
-                                <td width="40%" style="padding: 1px;"><strong>Created By:</strong></td>
-                                <td style="padding: 1px;">{{ $document->created_by_name }}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 1px;"><strong>Creator ID:</strong></td>
-                                <td style="padding: 1px;">{{ $document->created_by }}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 1px;"><strong>Created At:</strong></td>
-                                <td style="padding: 1px;">{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</td>
-                            </tr>
+                            <!-- Creator ID, Total Items, Total Quantity dihapus -->
                         </table>
                     </div>
                     <div class="col-6">
                         <table class="table table-sm table-borderless compact-text">
-                            <tr>
-                                <td width="40%" style="padding: 1px;"><strong>Total Items:</strong></td>
-                                <td style="padding: 1px;">{{ $document->total_items }}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 1px;"><strong>Total Quantity:</strong></td>
-                                <td style="padding: 1px;"><strong>{{ \App\Helpers\NumberHelper::formatQuantity($document->total_qty) }}</strong></td>
-                            </tr>
+                            <!-- Creator ID, Total Items, Total Quantity dihapus -->
                         </table>
                     </div>
                 </div>
 
+                <!-- Items Table Header dengan Remarks -->
+                <div class="section-header compact-margin">
+                    <div class="section-title">RESERVATION ITEMS</div>
+                    @if($document->remarks)
+                    <div class="section-title">REMARKS</div>
+                    @endif
+                </div>
+
                 <!-- Items Table -->
                 <div class="mb-3 compact-margin">
-                    <h6 style="font-size: 10pt; margin-bottom: 5px;">RESERVATION ITEMS</h6>
                     <table class="table table-bordered table-print compact-table">
                         <thead>
                             <tr>
-                                <th width="3%" style="font-size: 8pt;">#</th>
+                                <th width="3%" style="font-size: 8pt;">No</th>
                                 <th width="12%" style="font-size: 8pt;">Material Code</th>
                                 <th width="25%" style="font-size: 8pt;">Description</th>
                                 <th width="5%" style="font-size: 8pt;">SORTF</th>
                                 <th width="5%" style="font-size: 8pt;">Unit</th>
-                                <th width="10%" style="font-size: 8pt; text-align: right;">Req. Qty</th>
+                                <th width="10%" style="font-size: 8pt;">Req. Qty</th>
                                 <th width="40%" style="font-size: 8pt;">Source PRO Numbers</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($document->items as $index => $item)
+                                @php
+                                    // Format material code: hilangkan leading zero jika numeric saja
+                                    $materialCode = $item->material_code;
+                                    if (ctype_digit($materialCode)) {
+                                        $materialCode = ltrim($materialCode, '0');
+                                    }
+                                @endphp
                                 <tr>
-                                    <td style="font-size: 8pt; text-align: center;">{{ $index + 1 }}</td>
-                                    <td style="font-size: 8pt;"><code style="font-size: 8pt;">{{ $item->material_code }}</code></td>
+                                    <td style="font-size: 8pt;">{{ $index + 1 }}</td>
+                                    <td style="font-size: 8pt;"><code style="font-size: 8pt;">{{ $materialCode }}</code></td>
                                     <td style="font-size: 8pt;">{{ \Illuminate\Support\Str::limit($item->material_description, 40) }}</td>
-                                    <td style="font-size: 8pt; text-align: center;">{{ $item->sortf ?? '-' }}</td>
-                                    <td style="font-size: 8pt; text-align: center;">{{ $item->unit }}</td>
-                                    <td style="font-size: 8pt; text-align: right;">{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</td>
+                                    <td style="font-size: 8pt;">{{ $item->sortf ?? '-' }}</td>
+                                    <td style="font-size: 8pt;">{{ $item->unit }}</td>
+                                    <td style="font-size: 8pt;">{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</td>
                                     <td style="font-size: 8pt;">
                                         @if(!empty($item->processed_sources))
                                             @foreach($item->processed_sources as $source)
@@ -258,20 +283,13 @@
                                 </tr>
                             @endforeach
                         </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="5" style="font-size: 8pt; text-align: right; padding: 4px !important;"><strong>TOTAL:</strong></td>
-                                <td style="font-size: 8pt; text-align: right; padding: 4px !important;"><strong>{{ \App\Helpers\NumberHelper::formatQuantity($document->total_qty) }}</strong></td>
-                                <td style="padding: 4px !important;"></td>
-                            </tr>
-                        </tfoot>
+                        {{-- Hapus tfoot (total) --}}
                     </table>
                 </div>
 
                 <!-- Remarks -->
                 @if($document->remarks)
                 <div class="mb-3 compact-margin">
-                    <h6 style="font-size: 10pt; margin-bottom: 3px;">REMARKS</h6>
                     <div class="border compact-padding" style="font-size: 9pt; line-height: 1.2;">
                         {{ $document->remarks }}
                     </div>
@@ -284,18 +302,21 @@
                         <div class="col-4">
                             <div class="text-center">
                                 <div class="signature-line"></div>
+                                <div class="signature-name">(Signature)</div>
                                 <div class="mt-1" style="font-size: 8pt;">Prepared By</div>
                             </div>
                         </div>
                         <div class="col-4">
                             <div class="text-center">
                                 <div class="signature-line"></div>
+                                <div class="signature-name">(Signature)</div>
                                 <div class="mt-1" style="font-size: 8pt;">Checked By</div>
                             </div>
                         </div>
                         <div class="col-4">
                             <div class="text-center">
                                 <div class="signature-line"></div>
+                                <div class="signature-name">(Signature)</div>
                                 <div class="mt-1" style="font-size: 8pt;">Approved By</div>
                             </div>
                         </div>

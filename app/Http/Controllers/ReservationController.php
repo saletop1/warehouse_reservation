@@ -119,7 +119,7 @@ class ReservationController extends Controller
                 'material_description' => $request->material_description,
                 'quantity' => $request->quantity,
                 'unit' => $request->unit,
-                'status' => 'draft',
+                'status' => 'created',
                 'created_by' => Auth::id(),
                 'created_by_name' => Auth::user()->name,
             ]);
@@ -171,6 +171,81 @@ class ReservationController extends Controller
     }
 
     /**
+ * Show the form for editing the specified document.
+ */
+public function editDocument($id)
+{
+    try {
+        $document = ReservationDocument::findOrFail($id);
+        // Hanya dokumen dengan status 'created' yang bisa diedit
+        if ($document->status != 'created') {
+            return redirect()->route('documents.show', $document->id)
+                ->with('error', 'Only documents with status "Created" can be edited.');
+        }
+        return view('documents.edit', compact('document'));
+    } catch (\Exception $e) {
+        return redirect()->route('documents.index')
+            ->with('error', 'Document not found: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Update the specified document in storage.
+ */
+public function updateDocument(Request $request, $id)
+{
+    DB::beginTransaction();
+
+    try {
+        $document = ReservationDocument::findOrFail($id);
+
+        // Hanya dokumen dengan status 'created' yang bisa diupdate
+        if ($document->status != 'created') {
+            return redirect()->route('documents.show', $document->id)
+                ->with('error', 'Only documents with status "Created" can be edited.');
+        }
+
+        $request->validate([
+            'remarks' => 'nullable|string|max:500',
+            'items' => 'required|array',
+            'items.*.id' => 'required|exists:reservation_document_items,id',
+            'items.*.requested_qty' => 'required|numeric|min:0',
+        ]);
+
+        // Update remarks - PERBAIKAN DI SINI
+        $document->remarks = $request->remarks;
+        $document->save();
+
+        // Update items qty
+        $totalQty = 0;
+        foreach ($request->items as $itemData) {
+            $item = $document->items()->find($itemData['id']);
+            if ($item) {
+                $item->update([
+                    'requested_qty' => $itemData['requested_qty'],
+                ]);
+                $totalQty += $itemData['requested_qty'];
+            }
+        }
+
+        // Update document total qty
+        $document->update([
+            'total_qty' => $totalQty,
+        ]);
+
+        DB::commit();
+
+        return redirect()->route('documents.show', $document->id)
+            ->with('success', 'Document updated successfully.');
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()
+            ->with('error', 'Failed to update document: ' . $e->getMessage())
+            ->withInput();
+    }
+}
+
+/**
      * Update the specified reservation in storage.
      */
     public function update(Request $request, $id)
@@ -1439,7 +1514,7 @@ class ReservationController extends Controller
             $document = ReservationDocument::create([
                 'document_no' => $documentNo,
                 'plant' => $plant,
-                'status' => 'draft',
+                'status' => 'created',
                 'total_items' => $totalItems,
                 'total_qty' => $totalQty,
                 'created_by' => Auth::id(),

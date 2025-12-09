@@ -58,37 +58,32 @@
                         <!-- Step 1: Select Plant -->
                         <div class="tab-pane fade show active" id="step1">
                             <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="plant_select" class="form-label fw-bold">Select Plant *</label>
-                                        <select class="form-control form-control-sm" id="plant_select" required>
-                                            <option value="">-- Select Plant --</option>
-                                            @foreach($plants as $plant)
-                                                <option value="{{ $plant->sap_plant }}" data-code="{{ $plant->dwerk }}">
-                                                    {{ $plant->sap_plant }} ({{ $plant->dwerk }})
-                                                </option>
-                                            @endforeach
-                                        </select>
+                                <div class="col-md-12">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <label class="form-label fw-bold mb-0">Select Plant *</label>
+                                        <button type="button" class="btn btn-sm btn-primary" id="btn-next-step1" disabled>
+                                            Next <i class="fas fa-arrow-right ms-1"></i>
+                                        </button>
                                     </div>
-                                </div>
 
-                                <div class="col-md-6">
-                                    <div class="card bg-light">
-                                        <div class="card-body p-2">
-                                            <h6 class="mb-2"><i class="fas fa-info-circle"></i> Data Status</h6>
-                                            <div class="small">
-                                                <span class="badge bg-info" id="data-status">Checking...</span>
-                                                <span id="data-count-info" class="ms-2"></span>
-                                            </div>
+                                    <div class="mb-3">
+                                        <div class="input-group">
+                                            <select class="form-control form-control-sm" id="plant_select" required>
+                                                <option value="">-- Select Plant --</option>
+                                                @foreach($plants as $plant)
+                                                    <option value="{{ $plant->sap_plant }}" data-code="{{ $plant->dwerk }}">
+                                                        {{ $plant->sap_plant }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <span class="input-group-text bg-light">
+                                                <small id="plant-info" class="text-muted">
+                                                    <i class="fas fa-info-circle"></i> Select a plant to see details
+                                                </small>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div class="d-flex justify-content-end mt-3">
-                                <button type="button" class="btn btn-sm btn-primary" id="btn-next-step1" disabled>
-                                    Next <i class="fas fa-arrow-right ms-1"></i>
-                                </button>
                             </div>
                         </div>
 
@@ -114,10 +109,26 @@
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-md-12">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <div>
+                                            <label class="form-label fw-bold mb-0">Material Type *</label>
+                                            <small class="text-muted ms-2">
+                                                <span class="badge bg-primary" id="selected-types-count">0</span> types selected
+                                            </small>
+                                        </div>
+                                        <div>
+                                            <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step2">
+                                                <i class="fas fa-arrow-left me-1"></i> Back
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-primary" id="btn-next-step2" disabled>
+                                                Next <i class="fas fa-arrow-right ms-1"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <div class="mb-3">
-                                        <label class="form-label fw-bold">Material Type *</label>
-                                        <div id="material-types-checkbox-container" class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
+                                        <div id="material-types-checkbox-container" class="border rounded p-2" style="max-height: 300px; overflow-y: auto;">
                                             <div class="text-center py-2">
                                                 <div class="spinner-border text-primary spinner-border-sm" role="status">
                                                     <span class="visually-hidden">Loading...</span>
@@ -132,38 +143,48 @@
                                         <label class="form-check-label" for="select_all_types">Select all</label>
                                     </div>
                                 </div>
-
-                                <div class="col-md-6">
-                                    <div class="card">
-                                        <div class="card-header p-2">
-                                            <h6 class="mb-0">Selected Material Types <span class="badge bg-primary float-end" id="selected-types-count">0</span></h6>
-                                        </div>
-                                        <div class="card-body p-2">
-                                            <div id="selected-types-list" style="min-height: 80px;">
-                                                <p class="text-muted mb-0 small">No material types selected</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="d-flex justify-content-between mt-3">
-                                <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step2">
-                                    <i class="fas fa-arrow-left me-1"></i> Back
-                                </button>
-                                <button type="button" class="btn btn-sm btn-primary" id="btn-next-step2" disabled>
-                                    Next <i class="fas fa-arrow-right ms-1"></i>
-                                </button>
                             </div>
                         </div>
 
                         <!-- Step 3: Material Selection -->
                         <div class="tab-pane fade" id="step3">
                             <div class="row">
-                                <div class="col-md-8">
-                                    <div class="mb-3">
-                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="col-md-12">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <div>
                                             <label class="form-label fw-bold mb-0">Available Materials *</label>
+                                            <small class="text-muted ms-2">
+                                                <span class="badge bg-primary" id="selected-materials-count">0</span> selected
+                                            </small>
+                                        </div>
+                                        <div>
+                                            <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step3">
+                                                <i class="fas fa-arrow-left me-1"></i> Back
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-primary" id="btn-next-step3" disabled>
+                                                Next <i class="fas fa-arrow-right ms-1"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <div id="materials-checkbox-container" class="border rounded p-2" style="max-height: 350px; overflow-y: auto;">
+                                            <div class="text-center py-3">
+                                                <div class="spinner-border text-primary spinner-border-sm" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                                <p class="mt-2 small">Loading materials...</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            <div class="input-group input-group-sm" style="width: 300px;">
+                                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                                <input type="text" class="form-control" id="material-search" placeholder="Search material code or description...">
+                                                <button class="btn btn-outline-secondary" type="button" id="clear-search">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
                                             <div>
                                                 <button type="button" class="btn btn-xs btn-outline-primary me-1" id="select-all-materials">
                                                     <i class="fas fa-check-square"></i> All
@@ -173,46 +194,8 @@
                                                 </button>
                                             </div>
                                         </div>
-                                        <div id="materials-checkbox-container" class="border rounded p-2" style="max-height: 300px; overflow-y: auto;">
-                                            <div class="text-center py-3">
-                                                <div class="spinner-border text-primary spinner-border-sm" role="status">
-                                                    <span class="visually-hidden">Loading...</span>
-                                                </div>
-                                                <p class="mt-2 small">Loading materials...</p>
-                                            </div>
-                                        </div>
-
-                                        <div class="input-group input-group-sm mt-2">
-                                            <span class="input-group-text"><i class="fas fa-search"></i></span>
-                                            <input type="text" class="form-control" id="material-search" placeholder="Search material code or description...">
-                                            <button class="btn btn-outline-secondary" type="button" id="clear-search">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
-
-                                <div class="col-md-4">
-                                    <div class="card">
-                                        <div class="card-header p-2">
-                                            <h6 class="mb-0">Selected Materials <span class="badge bg-primary float-end" id="selected-materials-count">0</span></h6>
-                                        </div>
-                                        <div class="card-body p-2">
-                                            <div id="selected-materials-list" style="max-height: 200px; overflow-y: auto;">
-                                                <p class="text-muted mb-0 small">No materials selected</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="d-flex justify-content-between mt-3">
-                                <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step3">
-                                    <i class="fas fa-arrow-left me-1"></i> Back
-                                </button>
-                                <button type="button" class="btn btn-sm btn-primary" id="btn-next-step3" disabled>
-                                    Next <i class="fas fa-arrow-right ms-1"></i>
-                                </button>
                             </div>
                         </div>
 
@@ -231,20 +214,26 @@
                             </div>
 
                             <div class="row">
-                                <div class="col-md-8">
-                                    <div class="mb-3">
-                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="col-md-12">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <div>
                                             <label class="form-label fw-bold mb-0">Available PRO Numbers *</label>
-                                            <div>
-                                                <button type="button" class="btn btn-xs btn-outline-primary me-1" id="select-all-pro">
-                                                    <i class="fas fa-check-square"></i> All
-                                                </button>
-                                                <button type="button" class="btn btn-xs btn-outline-secondary" id="deselect-all-pro">
-                                                    <i class="fas fa-times-circle"></i> None
-                                                </button>
-                                            </div>
+                                            <small class="text-muted ms-2">
+                                                <span class="badge bg-primary" id="selected-pro-count">0</span> selected
+                                            </small>
                                         </div>
-                                        <div id="pro-numbers-checkbox-container" class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
+                                        <div>
+                                            <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step4">
+                                                <i class="fas fa-arrow-left me-1"></i> Back
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-primary" id="btn-next-step4" disabled>
+                                                Next <i class="fas fa-arrow-right ms-1"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <div id="pro-numbers-checkbox-container" class="border rounded p-2" style="max-height: 350px; overflow-y: auto;">
                                             <div class="text-center py-3">
                                                 <div class="spinner-border text-primary spinner-border-sm" role="status">
                                                     <span class="visually-hidden">Loading...</span>
@@ -252,30 +241,17 @@
                                                 <p class="mt-2 small">Loading PRO numbers...</p>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
 
-                                <div class="col-md-4">
-                                    <div class="card">
-                                        <div class="card-header p-2">
-                                            <h6 class="mb-0">Selected PRO Numbers</h6>
-                                        </div>
-                                        <div class="card-body p-2">
-                                            <div id="selected-pro-list" style="max-height: 200px; overflow-y: auto;">
-                                                <p class="text-muted small mb-0">No PRO numbers selected</p>
-                                            </div>
+                                        <div class="d-flex justify-content-end mt-2">
+                                            <button type="button" class="btn btn-xs btn-outline-primary me-1" id="select-all-pro">
+                                                <i class="fas fa-check-square"></i> All
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-secondary" id="deselect-all-pro">
+                                                <i class="fas fa-times-circle"></i> None
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div class="d-flex justify-content-between mt-3">
-                                <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step4">
-                                    <i class="fas fa-arrow-left me-1"></i> Back
-                                </button>
-                                <button type="button" class="btn btn-sm btn-primary" id="btn-next-step4" disabled>
-                                    Next <i class="fas fa-arrow-right ms-1"></i>
-                                </button>
                             </div>
                         </div>
 
@@ -283,9 +259,19 @@
                         <div class="tab-pane fade" id="step5">
                             <div class="row">
                                 <div class="col-md-12">
-                                    <div class="mb-3">
-                                        <h5>Review and Create Reservation</h5>
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 class="mb-0">Review and Create Reservation</h5>
+                                        <div>
+                                            <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step5">
+                                                <i class="fas fa-arrow-left me-1"></i> Back
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-success" id="btn-create-reservation">
+                                                <i class="fas fa-file-alt me-1"></i> Create Reservation
+                                            </button>
+                                        </div>
+                                    </div>
 
+                                    <div class="mb-3">
                                         <!-- Materials Table -->
                                         <div class="table-responsive">
                                             <table class="table table-sm table-bordered" id="materials-table">
@@ -296,10 +282,9 @@
                                                         <th width="12%" class="text-center">Material Code</th>
                                                         <th width="25%" class="text-center">Description</th>
                                                         <th width="8%" class="text-center">Additional Info</th>
+                                                        <th width="10%" class="text-center">Required Qty</th>
+                                                        <th width="12%" class="text-center">Requested Qty *</th>
                                                         <th width="5%" class="text-center">Unit</th>
-                                                        <th width="10%" class="text-center">Available Qty</th>
-                                                        <th width="10%" class="text-center">Requested Qty *</th>
-                                                        <th width="5%" class="text-center">Sources</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="materials-table-body">
@@ -314,15 +299,6 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div class="d-flex justify-content-between mt-3">
-                                <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step5">
-                                    <i class="fas fa-arrow-left me-1"></i> Back
-                                </button>
-                                <button type="button" class="btn btn-sm btn-success" id="btn-create-reservation">
-                                    <i class="fas fa-file-alt me-1"></i> Create Reservation
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -576,6 +552,25 @@
             overflow: hidden;
         }
     }
+
+    /* Style untuk PRO number dengan material info */
+    .pro-item-info {
+        font-size: 0.8rem;
+        color: #666;
+        margin-left: 10px;
+        font-style: italic;
+    }
+
+    /* Style untuk simple list tanpa block cell */
+    .simple-list-item {
+        padding: 4px 0;
+        border-bottom: 1px solid #f0f0f0;
+        margin: 0;
+    }
+
+    .simple-list-item:last-child {
+        border-bottom: none;
+    }
 </style>
 @endpush
 
@@ -683,20 +678,20 @@
         // Initialize tooltips
         $('[data-bs-toggle="tooltip"]').tooltip();
 
-        // Check data status on load
-        checkDataStatus();
-
         // Step 1: Plant selection
         $('#plant_select').on('change', function() {
             selectedPlant = $(this).val();
             const plantCode = $(this).find(':selected').data('code');
+            const plantText = $(this).find(':selected').text();
 
             if (selectedPlant) {
                 $('#btn-next-step1').prop('disabled', false);
-                checkDataStatusForPlant(selectedPlant);
+                // Tampilkan plant code (dwerk) saja di info box
+                $('#plant-info').html(`<span class="text-success"><strong>${plantText}</strong> (${plantCode})</span>`);
                 loadMaterialTypes(selectedPlant);
             } else {
                 $('#btn-next-step1').prop('disabled', true);
+                $('#plant-info').html('<i class="fas fa-info-circle"></i> Select a plant to see details');
             }
         });
 
@@ -776,11 +771,14 @@
                     if (response.success) {
                         if (response.pro_numbers && Array.isArray(response.pro_numbers)) {
                             proNumbers = response.pro_numbers.map(item => {
-                                if (typeof item === 'string') return item;
+                                if (typeof item === 'string') return {pro_number: item, material_count: 0};
                                 if (typeof item === 'object' && item !== null) {
-                                    return item.sap_order || item.pro_number || item.aufnr || item.pro || item.value || String(item);
+                                    return {
+                                        pro_number: item.sap_order || item.pro_number || item.aufnr || item.pro || item.value || String(item),
+                                        material_count: item.material_count || 0
+                                    };
                                 }
-                                return String(item);
+                                return {pro_number: String(item), material_count: 0};
                             });
 
                             selectedProNumbers = [];
@@ -921,79 +919,11 @@
         });
 
         $('#btn-create-reservation').on('click', function() {
-            if (confirm('Create reservation document? Used sync data will be deleted automatically.')) {
+            if (confirm('Create reservation document?')) {
                 createReservationDocument();
             }
         });
     });
-
-    function checkDataStatus() {
-        $.ajax({
-            url: '/reservations/check-sync-status',
-            method: 'GET',
-            success: function(response) {
-                if (response.success) {
-                    if (response.count > 0) {
-                        $('#data-status').removeClass('bg-danger bg-warning').addClass('bg-success');
-                        $('#data-status').text('Data Available');
-                        $('#data-count-info').html(`<span class="text-success">${response.count} sync records</span>`);
-                        $('#plant_select').prop('disabled', false);
-                    } else {
-                        $('#data-status').removeClass('bg-success bg-warning').addClass('bg-danger');
-                        $('#data-status').text('No Data');
-                        $('#data-count-info').html('<span class="text-danger">No sync data available.</span>');
-                        $('#plant_select').prop('disabled', true);
-                        $('#btn-next-step1').prop('disabled', true);
-                    }
-                }
-            },
-            error: function() {
-                $('#data-status').removeClass('bg-success bg-warning').addClass('bg-danger');
-                $('#data-status').text('Error');
-                $('#data-count-info').html('<span class="text-danger">Unable to check data status</span>');
-            }
-        });
-    }
-
-    function checkDataStatusForPlant(plant) {
-        $.ajax({
-            url: '/reservations/index?plant=' + plant,
-            method: 'GET',
-            success: function(response) {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(response, 'text/html');
-                const dataCountElement = doc.querySelector('.total-count');
-                if (dataCountElement) {
-                    const count = parseInt(dataCountElement.textContent) || 0;
-                    updateDataStatus(count, plant);
-                }
-            },
-            error: function() {
-                updateDataStatus(0, plant);
-            }
-        });
-    }
-
-    function updateDataStatus(count, plant = null) {
-        const statusBadge = $('#data-status');
-        const countInfo = $('#data-count-info');
-
-        if (count === 0) {
-            statusBadge.removeClass('bg-success bg-warning').addClass('bg-danger');
-            statusBadge.text('No Data');
-            if (plant) {
-                countInfo.html('<span class="text-danger">No sync data for plant ' + plant + '</span>');
-            }
-        } else if (count < 10) {
-            statusBadge.removeClass('bg-success bg-danger').addClass('bg-warning');
-            statusBadge.text('Limited Data');
-            countInfo.text(count + ' records');
-        } else {
-            statusBadge.removeClass('bg-warning bg-danger').addClass('bg-success');
-            statusBadge.text('Data Available');
-            countInfo.text(count + ' records');
-        }
-    }
 
     function updateStepNavigation() {
         $('.nav-link').removeClass('active');
@@ -1009,7 +939,7 @@
     }
 
     function loadMaterialTypes(plant) {
-        $('#material-types-list-display').html(`
+        $('#material-types-checkbox-container').html(`
             <div class="text-center py-2">
                 <div class="spinner-border text-primary spinner-border-sm" role="status">
                     <span class="visually-hidden">Loading...</span>
@@ -1036,17 +966,13 @@
                             const description = getMaterialTypeDescription(type);
 
                             containerHtml += `
-                                <div class="checkbox-item" data-type="${type}">
+                                <div class="simple-list-item">
                                     <div class="form-check">
                                         <input class="form-check-input material-type-checkbox" type="checkbox"
                                                id="type_${type}" value="${type}" ${isChecked ? 'checked' : ''}>
                                         <label class="form-check-label" for="type_${type}">
-                                            <div class="d-flex flex-column">
-                                                <div class="d-flex justify-content-between">
-                                                    <span class="fw-bold">${type}</span>
-                                                    <small class="text-muted">${description}</small>
-                                                </div>
-                                            </div>
+                                            <span class="fw-bold">${type}</span>
+                                            <small class="text-muted ms-2">${description}</small>
                                         </label>
                                     </div>
                                 </div>
@@ -1068,11 +994,12 @@
                             selectedMaterialTypes = selectedMaterialTypes.filter(t => t !== type);
                         }
 
-                        updateSelectedTypesDisplay();
+                        $('#selected-types-count').text(selectedMaterialTypes.length);
                         $('#btn-next-step2').prop('disabled', selectedMaterialTypes.length === 0);
                     });
 
-                    updateSelectedTypesDisplay();
+                    $('#selected-types-count').text(selectedMaterialTypes.length);
+                    $('#btn-next-step2').prop('disabled', selectedMaterialTypes.length === 0);
                 }
             },
             error: function(xhr) {
@@ -1080,25 +1007,6 @@
                 showNotification('Failed to load material types', 'error', 4000);
             }
         });
-    }
-
-    function updateSelectedTypesDisplay() {
-        const container = $('#selected-types-list');
-        const countContainer = $('#selected-types-count');
-
-        if (selectedMaterialTypes.length === 0) {
-            container.html('<p class="text-muted mb-0 small">No material types selected</p>');
-        } else {
-            let html = '<div class="d-flex flex-wrap gap-1">';
-            selectedMaterialTypes.forEach(function(type) {
-                const description = getMaterialTypeDescription(type);
-                html += `<span class="badge bg-success badge-sm" title="${description}">${type}</span>`;
-            });
-            html += '</div>';
-            container.html(html);
-        }
-
-        countContainer.text(selectedMaterialTypes.length);
     }
 
     function loadMaterials(plant, materialTypes) {
@@ -1131,24 +1039,20 @@
                             const typeDescription = getMaterialTypeDescription(material.mtart);
 
                             containerHtml += `
-                                <div class="checkbox-item ${isChecked ? 'selected' : ''}" data-material="${material.matnr}">
+                                <div class="simple-list-item">
                                     <div class="form-check">
                                         <input class="form-check-input material-checkbox" type="checkbox"
                                                id="mat_${material.matnr}" value="${material.matnr}" ${isChecked ? 'checked' : ''}>
                                         <label class="form-check-label" for="mat_${material.matnr}">
-                                            <div class="d-flex flex-column">
-                                                <div class="d-flex justify-content-between">
-                                                    <div class="material-code">${displayMatnr}</div>
-                                                    <small class="text-muted">${material.mtart}</small>
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <span class="material-code">${displayMatnr}</span>
+                                                    <small class="text-muted ms-2">${material.mtart}</small>
+                                                    <div class="material-desc">${material.maktx}</div>
                                                 </div>
-                                                <div class="material-desc" title="${material.maktx}">${material.maktx}</div>
-                                                <div class="d-flex justify-content-between mt-1">
-                                                    <small class="text-muted">
-                                                        <strong>Type:</strong> ${typeDescription}
-                                                    </small>
-                                                    <small class="text-muted">
-                                                        <strong>Additional Info:</strong> ${material.sortf || '-'}
-                                                    </small>
+                                                <div class="text-end">
+                                                    <small class="text-muted d-block">${typeDescription}</small>
+                                                    <small class="text-muted">${material.sortf || '-'}</small>
                                                 </div>
                                             </div>
                                         </label>
@@ -1173,13 +1077,12 @@
                             selectedMaterials = selectedMaterials.filter(m => m !== materialCode);
                         }
 
-                        $(this).closest('.checkbox-item').toggleClass('selected', isChecked);
-                        updateSelectedMaterialsList();
-                        $('#btn-next-step3').prop('disabled', selectedMaterials.length === 0);
                         $('#selected-materials-count').text(selectedMaterials.length);
+                        $('#btn-next-step3').prop('disabled', selectedMaterials.length === 0);
                     });
 
-                    updateSelectedMaterialsList();
+                    $('#selected-materials-count').text(selectedMaterials.length);
+                    $('#btn-next-step3').prop('disabled', selectedMaterials.length === 0);
                 }
             },
             error: function(xhr) {
@@ -1191,19 +1094,19 @@
 
     function filterMaterials(searchTerm) {
         if (!searchTerm) {
-            $('.checkbox-item[data-material]').show();
+            $('.simple-list-item').show();
             return;
         }
 
-        $('.checkbox-item[data-material]').each(function() {
-            const materialCode = $(this).data('material').toLowerCase();
+        $('.simple-list-item').each(function() {
+            const materialCode = $(this).find('.material-code').text().toLowerCase();
             const materialDesc = $(this).find('.material-desc').text().toLowerCase();
-            const displayMatnr = formatMaterialCodeForUI(materialCode).toLowerCase();
-            const additionalInfo = $(this).find('small:contains("Additional Info")').text().toLowerCase();
+            const typeCode = $(this).find('small.text-muted').first().text().toLowerCase();
+            const additionalInfo = $(this).find('small.text-muted').last().text().toLowerCase();
 
             if (materialCode.includes(searchTerm) ||
                 materialDesc.includes(searchTerm) ||
-                displayMatnr.includes(searchTerm) ||
+                typeCode.includes(searchTerm) ||
                 additionalInfo.includes(searchTerm)) {
                 $(this).show();
             } else {
@@ -1212,59 +1115,27 @@
         });
     }
 
-    function updateSelectedMaterialsList() {
-        const container = $('#selected-materials-list');
-
-        if (selectedMaterials.length === 0) {
-            container.html('<p class="text-muted mb-0 small">No materials selected</p>');
-        } else {
-            let html = '';
-            selectedMaterials.forEach(function(materialCode) {
-                const material = allMaterials.find(m => m.matnr === materialCode);
-                const desc = material ? material.maktx : 'Unknown material';
-                const displayMatnr = formatMaterialCodeForUI(materialCode);
-                const typeDescription = material ? getMaterialTypeDescription(material.mtart) : '';
-                const additionalInfo = material ? material.sortf || '-' : '-';
-
-                html += `
-                    <div class="selected-materials-item">
-                        <div class="d-flex justify-content-between">
-                            <strong>${displayMatnr}</strong>
-                            <small class="text-muted">${material ? material.mtart : ''}</small>
-                        </div>
-                        <small class="text-muted">${desc.substring(0, 35)}${desc.length > 35 ? '...' : ''}</small>
-                        <div class="d-flex justify-content-between mt-1">
-                            <small class="text-muted">
-                                <strong>Type:</strong> ${typeDescription}
-                            </small>
-                            <small class="text-muted">
-                                <strong>Additional:</strong> ${additionalInfo}
-                            </small>
-                        </div>
-                    </div>
-                `;
-            });
-            container.html(html);
-        }
-    }
-
     function populateProNumbersContainer() {
         let containerHtml = '';
         if (proNumbers.length > 0) {
-            proNumbers.forEach(function(pro, index) {
-                const proString = String(pro).trim();
+            proNumbers.forEach(function(proObj, index) {
+                const proString = String(proObj.pro_number).trim();
                 if (!proString) return;
 
                 const displayPro = formatProNumberForUI(proString);
+                const materialCount = proObj.material_count || 0;
                 const isChecked = false;
 
                 containerHtml += `
-                    <div class="checkbox-item" data-pro="${proString}" data-index="${index}">
+                    <div class="simple-list-item">
                         <div class="form-check">
                             <input class="form-check-input pro-checkbox" type="checkbox"
                                    id="pro_${index}" value="${proString}" ${isChecked ? 'checked' : ''}>
                             <label class="form-check-label" for="pro_${index}">
                                 <strong>${displayPro}</strong>
+                                <span class="pro-item-info">
+                                    (${materialCount} material${materialCount !== 1 ? 's' : ''} available)
+                                </span>
                             </label>
                         </div>
                     </div>
@@ -1287,33 +1158,12 @@
                 selectedProNumbers = selectedProNumbers.filter(p => p !== proNumber);
             }
 
-            $(this).closest('.checkbox-item').toggleClass('selected', isChecked);
-            updateSelectedProList();
+            $('#selected-pro-count').text(selectedProNumbers.length);
             $('#btn-next-step4').prop('disabled', selectedProNumbers.length === 0);
         });
 
+        $('#selected-pro-count').text(selectedProNumbers.length);
         $('#btn-next-step4').prop('disabled', selectedProNumbers.length === 0);
-    }
-
-    function updateSelectedProList() {
-        const container = $('#selected-pro-list');
-
-        if (selectedProNumbers.length === 0) {
-            container.html('<p class="text-muted small mb-0">No PRO numbers selected</p>');
-        } else {
-            let html = '';
-            const displayLimit = 10;
-            selectedProNumbers.slice(0, displayLimit).forEach(function(pro) {
-                const displayPro = formatProNumberForUI(pro);
-                html += `<span class="badge bg-primary me-1 mb-1 badge-sm">${displayPro}</span>`;
-            });
-
-            if (selectedProNumbers.length > displayLimit) {
-                html += `<span class="badge bg-secondary badge-sm">+ ${selectedProNumbers.length - displayLimit}</span>`;
-            }
-
-            container.html(html);
-        }
     }
 
     function formatQuantity(qty) {
@@ -1330,7 +1180,7 @@
         if (!loadedMaterials || loadedMaterials.length === 0) {
             html = `
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-3">
+                    <td colspan="8" class="text-center text-muted py-3">
                         <h6>No materials data available</h6>
                     </td>
                 </tr>
@@ -1356,8 +1206,7 @@
                 sourceBadges = '<span class="text-muted small">No source</span>';
             }
 
-            const sourceCount = displaySources.length;
-            const isConsolidated = sourceCount > 1;
+            const isConsolidated = displaySources.length > 1;
             const rowClass = isConsolidated ? 'consolidated-row' : '';
 
             html += `
@@ -1367,7 +1216,6 @@
                     <td class="text-center"><code>${formatMaterialCodeForUI(material.material_code)}</code></td>
                     <td>${material.material_description || 'No description'}</td>
                     <td class="text-center">${material.sortf || '-'}</td>
-                    <td class="text-center">${material.unit || '-'}</td>
                     <td class="text-center quantity-cell">${formattedOriginalQty}</td>
                     <td class="text-center">
                         <input type="number" class="form-control quantity-input requested-qty text-center"
@@ -1376,11 +1224,7 @@
                                data-index="${index}"
                                data-material="${material.material_code}">
                     </td>
-                    <td class="text-center">
-                        <span class="badge ${isConsolidated ? 'bg-warning' : 'bg-secondary'} badge-sm">
-                            ${sourceCount}
-                        </span>
-                    </td>
+                    <td class="text-center">${material.unit || '-'}</td>
                 </tr>
             `;
         });
@@ -1522,7 +1366,7 @@
 
                         if (selectedSuggestedPros.length > 0) {
                             selectedProNumbers = selectedSuggestedPros;
-                            updateSelectedProList();
+                            $('#selected-pro-count').text(selectedProNumbers.length);
                             populateProNumbersContainer();
                             $('#btn-next-step4').prop('disabled', false);
                         }

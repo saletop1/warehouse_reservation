@@ -1,4 +1,4 @@
-# sap_rfc.py - FIXED VERSION tanpa sync_by_name
+# sap_rfc.py - FIXED VERSION dengan semua field dari SAP
 import os
 import sys
 from flask import Flask, request, jsonify
@@ -80,15 +80,22 @@ class SAPConnector:
                     # Check for data
                     if 'T_DATA1' in result:
                         data = result['T_DATA1']
-                        if isinstance(data, list):
+                        if isinstance(data, list) and data:
                             logger.info(f"✅ Got {len(data)} records for PRO {pro_number}")
+
+                            # **DEBUG: Log struktur data pertama untuk melihat field yang tersedia**
+                            if data:
+                                first_record = data[0]
+                                logger.info(f"📊 Struktur data SAP untuk debugging:")
+                                for key, value in first_record.items():
+                                    logger.info(f"  {key}: {value} (type: {type(value)})")
 
                             # Tambahkan PRO number ke setiap record
                             for item in data:
                                 item['PRO_NUMBER'] = pro_number
                                 all_data.append(item)
                         else:
-                            logger.warning(f"⚠️  T_DATA1 is not a list for PRO {pro_number}")
+                            logger.warning(f"⚠️  T_DATA1 is empty or not a list for PRO {pro_number}")
                     else:
                         logger.warning(f"⚠️  No data in response for PRO {pro_number}")
 
@@ -124,7 +131,7 @@ class MySQLHandler:
             return None
 
     def save_reservation_data(self, plant: str, pro_numbers: list, sap_data: list, user_id: int = None):
-        """Save SAP data to MySQL"""
+        """Save SAP data to MySQL dengan SEMUA field dari T_DATA1"""
         if not sap_data:
             logger.warning("⚠️  No data to save")
             return 0
@@ -143,6 +150,14 @@ class MySQLHandler:
             columns = [row[0] for row in cursor.fetchall()]
             logger.info(f"📊 Table columns: {columns}")
 
+            # Log untuk debugging - tampilkan semua field yang ada di data SAP
+            if sap_data:
+                first_item = sap_data[0]
+                logger.info(f"🔍 Field yang tersedia dari SAP T_DATA1:")
+                sap_fields = list(first_item.keys())
+                for i, field in enumerate(sorted(sap_fields), 1):
+                    logger.info(f"  {i:2d}. {field}: {first_item.get(field)}")
+
             for item in sap_data:
                 try:
                     # **PERBAIKAN: Gunakan PSMNG untuk quantity**
@@ -155,7 +170,8 @@ class MySQLHandler:
                     else:
                         quantity = 0
 
-                    # Prepare base data
+                    # Prepare base data dengan SEMUA field dari SAP
+                    # Field utama yang sudah ada
                     base_data = {
                         'rsnum': item.get('RSNUM', ''),
                         'rspos': item.get('RSPOS', ''),
@@ -178,6 +194,93 @@ class MySQLHandler:
                         'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     }
 
+                    # **TAMBAHAN: Field-field yang sebelumnya NULL di database**
+                    # Field dari T_DATA1 yang perlu ditambahkan
+                    additional_fields = {
+                        # Field dari gambar yang NULL
+                        'nampl': item.get('NAMPL', ''),      # Nama Plant
+                        'lgort': item.get('LGORT', ''),      # Storage Location
+                        'namsl': item.get('NAMSL', ''),      # Nama Storage Location
+                        'dispo': item.get('DISPO', ''),      # MRP Controller
+                        'kdauf': item.get('KDAUF', ''),      # Order Number (Reference)
+                        'kdpos': item.get('KDPOS', ''),      # Item Number (Reference)
+                        'mathd': item.get('MATHD', ''),      # Material Handling
+                        'dispc': item.get('DISPC', ''),      # Production Supervisor
+                        'groes': item.get('GROES', ''),      # Size/Dimensions
+                        'ferth': item.get('FERTH', ''),      # Production Finish Time
+                        'zeinr': item.get('ZEINR', ''),      # Requirement Tracking Number
+                        'matkl': item.get('MATKL', ''),      # Material Group
+                        'naslr': item.get('NASLR', ''),      # Name of Requirement Segment
+                        'ulgo': item.get('ULGO', ''),       # Storage Type
+
+                        # Field lain yang mungkin ada di T_DATA1
+                        'bdter': self._parse_sap_date(item.get('BDTER', '')),  # Requirement Date
+                        'plnum': item.get('PLNUM', ''),      # Planned Order Number
+                        'plnbez': item.get('PLNBEZ', ''),    # Planned Order Description
+                        'pltxt': item.get('PLTXT', ''),      # Planned Order Long Text
+                        'bsmng': float(item.get('BSMNG', 0)) if item.get('BSMNG') else 0,  # Base Quantity
+                        'bmein': item.get('BMEIN', ''),      # Base Unit of Measure
+                        'enmng': float(item.get('ENMNG', 0)) if item.get('ENMNG') else 0,  # Withdrawal Quantity
+                        'einhe': item.get('EINHE', ''),      # Withdrawal Unit
+                        'umren': float(item.get('UMREN', 0)) if item.get('UMREN') else 0,  # Numerator for Conversion
+                        'umrez': float(item.get('UMREZ', 0)) if item.get('UMREZ') else 0,  # Denominator for Conversion
+                        'aufpl': item.get('AUFPL', ''),      # Routing Number of Operations
+                        'aplzl': item.get('APLZL', ''),      # Counter for Operations
+                        'rwdat': self._parse_sap_date(item.get('RWDAT', '')),  # Goods Receipt Date
+                        'verid': item.get('VERID', ''),      # Production Version
+                        'cuobj': item.get('CUOBJ', ''),      # Configuration Object
+                        'cucfg': item.get('CUCFG', ''),      # Configuration
+                        'charg': item.get('CHARG', ''),      # Batch Number
+                        'sobkz': item.get('SOBKZ', ''),      # Special Stock Indicator
+                        'kzbws': item.get('KZBWS', ''),      # Individual/Colllective Requirements
+                        'kzear': item.get('KZEAR', ''),      # Final Issue
+                        'umlgo': item.get('UMLGO', ''),      # Storage Type for Withdrawal
+                        'wempf': item.get('WEMPF', ''),      # Goods Recipient
+                        'ablad': item.get('ABLAD', ''),      # Unloading Point
+                        'hsdat': self._parse_sap_date(item.get('HSDAT', '')),  # Shelf Life Expiration Date
+                        'vsdat': self._parse_sap_date(item.get('VSDAT', '')),  # Production Start Date
+                        'ssdat': self._parse_sap_date(item.get('SSDAT', '')),  # System Status Date
+                        'weanz': float(item.get('WEANZ', 0)) if item.get('WEANZ') else 0,  # Number of GR Slips
+                        'webez': item.get('WEBEZ', ''),      # Goods Recipient's Name
+                        'kzvbr': item.get('KZVBR', ''),      # Consumption Posting
+                        'kzstr': item.get('KZSTR', ''),      # Structure Scope
+                        'kzrvb': item.get('KZRVB', ''),      # Reserv./Dependent Requirements
+                        'xloek': item.get('XLOEK', ''),      # Deletion Indicator
+                        'prvbe': item.get('PRVBE', ''),      # Supply Area
+                        'bedae': item.get('BEDAE', ''),      # Requirements Type
+                        'sanka': item.get('SANKA', ''),      # Indicator: Relevant for MRP
+                        'kzdis': item.get('KZDIS', ''),      # MRP Element: Indicator
+                        'profl': item.get('PROFL', ''),      # LP Relevant
+                        'kzsti': item.get('KZSTI', ''),      # BOM Explosion Number
+                        'kzkri': item.get('KZKRI', ''),      # Critical Part
+                        'verss': item.get('VERSS', ''),      # Production Supersession
+                        'kalst': float(item.get('KALST', 0)) if item.get('KALST') else 0,  # BOM Level
+                        'rvrel': item.get('RVREL', ''),      # Rel. Requirement (Backflush)
+                        'bdmng': float(item.get('BDMNG', 0)) if item.get('BDMNG') else 0,  # Requirement Quantity
+                        'schgt': item.get('SCHGT', ''),      # Bulk Material
+                        'kzpps': item.get('KZPPS', ''),      # Phantoms
+                        'pspnr': item.get('PSPNR', ''),      # WBS Element
+                        'aufps': item.get('AUFPS', ''),      # Order Item Number
+                        'pamng': float(item.get('PAMNG', 0)) if item.get('PAMNG') else 0,  # Planned Order Quantity
+                        'prreg': item.get('PRREG', ''),      # Priority Regulation
+                        'fevor': item.get('FEVOR', ''),      # Production Supervisor
+                        'kaufk': item.get('KAUFK', ''),      # Customer
+                        'kunnr': item.get('KUNNR', ''),      # Customer Number
+                        'ktext': item.get('KTEXT', ''),      # Description
+                        'vptnr': item.get('VPTNR', ''),      # Partner Account Number
+                        'vorna': item.get('VORNA', ''),      # First Name
+                        'name1': item.get('NAME1', ''),      # Name 1
+                        'name2': item.get('NAME2', ''),      # Name 2
+                        'ort01': item.get('ORT01', ''),      # City
+                        'pstlz': item.get('PSTLZ', ''),      # Postal Code
+                        'land1': item.get('LAND1', ''),      # Country
+                        'stras': item.get('STRAS', ''),      # Street
+                        'tel_number': item.get('TEL_NUMBER', ''),  # Telephone Number
+                    }
+
+                    # Gabungkan base_data dengan additional_fields
+                    base_data.update(additional_fields)
+
                     # **PERBAIKAN: Filter hanya kolom yang ada di tabel**
                     data_to_insert = {}
                     for col in columns:
@@ -188,6 +291,12 @@ class MySQLHandler:
                     if not data_to_insert.get('rsnum') or not data_to_insert.get('matnr'):
                         logger.warning(f"⚠️  Skipping record missing rsnum or matnr")
                         continue
+
+                    # Debug: Tampilkan data yang akan diinsert
+                    if saved_count == 0:  # Hanya untuk record pertama
+                        logger.info(f"🔍 Data pertama yang akan diinsert:")
+                        for key, value in data_to_insert.items():
+                            logger.info(f"  {key}: {value}")
 
                     # Build SQL - hanya kolom yang ada di data_to_insert
                     cols = list(data_to_insert.keys())
@@ -213,9 +322,14 @@ class MySQLHandler:
                     cursor.execute(sql, values)
                     saved_count += 1
 
+                    # Log setiap 100 records
+                    if saved_count % 100 == 0:
+                        logger.info(f"📝 Processed {saved_count} records...")
+
                 except Exception as e:
                     logger.error(f"❌ Error processing record: {e}")
-                    logger.error(f"Record data: {item}")
+                    logger.error(f"Record data keys: {list(item.keys())}")
+                    logger.error(f"Error details: {traceback.format_exc()}")
                     continue
 
             conn.commit()
@@ -223,6 +337,7 @@ class MySQLHandler:
 
         except Exception as e:
             logger.error(f"❌ Save error: {e}")
+            logger.error(f"Error traceback: {traceback.format_exc()}")
             conn.rollback()
         finally:
             cursor.close()
@@ -238,8 +353,12 @@ class MySQLHandler:
             date_str = str(date_value)
             if len(date_str) == 8 and date_str.isdigit():
                 return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-        except:
-            pass
+            # Coba format lain jika tidak 8 digit
+            elif len(date_str) == 10 and date_str[4] == '-' and date_str[7] == '-':
+                # Sudah dalam format YYYY-MM-DD
+                return date_str
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to parse date {date_value}: {e}")
         return None
 
 # Initialize
@@ -252,7 +371,8 @@ def health_check():
         'status': 'healthy',
         'service': 'SAP Sync',
         'timestamp': datetime.now().isoformat(),
-        'version': '1.2.0'
+        'version': '1.3.0',
+        'features': ['all_sap_fields', 'enhanced_logging', 'complete_data_mapping']
     })
 
 @app.route('/api/sap/sync', methods=['POST'])
@@ -332,6 +452,38 @@ def sync_reservations():
             'error_details': str(e)
         }), 500
 
+# Endpoint untuk debugging struktur data SAP
+@app.route('/api/sap/debug/structure', methods=['POST'])
+def debug_sap_structure():
+    try:
+        data = request.get_json()
+        plant = data.get('plant', '3000')
+        pro_numbers = data.get('pro_numbers', [''])
+
+        # Ambil satu record untuk debugging
+        sap_data = sap.get_reservation_data(plant, pro_numbers[:1])  # Ambil hanya PRO pertama
+
+        if sap_data and len(sap_data) > 0:
+            first_record = sap_data[0]
+            return jsonify({
+                'success': True,
+                'record_count': len(sap_data),
+                'fields': list(first_record.keys()),
+                'sample_record': first_record
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No data returned from SAP'
+            }), 404
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
 if __name__ == '__main__':
-    logger.info("🚀 Starting SAP Sync Service v1.2.0")
+    logger.info("🚀 Starting SAP Sync Service v1.3.0")
+    logger.info("✨ Features: Complete SAP field mapping, enhanced logging")
     app.run(host='0.0.0.0', port=5000, debug=True)

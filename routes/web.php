@@ -90,4 +90,6 @@ Route::get('/documents/{id}/pdf', [ReservationDocumentController::class, 'pdf'])
 Route::get('/documents/export/{type}', [ReservationDocumentController::class, 'export'])->name('documents.export');
 Route::post('/documents/export/selected/excel', [ReservationDocumentController::class, 'exportSelectedExcel'])->name('documents.export.selected.excel');
 Route::post('/documents/export/selected/pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('documents.export.selected.pdf');
+Route::get('/documents/{id}/edit', [ReservationController::class, 'editDocument'])->name('documents.edit');
+Route::put('/documents/{id}', [ReservationController::class, 'updateDocument'])->name('documents.update');
 });

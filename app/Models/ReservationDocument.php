@@ -17,6 +17,7 @@ class ReservationDocument extends Model
         'status',
         'total_items',
         'total_qty',
+        'remarks',
         'created_by',
         'created_by_name',
     ];

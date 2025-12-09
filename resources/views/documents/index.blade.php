@@ -82,7 +82,7 @@
 
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped table-hover" id="documentsTable">
-                            <thead class="table-dark">
+                            <thead class="table-dark text-center align-middle">
                                 <tr>
                                     <th width="40">
                                         <div class="form-check">
@@ -100,7 +100,7 @@
                             </thead>
                             <tbody>
                                 @forelse($documents as $document)
-                                    <tr>
+                                    <tr class="text-center align-middle">
                                         <td>
                                             <div class="form-check">
                                                 <input class="form-check-input document-checkbox" type="checkbox" value="{{ $document->id }}">
@@ -125,7 +125,7 @@
                                             @endif
                                         </td>
                                         <td>{{ $document->total_items }}</td>
-                                        <td class="text-end">{{ \App\Helpers\NumberHelper::formatQuantity($document->total_qty) }}</td>
+                                        <td>{{ \App\Helpers\NumberHelper::formatQuantity($document->total_qty) }}</td>
                                         <td>{{ $document->created_by_name }}</td>
                                         <td>{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</td>
                                     </tr>
@@ -171,6 +171,10 @@
         background-color: #f8f9fa;
         border-radius: 5px;
     }
+    #documentsTable th,
+    #documentsTable td {
+        vertical-align: middle;
+    }
 </style>
 
 <script>
@@ -187,7 +191,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const cells = row.getElementsByTagName('td');
             let found = false;
 
-            for (let i = 1; i < cells.length; i++) { // Skip checkbox column only
+            for (let i = 1; i < cells.length; i++) {
                 const cell = cells[i];
                 if (cell.textContent.toLowerCase().includes(searchTerm)) {
                     found = true;
@@ -228,7 +232,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (documentIds.length > 0) {
             exportPdfBtn.disabled = false;
             exportExcelBtn.disabled = false;
-            // Format as comma-separated string for easier handling
             selectedDocumentsPdfInput.value = documentIds.join(',');
             selectedDocumentsExcelInput.value = documentIds.join(',');
         } else {
