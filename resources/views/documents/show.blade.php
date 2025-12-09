@@ -51,7 +51,7 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <table class="table table-borderless">
                                 <tr>
                                     <th>Document No:</th>
@@ -75,32 +75,20 @@
                                 </tr>
                             </table>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <table class="table table-borderless">
-                                <tr>
-                                    <th>Total Items:</th>
-                                    <td>{{ $document->total_items }}</td>
-                                </tr>
-                                <tr>
-                                    <th>Total Quantity:</th>
-                                    <td><strong>{{ \App\Helpers\NumberHelper::formatQuantity($document->total_qty) }}</strong></td>
-                                </tr>
                                 <tr>
                                     <th>Created Date:</th>
                                     <td>{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d F Y H:i:s') }} WIB</td>
                                 </tr>
-                            </table>
-                        </div>
-                        <div class="col-md-3">
-                            <table class="table table-borderless">
                                 <tr>
                                     <th>Created By:</th>
                                     <td>{{ $document->created_by_name }}</td>
                                 </tr>
                             </table>
                         </div>
-                        <div class="col-md-3">
-                            <div class="alert alert-light">
+                        <div class="col-md-4">
+                            <div class="alert alert-light mb-0">
                                 <h6><i class="fas fa-info-circle"></i> Document Note</h6>
                                 @if($document->remarks && trim($document->remarks) != '')
                                     <p class="mb-0" style="white-space: pre-wrap;">{{ $document->remarks }}</p>
@@ -118,9 +106,9 @@
                 <div class="card-header">
                     <h5 class="mb-0">Document Items</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-bordered table-striped">
+                        <table class="table table-bordered table-striped mb-0">
                             <thead class="table-dark">
                                 <tr>
                                     <th>#</th>
@@ -128,7 +116,7 @@
                                     <th>Description</th>
                                     <th>SORTF</th>
                                     <th>Unit</th>
-                                    <th class="text-end">Requested Qty</th>
+                                    <th class="text-center">Requested Qty</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -139,7 +127,7 @@
                                         <td>{{ $item->material_description }}</td>
                                         <td>{{ $item->sortf ?? '-' }}</td>
                                         <td>{{ $item->unit }}</td>
-                                        <td class="text-end"><strong>{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</strong></td>
+                                        <td class="text-center"><strong>{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</strong></td>
                                     </tr>
                                 @endforeach
                             </tbody>

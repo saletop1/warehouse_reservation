@@ -76,7 +76,7 @@
                     <div class="mb-3">
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-search"></i></span>
-                            <input type="text" class="form-control" id="liveSearch" placeholder="Search by Document No, Plant, Status, or Created By...">
+                            <input type="text" class="form-control" id="liveSearch" placeholder="Search by Document No, Plant, Status, Remarks, or Created By...">
                         </div>
                     </div>
 
@@ -92,8 +92,7 @@
                                     <th>Document No</th>
                                     <th>Plant</th>
                                     <th>Status</th>
-                                    <th>Total Items</th>
-                                    <th>Total Qty</th>
+                                    <th>Remarks</th>
                                     <th>Created By</th>
                                     <th>Created At</th>
                                 </tr>
@@ -124,14 +123,21 @@
                                                 <span class="badge bg-danger">Cancelled</span>
                                             @endif
                                         </td>
-                                        <td>{{ $document->total_items }}</td>
-                                        <td>{{ \App\Helpers\NumberHelper::formatQuantity($document->total_qty) }}</td>
+                                        <td class="text-start">
+                                            @if($document->remarks && trim($document->remarks) != '')
+                                                <div class="remarks-text" data-bs-toggle="tooltip" title="{{ $document->remarks }}">
+                                                    {{ Str::limit($document->remarks, 50) }}
+                                                </div>
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
                                         <td>{{ $document->created_by_name }}</td>
                                         <td>{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="text-center text-muted py-5">
+                                        <td colspan="7" class="text-center text-muted py-5">
                                             <i class="fas fa-file-alt fa-3x mb-3"></i>
                                             <h5>No documents found</h5>
                                         </td>
@@ -175,10 +181,23 @@
     #documentsTable td {
         vertical-align: middle;
     }
+    .remarks-text {
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: help;
+    }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
     // Live Search Functionality
     const liveSearch = document.getElementById('liveSearch');
     const documentsTable = document.getElementById('documentsTable');

@@ -12,6 +12,8 @@
                 line-height: 1.2 !important;
                 margin: 0 !important;
                 padding: 5px !important;
+                font-family: Arial, Helvetica, sans-serif !important;
+                color: #000 !important;
             }
             .no-print {
                 display: none !important;
@@ -29,21 +31,31 @@
             .table td, .table th {
                 padding: 4px !important;
                 font-size: 9pt !important;
+                color: #000 !important;
+                border-color: #000 !important;
             }
             .badge {
                 padding: 2px 5px !important;
                 font-size: 8pt !important;
             }
             .signature-section {
-                margin-top: 20px !important;
+                margin-top: 40px !important;
             }
             .signature-line {
-                margin-top: 20px !important;
+                margin-top: 60px !important;
             }
             .border-top {
                 margin-top: 20px !important;
                 padding-top: 10px !important;
             }
+            * {
+                color: #000 !important;
+            }
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #000;
         }
 
         .print-header {
@@ -56,16 +68,19 @@
             font-size: 16pt;
             font-weight: bold;
             margin-bottom: 5px;
+            color: #000;
         }
 
         .company-info {
             font-size: 8pt;
             line-height: 1.1;
+            color: #000;
         }
 
         .table-print {
             font-size: 9pt;
             margin-bottom: 10px;
+            color: #000;
         }
 
         .table-print th {
@@ -75,6 +90,7 @@
             font-weight: bold;
             text-align: center !important;
             vertical-align: middle !important;
+            color: #000 !important;
         }
 
         .table-print td {
@@ -82,21 +98,17 @@
             padding: 5px !important;
             text-align: center !important;
             vertical-align: middle !important;
+            color: #000 !important;
         }
 
         .signature-section {
-            margin-top: 25px;
+            margin-top: 40px;
         }
 
         .signature-line {
             border-top: 1px solid #000;
             width: 180px;
-            margin-top: 50px;
-        }
-
-        .signature-name {
-            margin-top: 5px;
-            font-size: 8pt;
+            margin-top: 60px; /* Gap lebih besar untuk tanda tangan */
         }
 
         /* Compact styling for print */
@@ -107,6 +119,7 @@
         .compact-text {
             font-size: 9pt;
             line-height: 1.1;
+            color: #000;
         }
 
         .compact-badge {
@@ -128,20 +141,45 @@
             padding-bottom: 3px !important;
         }
 
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-
         .section-title {
             font-size: 10pt;
             font-weight: bold;
+            color: #000;
+        }
+
+        .remarks-container {
+            margin-top: 20px;
+            border: 1px solid #000;
+            padding: 8px;
+            font-size: 9pt;
+            line-height: 1.3;
+            color: #000;
+            background-color: #f9f9f9;
+        }
+
+        .remarks-title {
+            font-size: 9pt;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #000;
+        }
+
+        /* Force black color for all text */
+        .text-black {
+            color: #000 !important;
+        }
+
+        /* Remove any color styling */
+        .text-primary, .text-success, .text-danger, .text-warning, .text-info {
+            color: #000 !important;
+        }
+
+        .bg-primary, .bg-success, .bg-danger, .bg-warning, .bg-info {
+            background-color: transparent !important;
         }
     </style>
 </head>
-<body>
+<body class="text-black">
     <div class="container-fluid">
         <!-- Print Header (Visible only in browser) -->
         <div class="row mb-2 no-print">
@@ -172,15 +210,15 @@
                 <div class="print-header compact-margin">
                     <div class="row">
                         <div class="col-7">
-                            <div class="document-title">RESERVATION DOCUMENT</div>
-                            <div class="company-info">
+                            <div class="document-title text-black">RESERVATION DOCUMENT</div>
+                            <div class="company-info text-black">
                                 <strong>PT. Example Company</strong><br>
                                 Jl. Contoh No. 123, Jakarta<br>
                                 Phone: (021) 12345678 | Fax: (021) 87654321
                             </div>
                         </div>
                         <div class="col-5 text-end">
-                            <div class="document-title" style="color: {{ $document->plant == '3000' ? '#0d6efd' : '#198754' }}; font-size: 14pt;">
+                            <div class="document-title text-black" style="font-size: 14pt;">
                                 {{ $document->document_no }}
                             </div>
                             <div class="mt-1">
@@ -197,11 +235,11 @@
                                         <td style="padding: 1px;"><strong>Status:</strong></td>
                                         <td style="padding: 1px;">
                                             @if($document->status == 'created')
-                                                <span class="badge bg-warning" style="font-size: 7pt; padding: 1px 4px;">Created</span>
+                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #ffc107; color: #000;">Created</span>
                                             @elseif($document->status == 'posted')
-                                                <span class="badge bg-success" style="font-size: 7pt; padding: 1px 4px;">Posted</span>
+                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #198754; color: #fff;">Posted</span>
                                             @else
-                                                <span class="badge bg-danger" style="font-size: 7pt; padding: 1px 4px;">Cancelled</span>
+                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #dc3545; color: #fff;">Cancelled</span>
                                             @endif
                                         </td>
                                     </tr>
@@ -219,26 +257,9 @@
                     </div>
                 </div>
 
-                <!-- Document Info -->
-                <div class="row mb-3 compact-margin">
-                    <div class="col-6">
-                        <table class="table table-sm table-borderless compact-text">
-                            <!-- Creator ID, Total Items, Total Quantity dihapus -->
-                        </table>
-                    </div>
-                    <div class="col-6">
-                        <table class="table table-sm table-borderless compact-text">
-                            <!-- Creator ID, Total Items, Total Quantity dihapus -->
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Items Table Header dengan Remarks -->
-                <div class="section-header compact-margin">
-                    <div class="section-title">RESERVATION ITEMS</div>
-                    @if($document->remarks)
-                    <div class="section-title">REMARKS</div>
-                    @endif
+                <!-- Section Title -->
+                <div class="compact-margin">
+                    <div class="section-title text-black">RESERVATION ITEMS</div>
                 </div>
 
                 <!-- Items Table -->
@@ -283,15 +304,15 @@
                                 </tr>
                             @endforeach
                         </tbody>
-                        {{-- Hapus tfoot (total) --}}
                     </table>
                 </div>
 
-                <!-- Remarks -->
+                <!-- Remarks (dipindah ke kiri bawah tabel) -->
                 @if($document->remarks)
                 <div class="mb-3 compact-margin">
-                    <div class="border compact-padding" style="font-size: 9pt; line-height: 1.2;">
-                        {{ $document->remarks }}
+                    <div class="remarks-container">
+                        <div class="remarks-title">REMARKS</div>
+                        <div>{{ $document->remarks }}</div>
                     </div>
                 </div>
                 @endif
@@ -302,22 +323,19 @@
                         <div class="col-4">
                             <div class="text-center">
                                 <div class="signature-line"></div>
-                                <div class="signature-name">(Signature)</div>
-                                <div class="mt-1" style="font-size: 8pt;">Prepared By</div>
+                                <div class="mt-1" style="font-size: 8pt; color: #000;">Prepared By</div>
                             </div>
                         </div>
                         <div class="col-4">
                             <div class="text-center">
                                 <div class="signature-line"></div>
-                                <div class="signature-name">(Signature)</div>
-                                <div class="mt-1" style="font-size: 8pt;">Checked By</div>
+                                <div class="mt-1" style="font-size: 8pt; color: #000;">Checked By</div>
                             </div>
                         </div>
                         <div class="col-4">
                             <div class="text-center">
                                 <div class="signature-line"></div>
-                                <div class="signature-name">(Signature)</div>
-                                <div class="mt-1" style="font-size: 8pt;">Approved By</div>
+                                <div class="mt-1" style="font-size: 8pt; color: #000;">Approved By</div>
                             </div>
                         </div>
                     </div>
@@ -325,7 +343,7 @@
 
                 <!-- Footer -->
                 <div class="mt-3 pt-2 border-top" style="font-size: 7pt; line-height: 1.1;">
-                    <div class="text-center text-muted">
+                    <div class="text-center text-muted text-black">
                         Document generated on {{ now()->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB |
                         Page 1 of 1 |
                         {{ $document->document_no }}
