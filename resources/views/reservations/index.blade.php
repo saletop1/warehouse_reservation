@@ -14,9 +14,6 @@
                     <a href="{{ route('reservations.create') }}" class="btn btn-success btn-sm">
                         <i class="fas fa-plus me-1"></i>Create
                     </a>
-                    <a href="{{ route('documents.index') }}" class="btn btn-info btn-sm">
-                        <i class="fas fa-file me-1"></i>Documents
-                    </a>
                 </div>
             </div>
         </div>
@@ -30,16 +27,8 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center gap-2">
                             <i class="fas fa-sync text-primary"></i>
-                            <h6 class="mb-0 fw-bold">SAP Data Sync & Overview</h6>
+                            <h6 class="mb-0 fw-bold">SAP Data Sync</h6>
                             <span class="badge bg-light text-dark border ms-2" id="pro-count-badge" style="display: none;">0 PRO</span>
-                        </div>
-                        <div class="d-flex gap-1">
-                            <span class="badge bg-light text-dark border small">
-                                <i class="fas fa-database me-1"></i>{{ $reservations->total() }} Records
-                            </span>
-                            <span class="badge bg-light text-dark border small">
-                                <i class="fas fa-industry me-1"></i>{{ $reservations->unique('sap_plant')->count() }} Plants
-                            </span>
                         </div>
                     </div>
                 </div>
@@ -75,12 +64,12 @@
                                     <label for="order_number" class="form-label small fw-semibold mb-1">
                                         PRO Order Numbers <span class="text-danger">*</span>
                                     </label>
-                                    <div class="position-relative">
-                                        <textarea class="form-control form-control-sm" id="order_number" name="order_number"
+                                    <div class="d-flex">
+                                        <textarea class="form-control form-control-sm flex-grow-1" id="order_number" name="order_number"
                                                   rows="1" placeholder="Enter multiple PRO numbers separated by commas or new lines"
                                                   required>{{ old('order_number', session('order')) }}</textarea>
-                                        <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-1"
-                                                type="button" id="paste-pro" title="Paste">
+                                        <button class="btn btn-sm btn-outline-secondary ms-1"
+                                                type="button" id="paste-pro" title="Paste PRO numbers">
                                             <i class="fas fa-paste"></i>
                                         </button>
                                     </div>
@@ -100,65 +89,6 @@
                             </div>
                         </div>
                     </form>
-
-                    {{-- Stats Row --}}
-                    <div class="row g-2 mt-3">
-                        <div class="col-md-3">
-                            <div class="border rounded p-2 bg-light">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-2">
-                                        <i class="fas fa-database text-primary"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="text-muted mb-0 small">Total Records</h6>
-                                        <h5 class="mb-0 fw-bold" id="totalRecords">{{ $reservations->total() }}</h5>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="border rounded p-2 bg-light">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-2">
-                                        <i class="fas fa-industry text-info"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="text-muted mb-0 small">Plants</h6>
-                                        <h5 class="mb-0 fw-bold" id="totalPlants">{{ $reservations->unique('sap_plant')->count() }}</h5>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="border rounded p-2 bg-light">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-2">
-                                        <i class="fas fa-boxes text-success"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="text-muted mb-0 small">Materials</h6>
-                                        <h5 class="mb-0 fw-bold" id="totalMaterials">{{ $reservations->unique('matnr')->count() }}</h5>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="border rounded p-2 bg-light">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-2">
-                                        <i class="fas fa-file-invoice text-danger"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="text-muted mb-0 small">PRO Numbers</h6>
-                                        <h5 class="mb-0 fw-bold" id="totalPro">{{ $reservations->unique('sap_order')->count() }}</h5>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -172,7 +102,6 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
                             <h6 class="mb-0 fw-bold">Reservation Data</h6>
-                            <span class="badge bg-light text-dark border ms-2" id="filteredCount">{{ $reservations->total() }}</span>
                         </div>
 
                         <div class="d-flex align-items-center">
@@ -187,28 +116,6 @@
                                         type="button" id="clearSearchBtn">
                                     <i class="fas fa-times"></i>
                                 </button>
-                            </div>
-
-                            {{-- Filter Dropdown --}}
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
-                                        type="button" id="filterDropdown" data-bs-toggle="dropdown">
-                                    <i class="fas fa-filter me-1"></i>Filter
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end border shadow-sm">
-                                    <li><a class="dropdown-item" href="#" data-filter="all">All Data</a></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    @foreach($plants as $plant)
-                                    <li>
-                                        <a class="dropdown-item" href="#" data-filter="plant-{{ $plant }}">
-                                            Plant {{ $plant }}
-                                            <span class="badge bg-secondary float-end">
-                                                {{ $reservations->where('sap_plant', $plant)->count() }}
-                                            </span>
-                                        </a>
-                                    </li>
-                                    @endforeach
-                                </ul>
                             </div>
                         </div>
                     </div>
@@ -359,10 +266,13 @@
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content border">
             <div class="modal-body text-center p-4">
-                <div class="spinner-border text-primary mb-3" role="status">
-                    <span class="visually-hidden">Loading...</span>
+                <div id="lottie-container"></div>
+                <div id="fallback-animation" style="display: none;">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
                 </div>
-                <h6 class="mb-2">Syncing SAP Data</h6>
+                <h6 class="mb-2 mt-3">Syncing SAP Data</h6>
                 <div class="progress mb-3" style="height: 4px;">
                     <div class="progress-bar progress-bar-striped progress-bar-animated"
                          id="syncProgress" style="width: 0%"></div>
@@ -458,9 +368,14 @@
         border-left-color: transparent;
     }
 
-    /* Stats card styling */
-    .bg-light {
-        background-color: #f8f9fa !important;
+    /* Lottie animation container */
+    #lottie-container {
+        width: 120px;
+        height: 120px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     /* Responsive adjustments */
@@ -493,337 +408,397 @@
             margin-bottom: 0 !important;
         }
 
-        /* Make stats cards smaller on mobile */
-        .border.rounded.p-2.bg-light {
-            padding: 0.5rem !important;
-        }
-
-        .border.rounded.p-2.bg-light h5 {
-            font-size: 1rem;
+        /* Adjust Lottie container for mobile */
+        #lottie-container {
+            width: 100px;
+            height: 100px;
         }
     }
 </style>
 @endpush
 
 @push('scripts')
+{{-- Load Lottie library --}}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Fokuskan ke input plant saat halaman dimuat
-        const plantInput = document.getElementById('plant');
-        if (plantInput) {
-            setTimeout(() => {
-                plantInput.focus();
-            }, 300);
+document.addEventListener('DOMContentLoaded', function() {
+    // Fokuskan ke input plant saat halaman dimuat
+    const plantInput = document.getElementById('plant');
+    if (plantInput) {
+        setTimeout(() => {
+            plantInput.focus();
+        }, 300);
+    }
+
+    // Elements
+    const orderNumberInput = document.getElementById('order_number');
+    const proCountBadge = document.getElementById('pro-count-badge');
+    const pasteProBtn = document.getElementById('paste-pro');
+    const syncButton = document.getElementById('syncButton');
+    const syncForm = document.getElementById('syncForm');
+
+    // Modal elements
+    const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
+    const progressModalElement = document.getElementById('progressModal');
+    const resultModal = new bootstrap.Modal(document.getElementById('resultModal'));
+
+    // Variable untuk menyimpan instance Lottie
+    let lottieAnimation = null;
+
+    // Fungsi untuk memuat animasi Lottie
+    function loadLottieAnimation() {
+        const container = document.getElementById('lottie-container');
+        const fallback = document.getElementById('fallback-animation');
+
+        // Kosongkan container
+        container.innerHTML = '';
+
+        // Cek apakah file animasi ada di server
+        const animationUrl = "{{ asset('animation/Pacman.json') }}";
+
+        // Coba load animasi Lottie
+        try {
+            lottieAnimation = lottie.loadAnimation({
+                container: container,
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                path: animationUrl,
+                rendererSettings: {
+                    progressiveLoad: true,
+                    hideOnTransparent: true
+                }
+            });
+
+            // Sembunyikan fallback spinner
+            fallback.style.display = 'none';
+            container.style.display = 'block';
+
+            // Event listener untuk error animasi
+            lottieAnimation.addEventListener('error', function(error) {
+                console.error('Lottie animation error:', error);
+                showFallbackAnimation();
+            });
+
+            // Event listener ketika data gagal dimuat
+            lottieAnimation.addEventListener('data_failed', function() {
+                console.error('Lottie animation data failed to load');
+                showFallbackAnimation();
+            });
+
+        } catch (error) {
+            console.error('Error loading Lottie animation:', error);
+            showFallbackAnimation();
         }
+    }
 
-        // Elements
-        const orderNumberInput = document.getElementById('order_number');
-        const proCountBadge = document.getElementById('pro-count-badge');
-        const pasteProBtn = document.getElementById('paste-pro');
-        const syncButton = document.getElementById('syncButton');
-        const syncForm = document.getElementById('syncForm');
+    // Fungsi untuk menampilkan fallback spinner
+    function showFallbackAnimation() {
+        const container = document.getElementById('lottie-container');
+        const fallback = document.getElementById('fallback-animation');
 
-        // Modal elements
-        const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
-        const resultModal = new bootstrap.Modal(document.getElementById('resultModal'));
+        container.style.display = 'none';
+        fallback.style.display = 'block';
+    }
 
-        // Parse PRO numbers with support for multiple formats
-        function parseProNumbers(inputText) {
-            if (!inputText) return [];
-
-            // Support for multiple formats: comma, newline, semicolon, space
-            let normalized = inputText
-                .replace(/[,;|\n\r]/g, ',')  // Replace all separators with commas
-                .replace(/\s+/g, ',')        // Replace spaces with commas
-                .replace(/,\s*,/g, ',')      // Remove empty entries
-                .replace(/^\s+|\s+$/g, '');  // Trim whitespace
-
-            let proNumbers = normalized.split(',')
-                .map(pro => {
-                    // Clean each PRO number
-                    let cleaned = pro.trim();
-
-                    // Remove any non-numeric characters (except for PRO prefixes if needed)
-                    cleaned = cleaned.replace(/[^0-9]/g, '');
-
-                    // Keep leading zeros for SAP format (12 digits)
-                    return cleaned;
-                })
-                .filter(pro => pro.length > 0 && /^\d+$/.test(pro));
-
-            // Remove duplicates and sort numerically
-            proNumbers = [...new Set(proNumbers)];
-            proNumbers.sort((a, b) => {
-                // Convert to numbers for proper numerical sorting
-                const numA = parseInt(a, 10);
-                const numB = parseInt(b, 10);
-                return numA - numB;
-            });
-
-            return proNumbers;
-        }
-
-        // Update PRO badge and sync button state
-        function updateProBadge() {
-            const inputText = orderNumberInput.value;
-            const proNumbers = parseProNumbers(inputText);
-            const count = proNumbers.length;
-
-            // Update badge
-            if (count > 0) {
-                proCountBadge.textContent = `${count} PRO`;
-                proCountBadge.style.display = 'inline-block';
-                syncButton.disabled = false;
-            } else {
-                proCountBadge.style.display = 'none';
-                syncButton.disabled = true;
-            }
-
-            return proNumbers;
-        }
-
-        // Event listeners for sync form
-        orderNumberInput.addEventListener('input', updateProBadge);
-
-        orderNumberInput.addEventListener('blur', function() {
-            const proNumbers = parseProNumbers(this.value);
-            if (proNumbers.length > 0) {
-                // Format with each PRO on new line for better readability
-                this.value = proNumbers.join('\n');
-                updateProBadge();
-            }
-        });
-
-        pasteProBtn.addEventListener('click', async function() {
-            try {
-                const text = await navigator.clipboard.readText();
-                if (text.trim()) {
-                    orderNumberInput.value = text.trim();
-                    updateProBadge();
-                }
-            } catch (err) {
-                console.error('Clipboard error:', err);
-            }
-        });
-
-        // Form submission with AJAX
-        if (syncForm) {
-            syncForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-
-                const plant = document.getElementById('plant').value;
-                const orderInput = document.getElementById('order_number').value;
-                const proNumbers = parseProNumbers(orderInput);
-
-                // Validation
-                if (!plant) {
-                    alert('Plant is required');
-                    return false;
-                }
-
-                if (proNumbers.length === 0) {
-                    alert('Enter at least one PRO number');
-                    return false;
-                }
-
-                console.log('Submitting PRO numbers:', proNumbers);
-
-                // Show progress modal
-                document.getElementById('progressDetails').textContent = `Processing ${proNumbers.length} PRO numbers`;
-                document.getElementById('progressProCount').textContent = `${proNumbers.length} PRO`;
-                document.getElementById('progressPlant').textContent = `Plant: ${plant}`;
-                document.getElementById('syncProgress').style.width = '30%';
-
-                progressModal.show();
-
-                // Update button state
-                syncButton.disabled = true;
-
-                // Prepare form data
-                const formData = new FormData();
-                formData.append('plant', plant);
-                formData.append('order_number', orderInput);
-                formData.append('_token', document.querySelector('input[name="_token"]').value);
-                formData.append('pro_numbers_count', proNumbers.length);
-
-                // AJAX request
-                fetch('{{ route("reservations.sync") }}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(response => {
-                    document.getElementById('syncProgress').style.width = '100%';
-
-                    setTimeout(function() {
-                        progressModal.hide();
-
-                        if (response.success) {
-                            // Show success result
-                            showResultModal(
-                                'Sync Successful',
-                                `
-                                <div class="alert alert-success mb-3">
-                                    Data synced successfully
-                                </div>
-                                <div class="row mb-3">
-                                    <div class="col-6">
-                                        <div class="border p-2 text-center">
-                                            <h6 class="text-primary mb-1">${response.synced_count || 0}</h6>
-                                            <small class="text-muted">Records Saved</small>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="border p-2 text-center">
-                                            <h6 class="text-success mb-1">${proNumbers.length}</h6>
-                                            <small class="text-muted">PRO Numbers</small>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="border-top pt-2">
-                                    <small class="text-muted">Plant: ${plant}</small><br>
-                                    <small class="text-muted">PROs processed: ${proNumbers.length}</small>
-                                </div>
-                                `
-                            );
-
-                            // Reload page after 2 seconds if successful
-                            setTimeout(function() {
-                                location.reload();
-                            }, 2000);
-                        } else {
-                            // Show error result
-                            showResultModal(
-                                'Sync Failed',
-                                `
-                                <div class="alert alert-danger mb-3">
-                                    ${response.message || 'Sync failed'}
-                                </div>
-                                <div class="border p-2">
-                                    <small class="text-muted">Error details:</small>
-                                    <p class="mb-0 mt-1">${response.error || 'Unknown error'}</p>
-                                </div>
-                                `
-                            );
-                        }
-                    }, 500);
-                })
-                .catch(error => {
-                    progressModal.hide();
-                    console.error('Sync error:', error);
-
-                    showResultModal(
-                        'Sync Error',
-                        `
-                        <div class="alert alert-danger">
-                            Network error occurred: ${error.message}
-                        </div>
-                        `
-                    );
-                })
-                .finally(() => {
-                    // Reset button
-                    syncButton.disabled = false;
-                });
-
-                return false;
-            });
-        }
-
-        // Initialize
-        updateProBadge();
-
-        // Live search functionality
-        const liveSearchInput = document.getElementById('liveSearchInput');
-        const clearSearchBtn = document.getElementById('clearSearchBtn');
-        const tableRows = document.querySelectorAll('.searchable-row');
-        const filteredCount = document.getElementById('filteredCount');
-        const allRows = Array.from(tableRows);
-
-        if (liveSearchInput) {
-            liveSearchInput.addEventListener('input', function() {
-                const term = this.value.toLowerCase().trim();
-                let visibleCount = 0;
-
-                allRows.forEach(row => {
-                    const rowData = row.getAttribute('data-search').toLowerCase();
-                    const isVisible = rowData.includes(term);
-                    row.style.display = isVisible ? '' : 'none';
-                    if (isVisible) visibleCount++;
-                });
-
-                // Update count
-                filteredCount.textContent = visibleCount;
-
-                // Show/hide no data row
-                const noDataRow = document.getElementById('noDataRow');
-                if (noDataRow) {
-                    if (term === '' || visibleCount > 0) {
-                        noDataRow.style.display = 'none';
-                    } else {
-                        noDataRow.style.display = '';
-                    }
-                }
-            });
-
-            clearSearchBtn.addEventListener('click', function() {
-                liveSearchInput.value = '';
-                liveSearchInput.dispatchEvent(new Event('input'));
-                liveSearchInput.focus();
-            });
-
-            // Keyboard shortcuts
-            document.addEventListener('keydown', function(e) {
-                if (e.ctrlKey && e.key === '/') {
-                    e.preventDefault();
-                    liveSearchInput.focus();
-                    liveSearchInput.select();
-                }
-
-                if (e.key === 'Escape' && document.activeElement === liveSearchInput) {
-                    liveSearchInput.value = '';
-                    liveSearchInput.dispatchEvent(new Event('input'));
-                }
-            });
-        }
-
-        // Filter by plant
-        document.querySelectorAll('[data-filter]').forEach(item => {
-            item.addEventListener('click', function(e) {
-                e.preventDefault();
-                const filter = this.getAttribute('data-filter');
-
-                let visibleCount = 0;
-                allRows.forEach(row => {
-                    if (filter === 'all' || row.classList.contains(filter)) {
-                        row.style.display = '';
-                        visibleCount++;
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-
-                filteredCount.textContent = visibleCount;
-                if (liveSearchInput) liveSearchInput.value = '';
-
-                // Update dropdown text
-                const filterText = this.textContent.split('\n')[0];
-                document.getElementById('filterDropdown').innerHTML =
-                    `<i class="fas fa-filter me-1"></i>${filterText}`;
-            });
-        });
+    // Event untuk menampilkan modal progress
+    progressModalElement.addEventListener('show.bs.modal', function() {
+        loadLottieAnimation();
     });
 
-    // Helper functions
-    function showResultModal(title, content) {
-        $('#resultTitle').text(title);
-        $('#resultContent').html(content);
-        $('#resultModal').modal('show');
+    // Event untuk menyembunyikan modal progress
+    progressModalElement.addEventListener('hidden.bs.modal', function() {
+        // Hentikan animasi Lottie
+        if (lottieAnimation) {
+            lottieAnimation.destroy();
+            lottieAnimation = null;
+        }
+    });
+
+    // Parse PRO numbers with support for multiple formats
+    function parseProNumbers(inputText) {
+        if (!inputText) return [];
+
+        // Support for multiple formats: comma, newline, semicolon, space
+        let normalized = inputText
+            .replace(/[,;|\n\r]/g, ',')  // Replace all separators with commas
+            .replace(/\s+/g, ',')        // Replace spaces with commas
+            .replace(/,\s*,/g, ',')      // Remove empty entries
+            .replace(/^\s+|\s+$/g, '');  // Trim whitespace
+
+        let proNumbers = normalized.split(',')
+            .map(pro => {
+                // Clean each PRO number
+                let cleaned = pro.trim();
+
+                // Remove any non-numeric characters (except for PRO prefixes if needed)
+                cleaned = cleaned.replace(/[^0-9]/g, '');
+
+                // Keep leading zeros for SAP format (12 digits)
+                return cleaned;
+            })
+            .filter(pro => pro.length > 0 && /^\d+$/.test(pro));
+
+        // Remove duplicates and sort numerically
+        proNumbers = [...new Set(proNumbers)];
+        proNumbers.sort((a, b) => {
+            // Convert to numbers for proper numerical sorting
+            const numA = parseInt(a, 10);
+            const numB = parseInt(b, 10);
+            return numA - numB;
+        });
+
+        return proNumbers;
     }
+
+    // Update PRO badge and sync button state
+    function updateProBadge() {
+        const inputText = orderNumberInput.value;
+        const proNumbers = parseProNumbers(inputText);
+        const count = proNumbers.length;
+
+        // Update badge
+        if (count > 0) {
+            proCountBadge.textContent = `${count} PRO`;
+            proCountBadge.style.display = 'inline-block';
+            syncButton.disabled = false;
+        } else {
+            proCountBadge.style.display = 'none';
+            syncButton.disabled = true;
+        }
+
+        return proNumbers;
+    }
+
+    // Event listeners for sync form
+    orderNumberInput.addEventListener('input', updateProBadge);
+
+    orderNumberInput.addEventListener('blur', function() {
+        const proNumbers = parseProNumbers(this.value);
+        if (proNumbers.length > 0) {
+            // Format with each PRO on new line for better readability
+            this.value = proNumbers.join('\n');
+            updateProBadge();
+        }
+    });
+
+    // Paste button click handler
+    pasteProBtn.addEventListener('click', async function() {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text.trim()) {
+                // Parse the pasted text
+                const proNumbers = parseProNumbers(text);
+                if (proNumbers.length > 0) {
+                    orderNumberInput.value = proNumbers.join('\n');
+                    updateProBadge();
+
+                    // Show feedback
+                    const originalTitle = this.getAttribute('title');
+                    this.innerHTML = '<i class="fas fa-check"></i>';
+                    this.setAttribute('title', `Pasted ${proNumbers.length} PRO numbers`);
+
+                    setTimeout(() => {
+                        this.innerHTML = '<i class="fas fa-paste"></i>';
+                        this.setAttribute('title', originalTitle);
+                    }, 1500);
+                }
+            }
+        } catch (err) {
+            console.error('Clipboard error:', err);
+            alert('Unable to access clipboard. Please paste manually.');
+        }
+    });
+
+    // Form submission with AJAX
+    if (syncForm) {
+        syncForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const plant = document.getElementById('plant').value;
+            const orderInput = document.getElementById('order_number').value;
+            const proNumbers = parseProNumbers(orderInput);
+
+            // Validation
+            if (!plant) {
+                alert('Plant is required');
+                return false;
+            }
+
+            if (proNumbers.length === 0) {
+                alert('Enter at least one PRO number');
+                return false;
+            }
+
+            console.log('Submitting PRO numbers:', proNumbers);
+
+            // Show progress modal
+            document.getElementById('progressDetails').textContent = `Processing ${proNumbers.length} PRO numbers`;
+            document.getElementById('progressProCount').textContent = `${proNumbers.length} PRO`;
+            document.getElementById('progressPlant').textContent = `Plant: ${plant}`;
+            document.getElementById('syncProgress').style.width = '30%';
+
+            progressModal.show();
+
+            // Update button state
+            syncButton.disabled = true;
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('plant', plant);
+            formData.append('order_number', orderInput);
+            formData.append('_token', document.querySelector('input[name="_token"]').value);
+            formData.append('pro_numbers_count', proNumbers.length);
+
+            // AJAX request
+            fetch('{{ route("reservations.sync") }}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(response => {
+                document.getElementById('syncProgress').style.width = '100%';
+
+                setTimeout(function() {
+                    progressModal.hide();
+
+                    if (response.success) {
+                        // Show success result
+                        showResultModal(
+                            'Sync Successful',
+                            `
+                            <div class="alert alert-success mb-3">
+                                Data synced successfully
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <div class="border p-2 text-center">
+                                        <h6 class="text-primary mb-1">${response.synced_count || 0}</h6>
+                                        <small class="text-muted">Records Saved</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="border p-2 text-center">
+                                        <h6 class="text-success mb-1">${proNumbers.length}</h6>
+                                        <small class="text-muted">PRO Numbers</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="border-top pt-2">
+                                <small class="text-muted">Plant: ${plant}</small><br>
+                                <small class="text-muted">PROs processed: ${proNumbers.length}</small>
+                            </div>
+                            `
+                        );
+
+                        // Reload page after 2 seconds if successful
+                        setTimeout(function() {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        // Show error result
+                        showResultModal(
+                            'Sync Failed',
+                            `
+                            <div class="alert alert-danger mb-3">
+                                ${response.message || 'Sync failed'}
+                            </div>
+                            <div class="border p-2">
+                                <small class="text-muted">Error details:</small>
+                                <p class="mb-0 mt-1">${response.error || 'Unknown error'}</p>
+                            </div>
+                            `
+                        );
+                    }
+                }, 500);
+            })
+            .catch(error => {
+                progressModal.hide();
+                console.error('Sync error:', error);
+
+                showResultModal(
+                    'Sync Error',
+                    `
+                    <div class="alert alert-danger">
+                        Network error occurred: ${error.message}
+                    </div>
+                    `
+                );
+            })
+            .finally(() => {
+                // Reset button
+                syncButton.disabled = false;
+            });
+
+            return false;
+        });
+    }
+
+    // Initialize
+    updateProBadge();
+
+    // Live search functionality
+    const liveSearchInput = document.getElementById('liveSearchInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const tableRows = document.querySelectorAll('.searchable-row');
+    const allRows = Array.from(tableRows);
+
+    if (liveSearchInput) {
+        liveSearchInput.addEventListener('input', function() {
+            const term = this.value.toLowerCase().trim();
+            let visibleCount = 0;
+
+            allRows.forEach(row => {
+                const rowData = row.getAttribute('data-search').toLowerCase();
+                const isVisible = rowData.includes(term);
+                row.style.display = isVisible ? '' : 'none';
+                if (isVisible) visibleCount++;
+            });
+
+            // Show/hide no data row
+            const noDataRow = document.getElementById('noDataRow');
+            if (noDataRow) {
+                if (term === '' || visibleCount > 0) {
+                    noDataRow.style.display = 'none';
+                } else {
+                    noDataRow.style.display = '';
+                }
+            }
+        });
+
+        clearSearchBtn.addEventListener('click', function() {
+            liveSearchInput.value = '';
+            liveSearchInput.dispatchEvent(new Event('input'));
+            liveSearchInput.focus();
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === '/') {
+                e.preventDefault();
+                liveSearchInput.focus();
+                liveSearchInput.select();
+            }
+
+            if (e.key === 'Escape' && document.activeElement === liveSearchInput) {
+                liveSearchInput.value = '';
+                liveSearchInput.dispatchEvent(new Event('input'));
+            }
+        });
+    }
+});
+
+// Helper functions
+function showResultModal(title, content) {
+    document.getElementById('resultTitle').textContent = title;
+    document.getElementById('resultContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('resultModal')).show();
+}
 </script>
 @endpush
 @endsection

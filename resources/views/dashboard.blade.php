@@ -114,7 +114,7 @@
 
     <!-- Recent Documents -->
     <div class="row">
-        <div class="col-md-6">
+        <div class="col-md-12">
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">Recent Documents</h5>
@@ -122,28 +122,56 @@
                 <div class="card-body">
                     @php
                         $recentDocuments = \App\Models\ReservationDocument::orderBy('created_at', 'desc')
-                            ->limit(5)
+                            ->limit(10)
                             ->get();
                     @endphp
 
                     @if($recentDocuments->count() > 0)
-                        <div class="list-group">
-                            @foreach($recentDocuments as $doc)
-                                <a href="{{ route('documents.show', $doc->id) }}" class="list-group-item list-group-item-action">
-                                    <div class="d-flex w-100 justify-content-between">
-                                        <h6 class="mb-1 {{ $doc->plant == '3000' ? 'text-primary' : 'text-success' }}">
-                                            {{ $doc->document_no }}
-                                        </h6>
-                                        <small>{{ \Carbon\Carbon::parse($doc->created_at)->diffForHumans() }}</small>
-                                    </div>
-                                    <p class="mb-1">
-                                        <span class="badge bg-info">{{ $doc->plant }}</span>
-                                        <span class="badge bg-warning">{{ $doc->status }}</span>
-                                        <span class="badge bg-secondary">{{ $doc->total_items }} items</span>
-                                    </p>
-                                    <small>By: {{ $doc->created_by_name }}</small>
-                                </a>
-                            @endforeach
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Document No</th>
+                                        <th>Plant</th>
+                                        <th>Status</th>
+                                        <th>Remarks</th>
+                                        <th>Created By</th>
+                                        <th>Created At</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($recentDocuments as $doc)
+                                        <tr>
+                                            <td>
+                                                <a href="{{ route('documents.show', $doc->id) }}" class="{{ $doc->plant == '3000' ? 'text-primary' : 'text-success' }} fw-bold">
+                                                    {{ $doc->document_no }}
+                                                </a>
+                                            </td>
+                                            <td><span class="badge bg-info">{{ $doc->plant }}</span></td>
+                                            <td>
+                                                @if($doc->status == 'created')
+                                                    <span class="badge bg-warning">Created</span>
+                                                @elseif($doc->status == 'posted')
+                                                    <span class="badge bg-success">Posted</span>
+                                                @else
+                                                    <span class="badge bg-danger">Cancelled</span>
+                                                @endif
+                                            </td>
+                                            <td class="text-start">
+                                                @if($doc->remarks && trim($doc->remarks) != '')
+                                                    <div class="remarks-text" data-bs-toggle="tooltip" title="{{ $doc->remarks }}">
+                                                        {{ Str::limit($doc->remarks, 50) }}
+                                                    </div>
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
+                                            </td>
+                                            <td>{{ $doc->created_by_name }}</td>
+                                            <td>{{ \Carbon\Carbon::parse($doc->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     @else
                         <div class="text-center py-4">
@@ -159,117 +187,26 @@
                 </div>
             </div>
         </div>
-
-        <!-- System Status -->
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">System Status</h5>
-                </div>
-                <div class="card-body">
-                    @php
-                        $flaskUrl = env('FLASK_API_URL', 'http://127.0.0.1:8010');
-                        $flaskRunning = false;
-
-                        try {
-                            $client = new \GuzzleHttp\Client(['timeout' => 3]);
-                            $response = $client->get($flaskUrl . '/api/sap/health');
-                            if ($response->getStatusCode() == 200) {
-                                $flaskRunning = true;
-                            }
-                        } catch (\Exception $e) {
-                            $flaskRunning = false;
-                        }
-                    @endphp
-
-                    <div class="list-group">
-                        <div class="list-group-item">
-                            <div class="d-flex w-100 justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="mb-0">Python Flask API</h6>
-                                    <small class="text-muted">SAP Integration Service</small>
-                                </div>
-                                <div>
-                                    @if($flaskRunning)
-                                        <span class="badge bg-success">Running</span>
-                                    @else
-                                        <span class="badge bg-danger">Stopped</span>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="list-group-item">
-                            <div class="d-flex w-100 justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="mb-0">Database Connection</h6>
-                                    <small class="text-muted">MySQL Database</small>
-                                </div>
-                                <div>
-                                    @try
-                                        \Illuminate\Support\Facades\DB::connection()->getPdo();
-                                        <span class="badge bg-success">Connected</span>
-                                    @catch(\Exception $e)
-                                        <span class="badge bg-danger">Disconnected</span>
-                                    @endtry
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="list-group-item">
-                            <div class="d-flex w-100 justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="mb-0">SAP Credentials</h6>
-                                    <small class="text-muted">Username: {{ env('SAP_USERNAME', 'Not Set') }}</small>
-                                </div>
-                                <div>
-                                    @if(env('SAP_USERNAME') && env('SAP_PASSWORD'))
-                                        <span class="badge bg-success">Configured</span>
-                                    @else
-                                        <span class="badge bg-warning">Not Configured</span>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="list-group-item">
-                            <div class="d-flex w-100 justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="mb-0">Last Data Sync</h6>
-                                    @php
-                                        $lastSync = \Illuminate\Support\Facades\DB::table('sap_reservations')
-                                            ->orderBy('sync_date', 'desc')
-                                            ->value('sync_date');
-                                    @endphp
-                                    <small class="text-muted">
-                                        @if($lastSync)
-                                            {{ \Carbon\Carbon::parse($lastSync)->format('d M Y H:i:s') }}
-                                        @else
-                                            Never
-                                        @endif
-                                    </small>
-                                </div>
-                                <div>
-                                    @if($lastSync)
-                                        <span class="badge bg-info">{{ \Carbon\Carbon::parse($lastSync)->diffForHumans() }}</span>
-                                    @else
-                                        <span class="badge bg-secondary">No Data</span>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    @if(!$flaskRunning)
-                        <div class="alert alert-danger mt-3">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <strong>Python Flask API is not running!</strong><br>
-                            Please start the service by running: <code>python sap_rfc.py</code>
-                        </div>
-                    @endif
-                </div>
-            </div>
-        </div>
     </div>
 </div>
+
+<style>
+    .remarks-text {
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: help;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
 @endsection
