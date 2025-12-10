@@ -61,13 +61,6 @@ class ReservationController extends Controller
 
             $reservations = $query->orderBy('created_at', 'desc')->paginate(20);
 
-            // Debug: Cek data
-            Log::info('Reservations data:', [
-                'count' => $reservations->count(),
-                'total' => $reservations->total(),
-                'first_item' => $reservations->first() ? get_class($reservations->first()) : 'No data'
-            ]);
-
             return view('reservations.index', compact('reservations', 'plants', 'statuses'));
 
         } catch (\Exception $e) {
@@ -171,81 +164,119 @@ class ReservationController extends Controller
     }
 
     /**
- * Show the form for editing the specified document.
- */
-public function editDocument($id)
-{
-    try {
-        $document = ReservationDocument::findOrFail($id);
-        // Hanya dokumen dengan status 'created' yang bisa diedit
-        if ($document->status != 'created') {
-            return redirect()->route('documents.show', $document->id)
-                ->with('error', 'Only documents with status "Created" can be edited.');
-        }
-        return view('documents.edit', compact('document'));
-    } catch (\Exception $e) {
-        return redirect()->route('documents.index')
-            ->with('error', 'Document not found: ' . $e->getMessage());
-    }
-}
-
-/**
- * Update the specified document in storage.
- */
-public function updateDocument(Request $request, $id)
-{
-    DB::beginTransaction();
-
-    try {
-        $document = ReservationDocument::findOrFail($id);
-
-        // Hanya dokumen dengan status 'created' yang bisa diupdate
-        if ($document->status != 'created') {
-            return redirect()->route('documents.show', $document->id)
-                ->with('error', 'Only documents with status "Created" can be edited.');
-        }
-
-        $request->validate([
-            'remarks' => 'nullable|string|max:500',
-            'items' => 'required|array',
-            'items.*.id' => 'required|exists:reservation_document_items,id',
-            'items.*.requested_qty' => 'required|numeric|min:0',
-        ]);
-
-        // Update remarks - PERBAIKAN DI SINI
-        $document->remarks = $request->remarks;
-        $document->save();
-
-        // Update items qty
-        $totalQty = 0;
-        foreach ($request->items as $itemData) {
-            $item = $document->items()->find($itemData['id']);
-            if ($item) {
-                $item->update([
-                    'requested_qty' => $itemData['requested_qty'],
-                ]);
-                $totalQty += $itemData['requested_qty'];
+     * Show the form for editing the specified document.
+     */
+    public function editDocument($id)
+    {
+        try {
+            $document = ReservationDocument::findOrFail($id);
+            // Hanya dokumen dengan status 'created' yang bisa diedit
+            if ($document->status != 'created') {
+                return redirect()->route('documents.show', $document->id)
+                    ->with('error', 'Only documents with status "Created" can be edited.');
             }
+
+            // Get MRP from sap_reservations table for each item
+            foreach ($document->items as $item) {
+                $sapData = DB::table('sap_reservations')
+                    ->where('matnr', $item->material_code)
+                    ->where('sap_plant', $document->plant)
+                    ->first();
+
+                $item->dispo = $sapData->dispo ?? null;
+                $item->is_qty_editable = $this->isQtyEditableForMRP($sapData->dispo ?? null);
+            }
+
+            return view('documents.edit', compact('document'));
+        } catch (\Exception $e) {
+            return redirect()->route('documents.index')
+                ->with('error', 'Document not found: ' . $e->getMessage());
         }
-
-        // Update document total qty
-        $document->update([
-            'total_qty' => $totalQty,
-        ]);
-
-        DB::commit();
-
-        return redirect()->route('documents.show', $document->id)
-            ->with('success', 'Document updated successfully.');
-    } catch (\Exception $e) {
-        DB::rollBack();
-        return redirect()->back()
-            ->with('error', 'Failed to update document: ' . $e->getMessage())
-            ->withInput();
     }
-}
 
-/**
+    /**
+     * Check if quantity is editable based on MRP
+     */
+    private function isQtyEditableForMRP($dispo)
+    {
+        if (!$dispo) return true;
+
+        // MRP yang diperbolehkan untuk edit quantity
+        $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
+
+        return in_array($dispo, $allowedMRP);
+    }
+
+    /**
+     * Update the specified document in storage.
+     */
+    public function updateDocument(Request $request, $id)
+    {
+        DB::beginTransaction();
+
+        try {
+            $document = ReservationDocument::findOrFail($id);
+
+            // Hanya dokumen dengan status 'created' yang bisa diupdate
+            if ($document->status != 'created') {
+                return redirect()->route('documents.show', $document->id)
+                    ->with('error', 'Only documents with status "Created" can be edited.');
+            }
+
+            $request->validate([
+                'remarks' => 'nullable|string|max:500',
+                'items' => 'required|array',
+                'items.*.id' => 'required|exists:reservation_document_items,id',
+                'items.*.requested_qty' => 'required|numeric|min:0',
+            ]);
+
+            // Update remarks
+            $document->remarks = $request->remarks;
+            $document->save();
+
+            // Update items qty
+            $totalQty = 0;
+            foreach ($request->items as $itemData) {
+                $item = $document->items()->find($itemData['id']);
+                if ($item) {
+                    // Get MRP to check if quantity is editable
+                    $sapData = DB::table('sap_reservations')
+                        ->where('matnr', $item->material_code)
+                        ->where('sap_plant', $document->plant)
+                        ->first();
+
+                    $isEditable = $this->isQtyEditableForMRP($sapData->dispo ?? null);
+
+                    if (!$isEditable) {
+                        // Skip quantity update for non-editable MRP
+                        $itemData['requested_qty'] = $item->requested_qty;
+                    }
+
+                    $item->update([
+                        'requested_qty' => $itemData['requested_qty'],
+                    ]);
+                    $totalQty += $itemData['requested_qty'];
+                }
+            }
+
+            // Update document total qty
+            $document->update([
+                'total_qty' => $totalQty,
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('documents.show', $document->id)
+                ->with('success', 'Document updated successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->with('error', 'Failed to update document: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
+
+    /**
      * Update the specified reservation in storage.
      */
     public function update(Request $request, $id)
@@ -540,99 +571,140 @@ public function updateDocument(Request $request, $id)
         }
     }
 
-        private function processFlaskResponse($flaskResponse, $plant, $proNumbers)
-            {
-                DB::beginTransaction();
-                $syncedCount = 0;
+    /**
+     * Process Flask response with improved sortf handling
+     */
+    private function processFlaskResponse($flaskResponse, $plant, $proNumbers)
+    {
+        DB::beginTransaction();
+        $syncedCount = 0;
 
-                try {
-                    if (isset($flaskResponse['data']) && is_array($flaskResponse['data'])) {
-                        foreach ($flaskResponse['data'] as $item) {
-                            // Validasi data minimal
-                            if (empty($item['rsnum']) || empty($item['matnr']) || empty($item['sap_order'])) {
-                                Log::warning('Invalid data from Flask, missing required fields', ['item' => $item]);
-                                continue;
-                            }
-
-                            // Map data dari Flask
-                            $reservationData = [
-                                'rsnum' => $item['rsnum'] ?? null,
-                                'rspos' => $item['rspos'] ?? null,
-                                'sap_plant' => $item['sap_plant'] ?? $item['plant'] ?? $plant,
-                                'sap_order' => $item['sap_order'] ?? $item['order_number'] ?? null,
-                                'aufnr' => $item['aufnr'] ?? $item['sap_order'] ?? null,
-                                'matnr' => $item['matnr'] ?? null,
-                                'maktx' => $item['maktx'] ?? $item['material_description'] ?? 'No Description',
-                                'psmng' => $item['psmng'] ?? $item['quantity'] ?? 0,
-                                'meins' => $item['meins'] ?? $item['unit'] ?? 'PC',
-                                'gstrp' => isset($item['gstrp']) && !empty($item['gstrp']) ? Carbon::parse($item['gstrp']) : null,
-                                'gltrp' => isset($item['gltrp']) && !empty($item['gltrp']) ? Carbon::parse($item['gltrp']) : null,
-                                'makhd' => $item['makhd'] ?? $item['finish_good'] ?? null, // Kolom Finish Good
-                                'mtart' => $item['mtart'] ?? $item['material_type'] ?? null,
-                                'sortf' => $item['sortf'] ?? null,
-                                'dwerk' => $item['dwerk'] ?? $plant,
-                                'sync_by' => auth()->id(),
-                                'sync_by_name' => auth()->user()->name,
-                                'sync_at' => now(),
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ];
-
-                            // Hapus null values untuk date fields
-                            if (empty($reservationData['gstrp'])) {
-                                unset($reservationData['gstrp']);
-                            }
-                            if (empty($reservationData['gltrp'])) {
-                                unset($reservationData['gltrp']);
-                            }
-
-                            // **PERBAIKAN: Gunakan kombinasi unik rsnum + rspos + matnr + sap_plant**
-                            // Ini akan menyimpan setiap item reservation secara individual
-                            $uniqueKey = implode('_', [
-                                $reservationData['rsnum'],
-                                $reservationData['rspos'] ?? '000',
-                                $reservationData['matnr'],
-                                $reservationData['sap_plant']
-                            ]);
-
-                            // Update or create berdasarkan kombinasi unik
-                            $existing = DB::table('sap_reservations')
-                                ->where('rsnum', $reservationData['rsnum'])
-                                ->where('rspos', $reservationData['rspos'])
-                                ->where('matnr', $reservationData['matnr'])
-                                ->where('sap_plant', $reservationData['sap_plant'])
-                                ->first();
-
-                            if ($existing) {
-                                // Update existing record
-                                DB::table('sap_reservations')
-                                    ->where('id', $existing->id)
-                                    ->update($reservationData);
-                            } else {
-                                // Insert new record
-                                DB::table('sap_reservations')->insert($reservationData);
-                            }
-
-                            $syncedCount++;
-                        }
-                    } else {
-                        Log::warning('No data array in Flask response', ['response' => $flaskResponse]);
+        try {
+            if (isset($flaskResponse['data']) && is_array($flaskResponse['data'])) {
+                foreach ($flaskResponse['data'] as $item) {
+                    // Validasi data minimal
+                    if (empty($item['rsnum']) || empty($item['matnr']) || empty($item['sap_order'])) {
+                        Log::warning('Invalid data from Flask, missing required fields', ['item' => $item]);
+                        continue;
                     }
 
-                    DB::commit();
-                    Log::info('Database transaction committed', [
-                        'synced_count' => $syncedCount,
-                        'pro_numbers_count' => count($proNumbers),
-                        'plant' => $plant
-                    ]);
-                    return $syncedCount;
+                    // Extract sortf from multiple possible keys
+                    $sortf = $this->extractSortfFromItem($item);
 
-                } catch (\Exception $e) {
-                    DB::rollBack();
-                    Log::error('Process Flask response error: ' . $e->getMessage());
-                    throw new \Exception('Failed to process Flask response: ' . $e->getMessage());
+                    // Map data dari Flask
+                    $reservationData = [
+                        'rsnum' => $item['rsnum'] ?? null,
+                        'rspos' => $item['rspos'] ?? null,
+                        'sap_plant' => $item['sap_plant'] ?? $item['plant'] ?? $plant,
+                        'sap_order' => $item['sap_order'] ?? $item['order_number'] ?? null,
+                        'aufnr' => $item['aufnr'] ?? $item['sap_order'] ?? null,
+                        'matnr' => $item['matnr'] ?? null,
+                        'maktx' => $item['maktx'] ?? $item['material_description'] ?? 'No Description',
+                        'psmng' => $item['psmng'] ?? $item['quantity'] ?? 0,
+                        'meins' => $item['meins'] ?? $item['unit'] ?? 'PC',
+                        'gstrp' => isset($item['gstrp']) && !empty($item['gstrp']) ? Carbon::parse($item['gstrp']) : null,
+                        'gltrp' => isset($item['gltrp']) && !empty($item['gltrp']) ? Carbon::parse($item['gltrp']) : null,
+                        'makhd' => $item['makhd'] ?? $item['finish_good'] ?? null,
+                        'mtart' => $item['mtart'] ?? $item['material_type'] ?? null,
+                        'sortf' => $sortf, // Use extracted sortf value
+                        'dwerk' => $item['dwerk'] ?? $plant,
+                        'dispo' => $item['dispo'] ?? null,
+                        'kdauf' => $item['kdauf'] ?? null,
+                        'kdpos' => $item['kdpos'] ?? null,
+                        'sync_by' => auth()->id(),
+                        'sync_by_name' => auth()->user()->name,
+                        'sync_at' => now(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+
+                    // Debug: Log data untuk memastikan sortf ada
+                    Log::debug('Processing reservation data', [
+                        'matnr' => $reservationData['matnr'],
+                        'sortf_value' => $reservationData['sortf'],
+                        'has_sortf' => !empty($reservationData['sortf']),
+                        'original_keys' => array_keys($item)
+                    ]);
+
+                    // Clean up date fields
+                    if (empty($reservationData['gstrp'])) {
+                        unset($reservationData['gstrp']);
+                    }
+                    if (empty($reservationData['gltrp'])) {
+                        unset($reservationData['gltrp']);
+                    }
+
+                    // Check if record exists
+                    $existing = DB::table('sap_reservations')
+                        ->where('rsnum', $reservationData['rsnum'])
+                        ->where('rspos', $reservationData['rspos'])
+                        ->where('matnr', $reservationData['matnr'])
+                        ->where('sap_plant', $reservationData['sap_plant'])
+                        ->first();
+
+                    if ($existing) {
+                        DB::table('sap_reservations')
+                            ->where('id', $existing->id)
+                            ->update($reservationData);
+                    } else {
+                        DB::table('sap_reservations')->insert($reservationData);
+                    }
+
+                    $syncedCount++;
                 }
+            } else {
+                Log::warning('No data array in Flask response', ['response' => $flaskResponse]);
             }
+
+            DB::commit();
+            Log::info('Database transaction committed', [
+                'synced_count' => $syncedCount,
+                'pro_numbers_count' => count($proNumbers),
+                'plant' => $plant
+            ]);
+            return $syncedCount;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Process Flask response error: ' . $e->getMessage());
+            throw new \Exception('Failed to process Flask response: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Extract sortf from item with multiple possible keys
+     */
+    private function extractSortfFromItem($item)
+    {
+        // Prioritize 'sortf' field
+        if (isset($item['sortf']) && !empty($item['sortf'])) {
+            return $item['sortf'];
+        }
+
+        // Check for alternative field names
+        $alternativeKeys = ['sort_field', 'additional_info', 'additional_info_1', 'info', 'ztext'];
+
+        foreach ($alternativeKeys as $key) {
+            if (isset($item[$key]) && !empty($item[$key])) {
+                Log::debug("Using alternative key for sortf: {$key}", ['value' => $item[$key]]);
+                return $item[$key];
+            }
+        }
+
+        // Check for any field that might contain additional info
+        foreach ($item as $key => $value) {
+            if (is_string($key) &&
+                (stripos($key, 'sort') !== false ||
+                 stripos($key, 'info') !== false ||
+                 stripos($key, 'text') !== false) &&
+                !empty($value) && is_string($value)) {
+                Log::debug("Found potential sortf field: {$key}", ['value' => $value]);
+                return $value;
+            }
+        }
+
+        return null;
+    }
 
     /**
      * Check if specific Flask endpoint exists
@@ -1055,7 +1127,7 @@ public function updateDocument(Request $request, $id)
     }
 
     /**
-     * AJAX: Get materials by type.
+     * AJAX: Get materials by type - DIKOREKSI untuk mengatasi masalah sortf di step 3
      */
     public function getMaterialsByType(Request $request)
     {
@@ -1070,20 +1142,45 @@ public function updateDocument(Request $request, $id)
                 ]);
             }
 
+            // PERBAIKAN: Query yang benar untuk mengambil data di step 3
+            // Mengambil data yang DISTINCT berdasarkan matnr, tapi juga menyertakan sortf
             $materials = DB::table('sap_reservations')
-                ->select('matnr', 'maktx', 'mtart', 'sortf')
+                ->select(
+                    'matnr',
+                    'maktx',
+                    'mtart',
+                    DB::raw('MAX(sortf) as sortf'), // Ambil sortf (gunakan MAX jika ada multiple)
+                    DB::raw('MAX(dispo) as dispo'), // Ambil MRP
+                    DB::raw('MAX(kdauf) as kdauf'), // Ambil Sales Order
+                    DB::raw('MAX(kdpos) as kdpos')
+                )
                 ->where('sap_plant', $plant)
                 ->whereIn('mtart', $materialTypes)
                 ->whereNotNull('matnr')
-                ->distinct()
+                ->groupBy('matnr', 'maktx', 'mtart') // Group by yang diperlukan
                 ->orderBy('matnr')
                 ->get();
+
+            // Debug logging untuk melihat data yang diambil
+            Log::info('Materials by type fetched - Step 3', [
+                'plant' => $plant,
+                'material_types' => $materialTypes,
+                'count' => $materials->count(),
+                'sample_materials' => $materials->take(3)->map(function($item) {
+                    return [
+                        'matnr' => $item->matnr,
+                        'sortf' => $item->sortf,
+                        'has_sortf' => !empty($item->sortf)
+                    ];
+                })
+            ]);
 
             return response()->json([
                 'success' => true,
                 'materials' => $materials
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to get materials: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get materials: ' . $e->getMessage()
@@ -1164,343 +1261,281 @@ public function updateDocument(Request $request, $id)
      * AJAX: Load multiple PRO.
      */
     public function loadMultiplePro(Request $request)
-{
-    try {
-        $plant = $request->input('plant');
-        $materialTypes = $request->input('material_types', []);
-        $materials = $request->input('materials', []);
-        $proNumbers = $request->input('pro_numbers', []);
+    {
+        try {
+            $plant = $request->input('plant');
+            $materialTypes = $request->input('material_types', []);
+            $materials = $request->input('materials', []);
+            $proNumbers = $request->input('pro_numbers', []);
 
-        Log::info('🔍 DEBUG - Starting loadMultiplePro', [
-            'plant' => $plant,
-            'materials_raw' => $materials,
-            'pro_numbers_raw' => $proNumbers,
-            'material_types' => $materialTypes
-        ]);
-
-        if (empty($proNumbers) || empty($materials)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No PRO numbers or materials selected'
-            ], 400);
-        }
-
-        // **PERBAIKAN 1: Konversi material codes ke format 18-digit dengan leading zeros**
-        $formattedMaterials = array_map(function($material) {
-            // Jika material adalah numeric (hanya angka), tambahkan leading zeros hingga 18 karakter
-            if (ctype_digit($material)) {
-                return str_pad($material, 18, '0', STR_PAD_LEFT);
-            }
-            // Jika mengandung huruf/simbol, kembalikan asli
-            return $material;
-        }, $materials);
-
-        Log::info('🔍 DEBUG - Material format conversion', [
-            'original' => $materials,
-            'formatted_18_digit' => $formattedMaterials
-        ]);
-
-        // **PERBAIKAN 2: Format PRO numbers jika numeric**
-        $formattedProNumbers = array_map(function($pro) {
-            $pro = trim($pro);
-            // Jika hanya angka, format ke 12-digit (panjang standar PRO number)
-            if (ctype_digit($pro)) {
-                return str_pad($pro, 12, '0', STR_PAD_LEFT);
-            }
-            return $pro;
-        }, $proNumbers);
-
-        Log::info('🔍 DEBUG - PRO number format conversion', [
-            'original' => $proNumbers,
-            'formatted_12_digit' => $formattedProNumbers
-        ]);
-
-        // **DEBUG 1: Cek data di database untuk kombinasi ini**
-        $debugQuery = DB::table('sap_reservations')
-            ->where('sap_plant', $plant)
-            ->where(function($query) use ($formattedProNumbers) {
-                foreach ($formattedProNumbers as $pro) {
-                    $query->orWhere('sap_order', $pro)
-                          ->orWhere('aufnr', $pro);
-                }
-            })
-            ->where(function($query) use ($formattedMaterials) {
-                foreach ($formattedMaterials as $material) {
-                    $query->orWhere('matnr', $material);
-                }
-            });
-
-        $debugData = $debugQuery->get();
-
-        Log::info('🔍 DEBUG - Direct database check', [
-            'query_conditions' => [
+            Log::info('🔍 DEBUG - Starting loadMultiplePro', [
                 'plant' => $plant,
-                'pros' => $formattedProNumbers,
-                'materials' => $formattedMaterials
-            ],
-            'found_count' => $debugData->count(),
-            'found_records' => $debugData->map(function($item) {
-                return [
-                    'matnr' => $item->matnr,
-                    'sap_order' => $item->sap_order,
-                    'aufnr' => $item->aufnr,
-                    'maktx' => $item->maktx
-                ];
-            })
-        ]);
-
-        // **PERBAIKAN 3: Query utama dengan format yang tepat**
-        $materialData = DB::table('sap_reservations')
-            ->select(
-                'matnr as material_code',
-                'maktx as material_description',
-                'meins as unit',
-                'sortf',
-                DB::raw('SUM(psmng) as total_qty'),
-                DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'),
-                DB::raw('COUNT(DISTINCT sap_order) as pro_count')
-            )
-            ->where('sap_plant', $plant)
-            ->whereIn('matnr', $formattedMaterials)
-            ->where(function($query) use ($formattedProNumbers) {
-                $query->whereIn('sap_order', $formattedProNumbers)
-                      ->orWhereIn('aufnr', $formattedProNumbers);
-            })
-            ->groupBy('matnr', 'maktx', 'meins', 'sortf')
-            ->orderBy('matnr')
-            ->get();
-
-        Log::info('🔍 DEBUG - Main query result', [
-            'query_count' => $materialData->count(),
-            'materials_found' => $materialData->pluck('material_code'),
-            'sql' => DB::getQueryLog()[count(DB::getQueryLog()) - 1]['query'] ?? 'N/A'
-        ]);
-
-        if ($materialData->isEmpty()) {
-            // **Cari data alternatif dengan format berbeda**
-            // Coba tanpa leading zeros
-            $altFormattedMaterials = array_map(function($material) {
-                return ltrim($material, '0');
-            }, $formattedMaterials);
-
-            $altFormattedProNumbers = array_map(function($pro) {
-                return ltrim($pro, '0');
-            }, $formattedProNumbers);
-
-            Log::info('🔍 DEBUG - Trying alternative format (without leading zeros)', [
-                'materials' => $altFormattedMaterials,
-                'pros' => $altFormattedProNumbers
+                'materials_raw' => $materials,
+                'pro_numbers_raw' => $proNumbers,
+                'material_types' => $materialTypes
             ]);
 
-            // **PERBAIKAN 4: Jika tidak ditemukan, coba query alternatif**
-            $alternativeData = DB::table('sap_reservations')
+            if (empty($proNumbers) || empty($materials)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No PRO numbers or materials selected'
+                ], 400);
+            }
+
+            // Format material codes to 18-digit
+            $formattedMaterials = array_map(function($material) {
+                if (ctype_digit($material)) {
+                    return str_pad($material, 18, '0', STR_PAD_LEFT);
+                }
+                return $material;
+            }, $materials);
+
+            // Format PRO numbers to 12-digit
+            $formattedProNumbers = array_map(function($pro) {
+                $pro = trim($pro);
+                if (ctype_digit($pro)) {
+                    return str_pad($pro, 12, '0', STR_PAD_LEFT);
+                }
+                return $pro;
+            }, $proNumbers);
+
+            // Main query dengan sortf - untuk step 5
+            $materialData = DB::table('sap_reservations')
                 ->select(
                     'matnr as material_code',
                     'maktx as material_description',
                     'meins as unit',
                     'sortf',
+                    'dispo',
                     DB::raw('SUM(psmng) as total_qty'),
                     DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'),
+                    DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
                     DB::raw('COUNT(DISTINCT sap_order) as pro_count')
                 )
                 ->where('sap_plant', $plant)
-                ->where(function($query) use ($altFormattedMaterials, $formattedMaterials) {
-                    // Coba kedua format
-                    $query->whereIn('matnr', $formattedMaterials)
-                          ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM matnr)'), $altFormattedMaterials);
-                })
-                ->where(function($query) use ($altFormattedProNumbers, $formattedProNumbers) {
+                ->whereIn('matnr', $formattedMaterials)
+                ->where(function($query) use ($formattedProNumbers) {
                     $query->whereIn('sap_order', $formattedProNumbers)
-                          ->orWhereIn('aufnr', $formattedProNumbers)
-                          ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM sap_order)'), $altFormattedProNumbers)
-                          ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM aufnr)'), $altFormattedProNumbers);
+                          ->orWhereIn('aufnr', $formattedProNumbers);
                 })
-                ->groupBy('matnr', 'maktx', 'meins', 'sortf')
+                ->groupBy('matnr', 'maktx', 'meins', 'sortf', 'dispo')
                 ->orderBy('matnr')
                 ->get();
 
-            if ($alternativeData->isEmpty()) {
-                // **Informasi lengkap untuk debugging**
-                $availableMaterials = DB::table('sap_reservations')
-                    ->where('sap_plant', $plant)
-                    ->whereNotNull('matnr')
-                    ->distinct()
-                    ->pluck('matnr')
-                    ->map(function($matnr) {
-                        return [
-                            'with_zeros' => $matnr,
-                            'without_zeros' => ltrim($matnr, '0')
-                        ];
-                    });
-
-                $availablePros = DB::table('sap_reservations')
-                    ->where('sap_plant', $plant)
-                    ->whereNotNull('sap_order')
-                    ->distinct()
-                    ->pluck('sap_order')
-                    ->map(function($pro) {
-                        return [
-                            'with_zeros' => $pro,
-                            'without_zeros' => ltrim($pro, '0')
-                        ];
-                    });
-
-                Log::warning('❌ No data found with any format', [
-                    'plant' => $plant,
-                    'user_selected_materials' => $materials,
-                    'formatted_materials_18d' => $formattedMaterials,
-                    'alt_materials_no_zeros' => $altFormattedMaterials,
-                    'available_materials_in_db' => $availableMaterials,
-                    'available_pros_in_db' => $availablePros
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The selected materials do not exist in the chosen PRO numbers',
-                    'details' => [
-                        'Plant: ' . $plant,
-                        'Materials selected (UI format): ' . implode(', ', $materials),
-                        'Materials searched (18-digit): ' . implode(', ', $formattedMaterials),
-                        'PRO numbers selected (UI format): ' . implode(', ', $proNumbers),
-                        'PRO numbers searched (12-digit): ' . implode(', ', $formattedProNumbers),
-                        'Try: 1) Sync fresh data from SAP 2) Check PRO numbers 3) Select different materials'
-                    ],
-                    'debug_info' => [
-                        'database_sample_materials' => $availableMaterials->take(5),
-                        'database_sample_pros' => $availablePros->take(5),
-                        'data_formats_tried' => [
-                            'materials_18_digit' => $formattedMaterials,
-                            'materials_no_zeros' => $altFormattedMaterials,
-                            'pros_12_digit' => $formattedProNumbers,
-                            'pros_no_zeros' => $altFormattedProNumbers
-                        ]
-                    ]
-                ], 404);
-            }
-
-            $materialData = $alternativeData;
-            Log::info('✅ Found data with alternative format', [
-                'count' => $materialData->count()
+            // Debug: Log sortf data di step 5
+            Log::info('Step 5 - Loaded material data with sortf', [
+                'count' => $materialData->count(),
+                'materials_with_sortf' => $materialData->whereNotNull('sortf')->count(),
+                'sample_sortf_values' => $materialData->take(5)->pluck('sortf')
             ]);
-        }
 
-        // **PERBAIKAN 5: Transform data - format material code untuk display**
-        $transformedData = [];
-        foreach ($materialData as $item) {
-            $sources = $item->source_pro_numbers ? explode(',', $item->source_pro_numbers) : [];
+            if ($materialData->isEmpty()) {
+                // Try alternative format
+                $altFormattedMaterials = array_map(function($material) {
+                    return ltrim($material, '0');
+                }, $formattedMaterials);
 
-            // Format material code untuk display (tanpa leading zeros)
-            $displayMaterialCode = $item->material_code;
-            if (ctype_digit($displayMaterialCode)) {
-                $displayMaterialCode = ltrim($displayMaterialCode, '0');
+                $altFormattedProNumbers = array_map(function($pro) {
+                    return ltrim($pro, '0');
+                }, $formattedProNumbers);
+
+                $alternativeData = DB::table('sap_reservations')
+                    ->select(
+                        'matnr as material_code',
+                        'maktx as material_description',
+                        'meins as unit',
+                        'sortf',
+                        'dispo',
+                        DB::raw('SUM(psmng) as total_qty'),
+                        DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'),
+                        DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
+                        DB::raw('COUNT(DISTINCT sap_order) as pro_count')
+                    )
+                    ->where('sap_plant', $plant)
+                    ->where(function($query) use ($altFormattedMaterials, $formattedMaterials) {
+                        $query->whereIn('matnr', $formattedMaterials)
+                              ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM matnr)'), $altFormattedMaterials);
+                    })
+                    ->where(function($query) use ($altFormattedProNumbers, $formattedProNumbers) {
+                        $query->whereIn('sap_order', $formattedProNumbers)
+                              ->orWhereIn('aufnr', $formattedProNumbers)
+                              ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM sap_order)'), $altFormattedProNumbers)
+                              ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM aufnr)'), $altFormattedProNumbers);
+                    })
+                    ->groupBy('matnr', 'maktx', 'meins', 'sortf', 'dispo')
+                    ->orderBy('matnr')
+                    ->get();
+
+                if ($alternativeData->isEmpty()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'The selected materials do not exist in the chosen PRO numbers',
+                        'details' => [
+                            'Plant: ' . $plant,
+                            'Materials selected (UI format): ' . implode(', ', $materials),
+                            'PRO numbers selected (UI format): ' . implode(', ', $proNumbers)
+                        ]
+                    ], 404);
+                }
+
+                $materialData = $alternativeData;
             }
 
-            // Format PRO numbers untuk display
-            $displaySources = array_map(function($source) {
-                if (ctype_digit($source)) {
-                    return ltrim($source, '0');
-                }
-                return $source;
-            }, $sources);
+            // Transform data
+            $transformedData = [];
+            foreach ($materialData as $item) {
+                $sources = $item->source_pro_numbers ? explode(',', $item->source_pro_numbers) : [];
+                $salesOrders = $item->sales_orders ? explode(',', $item->sales_orders) : [];
 
-            // Get PRO details
-            $proDetails = [];
-            foreach ($sources as $source) {
-                $proQty = DB::table('sap_reservations')
-                    ->where('sap_plant', $plant)
-                    ->where('matnr', $item->material_code)
-                    ->where('sap_order', $source)
-                    ->sum('psmng');
-
-                $displayPro = $source;
-                if (ctype_digit($displayPro)) {
-                    $displayPro = ltrim($displayPro, '0');
+                // Format material code untuk display
+                $displayMaterialCode = $item->material_code;
+                if (ctype_digit($displayMaterialCode)) {
+                    $displayMaterialCode = ltrim($displayMaterialCode, '0');
                 }
 
-                $proDetails[] = [
-                    'pro_number' => $displayPro,
-                    'pro_number_raw' => $source,
-                    'quantity' => $proQty ?? 0,
+                // Format sources untuk display
+                $displaySources = array_map(function($source) {
+                    if (ctype_digit($source)) {
+                        return ltrim($source, '0');
+                    }
+                    return $source;
+                }, $sources);
+
+                // Get PRO details
+                $proDetails = [];
+                foreach ($sources as $source) {
+                    $proData = DB::table('sap_reservations')
+                        ->where('sap_plant', $plant)
+                        ->where('matnr', $item->material_code)
+                        ->where('sap_order', $source)
+                        ->select('psmng', 'kdauf', 'kdpos', 'dispo', 'sortf')
+                        ->first();
+
+                    $displayPro = $source;
+                    if (ctype_digit($displayPro)) {
+                        $displayPro = ltrim($displayPro, '0');
+                    }
+
+                    $salesOrder = ($proData && $proData->kdauf && $proData->kdpos)
+                        ? $proData->kdauf . '-' . $proData->kdpos
+                        : (($proData && $proData->kdauf) ? $proData->kdauf : null);
+
+                    $proDetails[] = [
+                        'pro_number' => $displayPro,
+                        'pro_number_raw' => $source,
+                        'quantity' => $proData ? $proData->psmng : 0,
+                        'kdauf' => $proData ? $proData->kdauf : null,
+                        'kdpos' => $proData ? $proData->kdpos : null,
+                        'sales_order' => $salesOrder,
+                        'dispo' => $proData ? $proData->dispo : null,
+                        'sortf' => $proData ? $proData->sortf : null // Include sortf in pro details
+                    ];
+                }
+
+                $transformedData[] = [
+                    'material_code' => $item->material_code,
+                    'material_code_display' => $displayMaterialCode,
+                    'material_description' => $item->material_description,
+                    'unit' => $item->unit,
+                    'sortf' => $item->sortf, // Ensure sortf is included
+                    'dispo' => $item->dispo,
+                    'total_qty' => $item->total_qty,
+                    'sources' => $displaySources,
+                    'sources_raw' => $sources,
+                    'sales_orders' => $salesOrders,
+                    'sales_orders_raw' => $salesOrders,
+                    'pro_details' => $proDetails,
+                    'source_count' => $item->pro_count
                 ];
             }
 
-            $transformedData[] = [
-                'material_code' => $item->material_code, // Format asli dari SAP
-                'material_code_display' => $displayMaterialCode, // Untuk display di UI
-                'material_description' => $item->material_description,
-                'unit' => $item->unit,
-                'sortf' => $item->sortf,
-                'total_qty' => $item->total_qty,
-                'sources' => $displaySources, // Untuk display
-                'sources_raw' => $sources, // Format asli
-                'pro_details' => $proDetails,
-                'source_count' => $item->pro_count
-            ];
+            Log::info('✅ Step 5 - Successfully loaded material data with sortf', [
+                'transformed_count' => count($transformedData),
+                'materials_with_sortf' => count(array_filter($transformedData, function($item) {
+                    return !empty($item['sortf']);
+                }))
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $transformedData,
+                'count' => count($transformedData)
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('🔥 Failed to load PRO data: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'System error: ' . $e->getMessage()
+            ], 500);
         }
-
-        Log::info('✅ Successfully loaded material data', [
-            'transformed_count' => count($transformedData),
-            'materials_raw' => array_column($transformedData, 'material_code'),
-            'materials_display' => array_column($transformedData, 'material_code_display')
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'data' => $transformedData,
-            'count' => count($transformedData),
-            'debug_info' => [
-                'input_received' => [
-                    'materials_ui' => $materials,
-                    'pros_ui' => $proNumbers
-                ],
-                'database_matching' => [
-                    'materials_found' => array_column($transformedData, 'material_code_display'),
-                    'sources_found' => array_column($transformedData, 'sources')
-                ]
-            ]
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('🔥 Failed to load PRO data: ' . $e->getMessage(), [
-            'trace' => $e->getTraceAsString(),
-            'request_data' => $request->all()
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'System error: ' . $e->getMessage(),
-            'details' => [
-                'Please check application logs',
-                'Contact system administrator'
-            ]
-        ], 500);
     }
-}
 
     /**
      * AJAX: Create document and delete used sync data
      */
     public function createDocument(Request $request)
     {
+        Log::info('📝 CREATE DOCUMENT REQUEST RECEIVED', [
+            'timestamp' => now()->toISOString(),
+            'user_id' => auth()->id(),
+            'user_name' => auth()->user()->name,
+            'request_data_summary' => [
+                'plant' => $request->input('plant'),
+                'materials_count' => count($request->input('materials', [])),
+                'pro_numbers_count' => count($request->input('pro_numbers', [])),
+                'material_types_count' => count($request->input('material_types', []))
+            ]
+        ]);
+
         DB::beginTransaction();
 
         try {
             $plant = $request->input('plant');
             $materials = $request->input('materials', []);
             $proNumbers = $request->input('pro_numbers', []);
+            $materialTypes = $request->input('material_types', []);
 
-            Log::info('Creating reservation document', [
+            Log::info('🔧 Processing createDocument', [
                 'plant' => $plant,
                 'materials_count' => count($materials),
                 'pro_numbers_count' => count($proNumbers)
             ]);
 
             if (empty($materials)) {
+                Log::error('❌ No materials selected for document creation');
                 throw new \Exception('No materials selected');
             }
 
+            // Validate materials
+            foreach ($materials as $index => $material) {
+                Log::debug('Validating material ' . ($index + 1), [
+                    'material_code' => $material['material_code'] ?? 'N/A',
+                    'requested_qty' => $material['requested_qty'] ?? 0,
+                    'sortf' => $material['sortf'] ?? 'N/A' // Log sortf
+                ]);
+
+                if (!isset($material['material_code']) || !isset($material['requested_qty'])) {
+                    throw new \Exception("Material data incomplete at index {$index}");
+                }
+
+                if ($material['requested_qty'] <= 0) {
+                    throw new \Exception("Requested quantity must be greater than 0 for material: " .
+                        ($material['material_code_display'] ?? $material['material_code']));
+                }
+            }
+
             // Generate document number
-            $documentNo = $this->generateDocumentNumber($plant);
+            $documentNo = $this->generateDocumentNumberWithLock($plant);
+
+            Log::info('📄 Generated document number', [
+                'document_no' => $documentNo,
+                'plant' => $plant
+            ]);
 
             // Calculate totals
             $totalItems = count($materials);
@@ -1508,6 +1543,10 @@ public function updateDocument(Request $request, $id)
 
             foreach ($materials as $material) {
                 $totalQty += floatval($material['requested_qty'] ?? 0);
+            }
+
+            if ($totalQty <= 0) {
+                throw new \Exception('Total requested quantity must be greater than 0');
             }
 
             // Create document
@@ -1521,27 +1560,73 @@ public function updateDocument(Request $request, $id)
                 'created_by_name' => Auth::user()->name,
             ]);
 
-            // Create document items
-            foreach ($materials as $material) {
-                $document->items()->create([
+            Log::info('✅ Document created successfully', [
+                'document_id' => $document->id,
+                'document_no' => $documentNo,
+                'plant' => $plant
+            ]);
+
+            // Create document items dengan sortf
+            foreach ($materials as $index => $material) {
+                // Check if quantity is editable for MRP
+                $isQtyEditable = true;
+                $dispo = null;
+
+                if (isset($material['dispo'])) {
+                    $dispo = $material['dispo'];
+                } elseif (isset($material['pro_details']) && is_array($material['pro_details']) && count($material['pro_details']) > 0) {
+                    foreach ($material['pro_details'] as $proDetail) {
+                        if (isset($proDetail['dispo']) && $proDetail['dispo']) {
+                            $dispo = $proDetail['dispo'];
+                            break;
+                        }
+                    }
+                }
+
+                $isQtyEditable = $this->isQtyEditableForMRP($dispo);
+
+                // Prepare item data dengan sortf
+                $itemData = [
+                    'document_id' => $document->id,
                     'material_code' => $material['material_code'],
-                    'material_description' => $material['material_description'],
-                    'unit' => $material['unit'],
-                    'sortf' => $material['sortf'] ?? null,
+                    'material_description' => $material['material_description'] ?? 'No Description',
+                    'unit' => $material['unit'] ?? 'PC',
+                    'sortf' => $material['sortf'] ?? null, // Save sortf
+                    'dispo' => $dispo,
+                    'is_qty_editable' => $isQtyEditable,
                     'requested_qty' => $material['requested_qty'],
-                    'sources' => json_encode($material['sources'] ?? []),
-                    'pro_details' => json_encode($material['pro_details'] ?? []),
+                    'sources' => isset($material['sources']) ? json_encode($material['sources']) : json_encode([]),
+                    'sales_orders' => isset($material['sales_orders']) ? json_encode($material['sales_orders']) : json_encode([]),
+                    'pro_details' => isset($material['pro_details']) ? json_encode($material['pro_details']) : json_encode([]),
+                ];
+
+                // Validate required fields
+                if (empty($itemData['material_code']) || empty($itemData['requested_qty'])) {
+                    throw new \Exception("Missing required fields for material at index {$index}");
+                }
+
+                // Create item
+                $document->items()->create($itemData);
+
+                Log::debug('✅ Document item created', [
+                    'index' => $index,
+                    'material_code' => $material['material_code'],
+                    'sortf' => $material['sortf'] ?? 'N/A',
+                    'qty' => $material['requested_qty'],
+                    'dispo' => $dispo
                 ]);
             }
 
-            // Delete used sync data from sap_reservations table
+            // Delete used sync data
             $deletedCount = $this->deleteUsedSyncData($plant, $materials, $proNumbers);
 
             DB::commit();
 
-            Log::info('Reservation document created successfully', [
+            Log::info('🎉 Reservation document created successfully', [
                 'document_no' => $documentNo,
                 'document_id' => $document->id,
+                'total_items' => $totalItems,
+                'total_qty' => $totalQty,
                 'deleted_sync_data_count' => $deletedCount
             ]);
 
@@ -1550,13 +1635,18 @@ public function updateDocument(Request $request, $id)
                 'message' => 'Reservation document created successfully',
                 'document_no' => $documentNo,
                 'document_id' => $document->id,
+                'total_items' => $totalItems,
+                'total_qty' => $totalQty,
                 'deleted_sync_data_count' => $deletedCount,
                 'redirect_url' => route('documents.show', $document->id)
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Failed to create document: ' . $e->getMessage());
+            Log::error('🔥 Failed to create document: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
 
             return response()->json([
                 'success' => false,
@@ -1566,46 +1656,115 @@ public function updateDocument(Request $request, $id)
     }
 
     /**
+     * Helper function to get allowed MRP list
+     */
+    private function getAllowedMRP()
+    {
+        return ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
+    }
+
+    /**
+     * Generate document number with lock to prevent duplicates
+     */
+    private function generateDocumentNumberWithLock($plant)
+    {
+        DB::beginTransaction();
+
+        try {
+            $prefix = ($plant == '3000') ? 'RSMG' : 'RSBY';
+            $year = date('Y');
+            $month = date('m');
+
+            // Lock the table to prevent race conditions
+            $latestDoc = DB::table('reservation_documents')
+                ->where('plant', $plant)
+                ->whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->lockForUpdate()
+                ->orderBy('id', 'desc')
+                ->first();
+
+            $sequence = 1;
+            if ($latestDoc) {
+                $latestNumber = $latestDoc->document_no;
+                $latestSeq = intval(substr($latestNumber, strlen($prefix)));
+                $sequence = $latestSeq + 1;
+            }
+
+            $documentNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
+
+            // Double-check uniqueness
+            $exists = DB::table('reservation_documents')
+                ->where('document_no', $documentNo)
+                ->exists();
+
+            if ($exists) {
+                $sequence++;
+                $documentNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
+            }
+
+            DB::commit();
+
+            Log::info('Document number generated', [
+                'document_no' => $documentNo,
+                'plant' => $plant,
+                'sequence' => $sequence
+            ]);
+
+            return $documentNo;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to generate document number: ' . $e->getMessage());
+            throw new \Exception('Failed to generate document number: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Delete used sync data from sap_reservations table
      */
     private function deleteUsedSyncData($plant, $materials, $proNumbers)
-            {
-                $deletedCount = 0;
+    {
+        $deletedCount = 0;
 
-                try {
-                    // **PERBAIKAN: Format PRO numbers ke 12-digit untuk database matching**
-                    $formattedProNumbers = array_map(function($pro) {
-                        $pro = trim($pro);
-                        // Jika hanya angka, format ke 12-digit
-                        if (ctype_digit($pro)) {
-                            return str_pad($pro, 12, '0', STR_PAD_LEFT);
-                        }
-                        return $pro;
-                    }, $proNumbers);
+        try {
+            Log::info('🗑️ Starting sync data deletion', [
+                'plant' => $plant,
+                'materials_count' => count($materials),
+                'pro_numbers_count' => count($proNumbers)
+            ]);
 
-                    // **PERBAIKAN: Hapus SEMUA data dari PRO numbers yang dipilih**
-                    $deletedCount = DB::table('sap_reservations')
-                        ->where('sap_plant', $plant)
-                        ->where(function($query) use ($formattedProNumbers) {
-                            $query->whereIn('sap_order', $formattedProNumbers)
-                                ->orWhereIn('aufnr', $formattedProNumbers);
-                        })
-                        ->delete();
-
-                    Log::info('✅ Deleted ALL sync data for PROs', [
-                        'plant' => $plant,
-                        'pro_numbers_original' => $proNumbers,
-                        'pro_numbers_formatted' => $formattedProNumbers,
-                        'deleted_count' => $deletedCount
-                    ]);
-
-                    return $deletedCount;
-
-                } catch (\Exception $e) {
-                    Log::error('❌ Failed to delete sync data: ' . $e->getMessage());
-                    return 0;
+            // Format PRO numbers to 12-digit
+            $formattedProNumbers = array_map(function($pro) {
+                $pro = trim($pro);
+                if (ctype_digit($pro)) {
+                    return str_pad($pro, 12, '0', STR_PAD_LEFT);
                 }
-            }
+                return $pro;
+            }, $proNumbers);
+
+            // Delete ALL data from selected PRO numbers
+            $deletedCount = DB::table('sap_reservations')
+                ->where('sap_plant', $plant)
+                ->where(function($query) use ($formattedProNumbers) {
+                    $query->whereIn('sap_order', $formattedProNumbers)
+                        ->orWhereIn('aufnr', $formattedProNumbers);
+                })
+                ->delete();
+
+            Log::info('✅ Deleted sync data', [
+                'plant' => $plant,
+                'pro_numbers_count' => count($proNumbers),
+                'deleted_count' => $deletedCount
+            ]);
+
+            return $deletedCount;
+
+        } catch (\Exception $e) {
+            Log::error('❌ Failed to delete sync data: ' . $e->getMessage());
+            return 0;
+        }
+    }
 
     /**
      * Generate document number.
@@ -1616,7 +1775,6 @@ public function updateDocument(Request $request, $id)
         $year = date('Y');
         $month = date('m');
 
-        // Get next sequence from reservation_documents table
         $sequence = DB::table('reservation_documents')
             ->where('plant', $plant)
             ->whereYear('created_at', $year)
@@ -1762,6 +1920,62 @@ public function updateDocument(Request $request, $id)
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get statistics: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Debug sync data untuk melihat field yang ada
+     */
+    public function debugSyncData(Request $request)
+    {
+        try {
+            $plant = $request->input('plant', '3000');
+            $limit = $request->input('limit', 10);
+
+            // Get sample data with all fields
+            $sampleData = DB::table('sap_reservations')
+                ->where('sap_plant', $plant)
+                ->whereNotNull('matnr')
+                ->select('matnr', 'maktx', 'sortf', 'dispo', 'mtart', 'sap_order', 'created_at')
+                ->limit($limit)
+                ->get();
+
+            // Get column structure
+            $columns = DB::select('SHOW COLUMNS FROM sap_reservations');
+            $columnNames = array_column($columns, 'Field');
+
+            // Check for sortf values
+            $materialsWithSortf = DB::table('sap_reservations')
+                ->where('sap_plant', $plant)
+                ->whereNotNull('sortf')
+                ->where('sortf', '!=', '')
+                ->count();
+
+            // Get distinct sortf values
+            $distinctSortf = DB::table('sap_reservations')
+                ->where('sap_plant', $plant)
+                ->whereNotNull('sortf')
+                ->where('sortf', '!=', '')
+                ->distinct()
+                ->pluck('sortf')
+                ->take(10);
+
+            return response()->json([
+                'success' => true,
+                'debug_info' => [
+                    'table_columns' => $columnNames,
+                    'total_records' => DB::table('sap_reservations')->where('sap_plant', $plant)->count(),
+                    'materials_with_sortf' => $materialsWithSortf,
+                    'sample_data' => $sampleData,
+                    'distinct_sortf_values' => $distinctSortf,
+                    'has_sortf_field' => in_array('sortf', $columnNames)
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debug failed: ' . $e->getMessage()
             ], 500);
         }
     }

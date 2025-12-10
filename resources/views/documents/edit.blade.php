@@ -81,6 +81,7 @@
                                         <th>#</th>
                                         <th>Material Code</th>
                                         <th>Description</th>
+                                        <th>MRP</th>
                                         <th>SORTF</th>
                                         <th>Unit</th>
                                         <th class="text-end">Requested Qty</th>
@@ -97,21 +98,49 @@
 
                                             // Format nilai untuk ditampilkan
                                             $displayValue = $isDecimal ? $qtyValue : intval($qtyValue);
+
+                                            // Check if quantity is editable based on MRP
+                                            $isQtyEditable = $item->is_qty_editable ?? true;
+                                            $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
+                                            if ($item->dispo && !in_array($item->dispo, $allowedMRP)) {
+                                                $isQtyEditable = false;
+                                            }
                                         @endphp
                                         <tr>
                                             <td>{{ $index + 1 }}</td>
                                             <td><code>{{ $item->material_code }}</code></td>
-                                            <td>{{ $item->material_description }}</td>
+                                            <td style="white-space: normal; word-wrap: break-word; max-width: 300px;">{{ $item->material_description }}</td>
+                                            <td>
+                                                @if($item->dispo)
+                                                    <span class="badge bg-info">{{ $item->dispo }}</span>
+                                                    @if(!$isQtyEditable)
+                                                        <small class="text-muted d-block">(Fixed)</small>
+                                                    @endif
+                                                @else
+                                                    -
+                                                @endif
+                                            </td>
                                             <td>{{ $item->sortf ?? '-' }}</td>
                                             <td>{{ $item->unit }}</td>
                                             <td>
-                                                <input type="number"
-                                                       step="{{ $step }}"
-                                                       min="{{ $minValue }}"
-                                                       class="form-control text-end"
-                                                       name="items[{{ $index }}][requested_qty]"
-                                                       value="{{ old('items.'.$index.'.requested_qty', $displayValue) }}"
-                                                       required>
+                                                @if($isQtyEditable)
+                                                    <input type="number"
+                                                           step="{{ $step }}"
+                                                           min="{{ $minValue }}"
+                                                           class="form-control text-end"
+                                                           name="items[{{ $index }}][requested_qty]"
+                                                           value="{{ old('items.'.$index.'.requested_qty', $displayValue) }}"
+                                                           required>
+                                                @else
+                                                    <input type="number"
+                                                           class="form-control text-end bg-light"
+                                                           value="{{ $displayValue }}"
+                                                           readonly
+                                                           title="Quantity cannot be changed for this MRP">
+                                                    <input type="hidden"
+                                                           name="items[{{ $index }}][requested_qty]"
+                                                           value="{{ $displayValue }}">
+                                                @endif
                                                 <input type="hidden" name="items[{{ $index }}][id]" value="{{ $item->id }}">
                                             </td>
                                         </tr>
@@ -139,8 +168,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let isValid = true;
         let errorMessages = [];
 
-        // Validasi quantity tidak boleh negatif
-        const qtyInputs = document.querySelectorAll('input[name^="items["][name$="][requested_qty]"]');
+        // Validasi quantity tidak boleh negatif hanya untuk yang editable
+        const qtyInputs = document.querySelectorAll('input[name^="items["][name$="][requested_qty]"]:not([readonly])');
         qtyInputs.forEach(input => {
             const value = parseFloat(input.value);
             if (isNaN(value) || value < 0) {
@@ -159,7 +188,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Auto-format quantity input
-    const qtyInputs = document.querySelectorAll('input[name^="items["][name$="][requested_qty]"]');
+    const qtyInputs = document.querySelectorAll('input[name^="items["][name$="][requested_qty]"]:not([readonly])');
     qtyInputs.forEach(input => {
         input.addEventListener('blur', function() {
             let value = parseFloat(this.value);

@@ -278,10 +278,12 @@
                                                 <thead class="table-light">
                                                     <tr>
                                                         <th width="3%" class="text-center">#</th>
-                                                        <th width="15%" class="text-center">Source PRO Numbers</th>
-                                                        <th width="12%" class="text-center">Material Code</th>
-                                                        <th width="25%" class="text-center">Description</th>
-                                                        <th width="8%" class="text-center">Additional Info</th>
+                                                        <th width="12%" class="text-center">Source PRO Numbers</th>
+                                                        <th width="10%" class="text-center">Material Code</th>
+                                                        <th width="20%" class="text-center">Description</th>
+                                                        <th width="8%" class="text-center">MRP</th>
+                                                        <th width="10%" class="text-center">Sales Order</th>
+                                                        <th width="10%" class="text-center">Additional Info (sortf)</th>
                                                         <th width="10%" class="text-center">Required Qty</th>
                                                         <th width="12%" class="text-center">Requested Qty *</th>
                                                         <th width="5%" class="text-center">Unit</th>
@@ -383,11 +385,12 @@
     }
 
     .checkbox-item .material-desc {
-        font-size: 0.8rem;
+        font-size: 0.9rem;
         color: #666;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        white-space: normal;
+        word-wrap: break-word;
+        line-height: 1.4;
+        margin-top: 3px;
     }
 
     .selected-materials-item {
@@ -563,13 +566,46 @@
 
     /* Style untuk simple list tanpa block cell */
     .simple-list-item {
-        padding: 4px 0;
+        padding: 6px 0;
         border-bottom: 1px solid #f0f0f0;
         margin: 0;
     }
 
     .simple-list-item:last-child {
         border-bottom: none;
+    }
+
+    /* MRP badge styles */
+    .mrp-badge {
+        background-color: #6f42c1;
+        color: white;
+    }
+
+    .sales-order-badge {
+        background-color: #20c997;
+        color: white;
+    }
+
+    /* Description full view in table */
+    .table-description {
+        white-space: normal;
+        word-wrap: break-word;
+        line-height: 1.4;
+        max-width: 200px;
+    }
+
+    /* MRP non-editable style */
+    .qty-disabled {
+        background-color: #f8f9fa;
+        color: #6c757d;
+        cursor: not-allowed;
+    }
+
+    /* Additional Info cell style */
+    .additional-info-cell {
+        max-width: 150px;
+        word-wrap: break-word;
+        font-size: 0.85rem;
     }
 </style>
 @endpush
@@ -602,6 +638,9 @@
         'ZR08': 'Glass Material',
         'ZR09': 'Chemical Material'
     };
+
+    // MRP yang diperbolehkan untuk edit quantity
+    const allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
 
     // ============================
     // NOTIFICATION SYSTEM
@@ -686,7 +725,6 @@
 
             if (selectedPlant) {
                 $('#btn-next-step1').prop('disabled', false);
-                // Tampilkan plant code (dwerk) saja di info box
                 $('#plant-info').html(`<span class="text-success"><strong>${plantText}</strong> (${plantCode})</span>`);
                 loadMaterialTypes(selectedPlant);
             } else {
@@ -859,10 +897,12 @@
                                 materialMap[key] = {
                                     material_code: material.material_code,
                                     material_description: material.material_description,
-                                    sortf: material.sortf,
+                                    sortf: material.sortf, // Ensure sortf is included
+                                    dispo: material.dispo,
                                     unit: material.unit === 'ST' ? 'PC' : material.unit,
                                     total_qty: 0,
                                     sources: [],
+                                    sales_orders: [],
                                     pro_details: []
                                 };
                             }
@@ -879,7 +919,16 @@
                                 });
                             }
 
-                            // Add pro details
+                            // Add sales orders if not already present
+                            if (material.sales_orders) {
+                                material.sales_orders.forEach(function(so) {
+                                    if (so && !materialMap[key].sales_orders.includes(so)) {
+                                        materialMap[key].sales_orders.push(so);
+                                    }
+                                });
+                            }
+
+                            // Add pro details - preserve sortf from pro details
                             if (material.pro_details) {
                                 materialMap[key].pro_details = materialMap[key].pro_details.concat(material.pro_details);
                             }
@@ -887,6 +936,13 @@
 
                         // Convert back to array
                         loadedMaterials = Object.values(materialMap);
+
+                        // Debug: Log loaded materials with sortf
+                        console.log('📋 Loaded materials with sortf:', loadedMaterials.map(m => ({
+                            code: m.material_code,
+                            sortf: m.sortf,
+                            has_sortf: !!m.sortf
+                        })));
 
                         currentStep = 5;
                         updateStepNavigation();
@@ -1009,88 +1065,116 @@
         });
     }
 
-    function loadMaterials(plant, materialTypes) {
-        $('#materials-checkbox-container').html(`
-            <div class="text-center py-3">
-                <div class="spinner-border text-primary spinner-border-sm" role="status">
-                    <span class="visually-hidden">Loading...</span>
+            // Fungsi loadMaterials() yang DIPERBAIKI
+        function loadMaterials(plant, materialTypes) {
+            $('#materials-checkbox-container').html(`
+                <div class="text-center py-3">
+                    <div class="spinner-border text-primary spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 small">Loading materials...</p>
                 </div>
-                <p class="mt-2 small">Loading materials...</p>
-            </div>
-        `);
+            `);
 
-        $.ajax({
-            url: '/reservations/get-materials-by-type',
-            method: 'POST',
-            data: {
-                plant: plant,
-                material_types: materialTypes,
-                _token: '{{ csrf_token() }}'
-            },
-            success: function(response) {
-                if (response.success) {
-                    allMaterials = response.materials;
+            $.ajax({
+                url: '/reservations/get-materials-by-type',
+                method: 'POST',
+                data: {
+                    plant: plant,
+                    material_types: materialTypes,
+                    _token: '{{ csrf_token() }}'
+                },
+                success: function(response) {
+                    console.log('📋 Step 3 - Materials response:', response); // Debug log
 
-                    let containerHtml = '';
-                    if (allMaterials.length > 0) {
-                        allMaterials.forEach(function(material) {
-                            const displayMatnr = formatMaterialCodeForUI(material.matnr);
-                            const isChecked = selectedMaterials.includes(material.matnr);
-                            const typeDescription = getMaterialTypeDescription(material.mtart);
+                    if (response.success) {
+                        allMaterials = response.materials;
 
-                            containerHtml += `
-                                <div class="simple-list-item">
-                                    <div class="form-check">
-                                        <input class="form-check-input material-checkbox" type="checkbox"
-                                               id="mat_${material.matnr}" value="${material.matnr}" ${isChecked ? 'checked' : ''}>
-                                        <label class="form-check-label" for="mat_${material.matnr}">
-                                            <div class="d-flex justify-content-between align-items-start">
-                                                <div>
-                                                    <span class="material-code">${displayMatnr}</span>
-                                                    <small class="text-muted ms-2">${material.mtart}</small>
-                                                    <div class="material-desc">${material.maktx}</div>
+                        let containerHtml = '';
+                        if (allMaterials.length > 0) {
+                            allMaterials.forEach(function(material) {
+                                const displayMatnr = formatMaterialCodeForUI(material.matnr);
+                                const isChecked = selectedMaterials.includes(material.matnr);
+                                const typeDescription = getMaterialTypeDescription(material.mtart);
+
+                                // MRP information
+                                const mrp = material.dispo ? `<span class="badge mrp-badge badge-sm">${material.dispo}</span>` : '';
+
+                                // Sales Order information
+                                let salesOrder = '';
+                                if (material.kdauf && material.kdpos) {
+                                    salesOrder = `<span class="badge sales-order-badge badge-sm">${material.kdauf}-${material.kdpos}</span>`;
+                                } else if (material.kdauf) {
+                                    salesOrder = `<span class="badge sales-order-badge badge-sm">${material.kdauf}</span>`;
+                                }
+
+                                // PERBAIKAN: Tampilkan sortf dengan jelas
+                                const sortfValue = material.sortf || '';
+                                const sortfDisplay = sortfValue ?
+                                    `<div class="mt-1">
+                                        <small class="text-muted">
+                                            <strong>Additional Info:</strong> ${sortfValue}
+                                        </small>
+                                    </div>` :
+                                    '';
+
+                                containerHtml += `
+                                    <div class="simple-list-item">
+                                        <div class="form-check">
+                                            <input class="form-check-input material-checkbox" type="checkbox"
+                                                id="mat_${material.matnr}" value="${material.matnr}" ${isChecked ? 'checked' : ''}>
+                                            <label class="form-check-label" for="mat_${material.matnr}">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div style="flex: 1;">
+                                                        <div>
+                                                            <span class="material-code">${displayMatnr}</span>
+                                                            <small class="text-muted ms-2">${material.mtart}</small>
+                                                            ${mrp}
+                                                            ${salesOrder}
+                                                        </div>
+                                                        <div class="material-desc table-description">${material.maktx}</div>
+                                                        ${sortfDisplay}
+                                                    </div>
+                                                    <div class="text-end" style="min-width: 80px;">
+                                                        <small class="text-muted d-block">${typeDescription}</small>
+                                                    </div>
                                                 </div>
-                                                <div class="text-end">
-                                                    <small class="text-muted d-block">${typeDescription}</small>
-                                                    <small class="text-muted">${material.sortf || '-'}</small>
-                                                </div>
-                                            </div>
-                                        </label>
+                                            </label>
+                                        </div>
                                     </div>
-                                </div>
-                            `;
-                        });
-                    } else {
-                        containerHtml = '<p class="text-muted text-center py-3 small">No materials found</p>';
-                    }
-
-                    $('#materials-checkbox-container').html(containerHtml);
-
-                    // Add click handlers for checkboxes
-                    $('.material-checkbox').on('change', function() {
-                        const materialCode = $(this).val();
-                        const isChecked = $(this).is(':checked');
-
-                        if (isChecked && !selectedMaterials.includes(materialCode)) {
-                            selectedMaterials.push(materialCode);
-                        } else if (!isChecked) {
-                            selectedMaterials = selectedMaterials.filter(m => m !== materialCode);
+                                `;
+                            });
+                        } else {
+                            containerHtml = '<p class="text-muted text-center py-3 small">No materials found</p>';
                         }
+
+                        $('#materials-checkbox-container').html(containerHtml);
+
+                        // Add click handlers for checkboxes
+                        $('.material-checkbox').on('change', function() {
+                            const materialCode = $(this).val();
+                            const isChecked = $(this).is(':checked');
+
+                            if (isChecked && !selectedMaterials.includes(materialCode)) {
+                                selectedMaterials.push(materialCode);
+                            } else if (!isChecked) {
+                                selectedMaterials = selectedMaterials.filter(m => m !== materialCode);
+                            }
+
+                            $('#selected-materials-count').text(selectedMaterials.length);
+                            $('#btn-next-step3').prop('disabled', selectedMaterials.length === 0);
+                        });
 
                         $('#selected-materials-count').text(selectedMaterials.length);
                         $('#btn-next-step3').prop('disabled', selectedMaterials.length === 0);
-                    });
-
-                    $('#selected-materials-count').text(selectedMaterials.length);
-                    $('#btn-next-step3').prop('disabled', selectedMaterials.length === 0);
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Materials error:', xhr);
+                    showNotification('Failed to load materials', 'error', 4000);
                 }
-            },
-            error: function(xhr) {
-                console.error('Materials error:', xhr);
-                showNotification('Failed to load materials', 'error', 4000);
-            }
-        });
-    }
+            });
+        }
 
     function filterMaterials(searchTerm) {
         if (!searchTerm) {
@@ -1102,7 +1186,7 @@
             const materialCode = $(this).find('.material-code').text().toLowerCase();
             const materialDesc = $(this).find('.material-desc').text().toLowerCase();
             const typeCode = $(this).find('small.text-muted').first().text().toLowerCase();
-            const additionalInfo = $(this).find('small.text-muted').last().text().toLowerCase();
+            const additionalInfo = $(this).find('small.text-muted.d-block').text().toLowerCase();
 
             if (materialCode.includes(searchTerm) ||
                 materialDesc.includes(searchTerm) ||
@@ -1173,6 +1257,11 @@
         return num.toFixed(4).replace(/\.?0+$/, '');
     }
 
+    function isMRPAllowedForEdit(dispo) {
+        if (!dispo) return true;
+        return allowedMRP.includes(dispo);
+    }
+
     function populateMaterialsTable() {
         const tbody = $('#materials-table-body');
         let html = '';
@@ -1180,7 +1269,7 @@
         if (!loadedMaterials || loadedMaterials.length === 0) {
             html = `
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-3">
+                    <td colspan="10" class="text-center text-muted py-3">
                         <h6>No materials data available</h6>
                     </td>
                 </tr>
@@ -1192,6 +1281,9 @@
         loadedMaterials.forEach(function(material, index) {
             const originalQty = parseFloat(material.total_qty) || 0;
             const formattedOriginalQty = formatQuantity(originalQty);
+
+            // Check if quantity is editable based on MRP
+            const isQtyEditable = isMRPAllowedForEdit(material.dispo);
 
             // Format source PRO badges (display format)
             let sourceBadges = '';
@@ -1206,6 +1298,25 @@
                 sourceBadges = '<span class="text-muted small">No source</span>';
             }
 
+            // Format Sales Order badges
+            let salesOrderBadges = '';
+            const displaySalesOrders = material.sales_orders || [];
+
+            if (displaySalesOrders.length > 0) {
+                displaySalesOrders.forEach(function(so) {
+                    if (so && so !== 'null-null' && so !== 'null') {
+                        salesOrderBadges += `<span class="badge sales-order-badge source-pro-badge">${so}</span>`;
+                    }
+                });
+            }
+
+            if (!salesOrderBadges) {
+                salesOrderBadges = '<span class="text-muted small">-</span>';
+            }
+
+            // Format Additional Info (sortf)
+            const additionalInfo = material.sortf || '-';
+
             const isConsolidated = displaySources.length > 1;
             const rowClass = isConsolidated ? 'consolidated-row' : '';
 
@@ -1214,15 +1325,22 @@
                     <td class="text-center">${index + 1}</td>
                     <td class="text-center">${sourceBadges}</td>
                     <td class="text-center"><code>${formatMaterialCodeForUI(material.material_code)}</code></td>
-                    <td>${material.material_description || 'No description'}</td>
-                    <td class="text-center">${material.sortf || '-'}</td>
+                    <td class="table-description">${material.material_description || 'No description'}</td>
+                    <td class="text-center">
+                        ${material.dispo ? `<span class="badge mrp-badge">${material.dispo}</span>` : '-'}
+                    </td>
+                    <td class="text-center">${salesOrderBadges}</td>
+                    <td class="additional-info-cell">${additionalInfo}</td>
                     <td class="text-center quantity-cell">${formattedOriginalQty}</td>
                     <td class="text-center">
-                        <input type="number" class="form-control quantity-input requested-qty text-center"
+                        <input type="number" class="form-control quantity-input requested-qty text-center ${!isQtyEditable ? 'qty-disabled' : ''}"
                                value="${formattedOriginalQty}"
                                step="0.0001" min="0.0001"
                                data-index="${index}"
-                               data-material="${material.material_code}">
+                               data-material="${material.material_code}"
+                               data-dispo="${material.dispo || ''}"
+                               ${!isQtyEditable ? 'readonly title="Quantity cannot be changed for this MRP"' : ''}>
+                        ${!isQtyEditable ? '<small class="text-muted d-block">Fixed</small>' : ''}
                     </td>
                     <td class="text-center">${material.unit || '-'}</td>
                 </tr>
@@ -1231,9 +1349,13 @@
 
         tbody.html(html);
 
-        // Event listeners
-        $('.requested-qty').on('change', function() {
-            // Validasi jika diperlukan
+        // Event listeners for editable quantities only
+        $('.requested-qty:not(.qty-disabled)').on('change', function() {
+            const value = parseFloat($(this).val()) || 0;
+            if (value < 0) {
+                $(this).val(0);
+                showNotification('Quantity cannot be negative', 'warning', 3000);
+            }
         });
     }
 
@@ -1245,7 +1367,9 @@
 
         $('.requested-qty').each(function() {
             const value = parseFloat($(this).val()) || 0;
-            if (value <= 0) {
+            const isEditable = !$(this).hasClass('qty-disabled');
+
+            if (isEditable && value <= 0) {
                 isValid = false;
                 $(this).addClass('is-invalid');
                 invalidInputs.push($(this).data('material'));
@@ -1255,7 +1379,7 @@
         });
 
         if (!isValid) {
-            let errorMsg = 'Please enter valid quantities (greater than 0) for all materials.<br><br>';
+            let errorMsg = 'Please enter valid quantities (greater than 0) for editable materials.<br><br>';
             errorMsg += '<strong>Invalid materials:</strong><br>';
             invalidInputs.forEach(matnr => {
                 errorMsg += `• ${formatMaterialCodeForUI(matnr)}<br>`;
@@ -1264,21 +1388,33 @@
             return;
         }
 
-        // Prepare materials data
+        // Prepare materials data dengan sortf
         loadedMaterials.forEach(function(material, index) {
             const qtyInput = $(`.requested-qty[data-index="${index}"]`);
             const requestedQty = parseFloat(qtyInput.val()) || 0;
+            const isQtyEditable = !qtyInput.hasClass('qty-disabled');
 
             materialsData.push({
                 material_code: material.material_code,
+                material_code_display: formatMaterialCodeForUI(material.material_code),
                 material_description: material.material_description,
                 unit: material.unit,
-                sortf: material.sortf,
+                sortf: material.sortf, // Include sortf in data
+                dispo: material.dispo,
                 requested_qty: requestedQty,
+                is_qty_editable: isQtyEditable,
                 sources: material.sources || [],
+                sales_orders: material.sales_orders || [],
                 pro_details: material.pro_details || []
             });
         });
+
+        // Debug logging
+        console.log('📤 Sending materials data to server:', materialsData.map(m => ({
+            code: m.material_code_display,
+            sortf: m.sortf,
+            qty: m.requested_qty
+        })));
 
         showLoading('Creating reservation document...', 'Used sync data will be deleted automatically');
 
@@ -1294,24 +1430,58 @@
                 _token: '{{ csrf_token() }}'
             },
             success: function(response) {
+                console.log('✅ SUCCESS Response from server:', response);
                 hideLoading();
 
                 if (response.success) {
-                    showNotification(`Reservation document created successfully!<br><br><strong>Document Number:</strong> ${response.document_no}`, 'success', 5000);
+                    showNotification(
+                        `Reservation document created successfully!<br><br>
+                        <strong>Document Number:</strong> ${response.document_no}<br>
+                        <small>ID: ${response.document_id} | Deleted: ${response.deleted_sync_data_count} sync records</small>`,
+                        'success',
+                        5000
+                    );
+
+                    // Redirect setelah delay
                     setTimeout(() => {
-                        window.location.href = response.redirect_url;
+                        if (response.redirect_url) {
+                            window.location.href = response.redirect_url;
+                        } else {
+                            window.location.href = '/documents';
+                        }
                     }, 2000);
                 } else {
-                    showNotification('Error: ' + response.message, 'error', 5000);
+                    let errorMsg = 'Error: ' + (response.message || 'Unknown error');
+                    showNotification(errorMsg, 'error', 6000);
                 }
             },
             error: function(xhr) {
+                console.error('🔥 AJAX ERROR:', xhr);
                 hideLoading();
-                let errorMessage = 'Failed to create document';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    errorMessage += ': ' + xhr.responseJSON.message;
+
+                let errorMessage = 'Failed to create document. ';
+
+                if (xhr.status === 0) {
+                    errorMessage += 'Network error. Check your internet connection.';
+                } else if (xhr.status === 401) {
+                    errorMessage += 'Unauthorized. Please log in again.';
+                } else if (xhr.status === 403) {
+                    errorMessage += 'Forbidden. You don\'t have permission.';
+                } else if (xhr.status === 404) {
+                    errorMessage += 'Endpoint not found.';
+                } else if (xhr.status === 419) {
+                    errorMessage += 'Session expired. Please refresh the page.';
+                } else if (xhr.status === 422) {
+                    errorMessage += 'Validation error. Please check your data.';
+                } else if (xhr.status === 500) {
+                    errorMessage += 'Server error. Please contact administrator.';
                 }
-                showNotification(errorMessage, 'error', 5000);
+
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage += '<br><strong>Details:</strong> ' + xhr.responseJSON.message;
+                }
+
+                showNotification(errorMessage, 'error', 6000);
             }
         });
     }

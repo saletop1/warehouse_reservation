@@ -132,6 +132,8 @@
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Finish Good</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Material</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Description</th>
+                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">MRP</th>
+                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Sales Order</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase text-end">Quantity</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Unit</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Start Date</th>
@@ -167,6 +169,21 @@
                                             ? ltrim($materialNumber, '0')
                                             : $materialNumber;
 
+                                        // MRP dari kolom dispo
+                                        $mrp = $reservation->dispo ?? '-';
+
+                                        // Sales Order - combine kdauf dan kdpos
+                                        $salesOrder = '';
+                                        if ($reservation->kdauf && $reservation->kdpos) {
+                                            $salesOrder = $reservation->kdauf . '-' . $reservation->kdpos;
+                                        } elseif ($reservation->kdauf) {
+                                            $salesOrder = $reservation->kdauf;
+                                        } elseif ($reservation->kdpos) {
+                                            $salesOrder = $reservation->kdpos;
+                                        } else {
+                                            $salesOrder = '-';
+                                        }
+
                                         // Row class based on plant
                                         $rowClass = 'plant-' . ($reservation->sap_plant ?? 'unknown');
 
@@ -183,6 +200,8 @@
                                             $finishGood,
                                             $materialNumber,
                                             $reservation->maktx,
+                                            $mrp,
+                                            $salesOrder,
                                             $displayQuantity,
                                             $displayUnit,
                                             $reservation->gstrp,
@@ -204,9 +223,15 @@
                                             <span class="fw-medium">{{ $displayMaterial }}</span>
                                         </td>
                                         <td class="py-2 px-3 border-bottom" title="{{ $reservation->maktx }}">
-                                            <div class="text-truncate" style="max-width: 200px;">
-                                                {{ Str::limit($reservation->maktx, 50) }}
+                                            <div class="description-full" style="white-space: normal; max-width: 300px;">
+                                                {{ $reservation->maktx }}
                                             </div>
+                                        </td>
+                                        <td class="py-2 px-3 border-bottom">
+                                            <span class="badge bg-info">{{ $mrp }}</span>
+                                        </td>
+                                        <td class="py-2 px-3 border-bottom">
+                                            <span class="text-mono">{{ $salesOrder }}</span>
                                         </td>
                                         <td class="py-2 px-3 border-bottom text-end">
                                             <span class="fw-semibold">{{ $displayQuantity }}</span>
@@ -231,7 +256,7 @@
                                     </tr>
                                 @empty
                                     <tr id="noDataRow">
-                                        <td colspan="10" class="text-center text-muted py-4">
+                                        <td colspan="12" class="text-center text-muted py-4">
                                             <div class="py-3">
                                                 <i class="fas fa-database fa-2x text-muted mb-3 opacity-50"></i>
                                                 <p class="mb-2">No reservation data found</p>
@@ -368,6 +393,13 @@
         border-left-color: transparent;
     }
 
+    /* Description full view */
+    .description-full {
+        word-wrap: break-word;
+        white-space: normal;
+        line-height: 1.4;
+    }
+
     /* Lottie animation container */
     #lottie-container {
         width: 120px;
@@ -412,6 +444,10 @@
         #lottie-container {
             width: 100px;
             height: 100px;
+        }
+
+        .description-full {
+            max-width: 150px !important;
         }
     }
 </style>

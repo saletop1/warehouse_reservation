@@ -44,7 +44,12 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('reservations')->name('reservations.')->group(function () {
         Route::get('/', [ReservationController::class, 'index'])->name('index');
         Route::get('/create', [ReservationController::class, 'create'])->name('create');
+        Route::post('/', [ReservationController::class, 'store'])->name('store');
         Route::get('/{id}', [ReservationController::class, 'show'])->name('show');
+        Route::get('/{id}/edit', [ReservationController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [ReservationController::class, 'update'])->name('update');
+        Route::delete('/{id}', [ReservationController::class, 'destroy'])->name('destroy');
+        Route::post('/bulk-delete', [ReservationController::class, 'bulkDelete'])->name('bulk-delete');
         Route::get('/export/{type?}', [ReservationController::class, 'export'])->name('export');
 
         // Sync operations
@@ -76,20 +81,13 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('documents')->name('documents.')->group(function () {
         Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
+        Route::get('/{id}/edit', [ReservationController::class, 'editDocument'])->name('edit');
+        Route::put('/{id}', [ReservationController::class, 'updateDocument'])->name('update');
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
         Route::get('/export/{type}', [ReservationDocumentController::class, 'export'])->name('export');
-        Route::get('/export/pdf', [ReservationDocumentController::class, 'exportPdf'])->name('export.pdf');
+        Route::post('/export/selected/excel', [ReservationDocumentController::class, 'exportSelectedExcel'])->name('export.selected.excel');
+        Route::post('/export/selected/pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('export.selected.pdf');
         Route::get('/check-flask-endpoint', [ReservationController::class, 'checkFlaskEndpoint'])->name('checkFlaskEndpoint');
     });
-    // Documents routes
-Route::get('/documents', [ReservationDocumentController::class, 'index'])->name('documents.index');
-Route::get('/documents/{id}', [ReservationDocumentController::class, 'show'])->name('documents.show');
-Route::get('/documents/{id}/print', [ReservationDocumentController::class, 'print'])->name('documents.print');
-Route::get('/documents/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('documents.pdf');
-Route::get('/documents/export/{type}', [ReservationDocumentController::class, 'export'])->name('documents.export');
-Route::post('/documents/export/selected/excel', [ReservationDocumentController::class, 'exportSelectedExcel'])->name('documents.export.selected.excel');
-Route::post('/documents/export/selected/pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('documents.export.selected.pdf');
-Route::get('/documents/{id}/edit', [ReservationController::class, 'editDocument'])->name('documents.edit');
-Route::put('/documents/{id}', [ReservationController::class, 'updateDocument'])->name('documents.update');
 });
