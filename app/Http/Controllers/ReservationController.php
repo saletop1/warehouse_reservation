@@ -169,22 +169,39 @@ class ReservationController extends Controller
     public function editDocument($id)
     {
         try {
-            $document = ReservationDocument::findOrFail($id);
+            $document = ReservationDocument::with('items')->findOrFail($id);
+
             // Hanya dokumen dengan status 'created' yang bisa diedit
             if ($document->status != 'created') {
                 return redirect()->route('documents.show', $document->id)
                     ->with('error', 'Only documents with status "Created" can be edited.');
             }
 
-            // Get MRP from sap_reservations table for each item
+            // Process items untuk edit view - ambil sortf dari pro_details dan sales orders
             foreach ($document->items as $item) {
+                // Decode sales orders untuk ditampilkan
+                $salesOrders = json_decode($item->sales_orders, true) ?? [];
+                $item->sales_orders = $salesOrders;
+
+                // Set sortf dari kolom sortf, jika kosong gunakan default
+                $item->sortf = $item->sortf ?? '-';
+
+                // Get MRP from sap_reservations table for each item
                 $sapData = DB::table('sap_reservations')
                     ->where('matnr', $item->material_code)
                     ->where('sap_plant', $document->plant)
                     ->first();
 
-                $item->dispo = $sapData->dispo ?? null;
-                $item->is_qty_editable = $this->isQtyEditableForMRP($sapData->dispo ?? null);
+                $item->dispo = $sapData->dispo ?? $item->dispo ?? null;
+                $item->is_qty_editable = $this->isQtyEditableForMRP($item->dispo);
+
+                // Log untuk debugging
+                \Log::info('Item in editDocument:', [
+                    'material_code' => $item->material_code,
+                    'dispo' => $item->dispo,
+                    'is_qty_editable' => $item->is_qty_editable,
+                    'sales_orders_count' => count($salesOrders)
+                ]);
             }
 
             return view('documents.edit', compact('document'));
@@ -207,7 +224,7 @@ class ReservationController extends Controller
         return in_array($dispo, $allowedMRP);
     }
 
-    /**
+     /**
      * Update the specified document in storage.
      */
     public function updateDocument(Request $request, $id)
@@ -1265,6 +1282,9 @@ class ReservationController extends Controller
                 /**
              * AJAX: Load multiple PRO - DIPERBAIKI untuk include data tambahan
              */
+            /**
+     * AJAX: Load multiple PRO - DIPERBAIKI untuk include data tambahan
+     */
             public function loadMultiplePro(Request $request)
             {
                 try {
@@ -1339,6 +1359,7 @@ class ReservationController extends Controller
                         'sample_data' => $materialData->take(2)->map(function($item) {
                             return [
                                 'matnr' => $item->material_code,
+                                'sortf' => $item->sortf,
                                 'mathd' => $item->mathd,
                                 'makhd' => $item->makhd,
                                 'groes' => $item->groes,
@@ -1502,7 +1523,7 @@ class ReservationController extends Controller
                             'material_code_display' => $displayMaterialCode,
                             'material_description' => $item->material_description,
                             'unit' => $item->unit,
-                            'sortf' => $item->sortf,
+                            'sortf' => $item->sortf, // PASTIKAN sortf DISERTAKAN
                             'dispo' => $item->dispo,
                             'total_qty' => $item->total_qty,
                             'sources' => $displaySources,
@@ -1539,9 +1560,6 @@ class ReservationController extends Controller
                 }
             }
 
-    /**
-     * AJAX: Create document and delete used sync data
-     */
     public function createDocument(Request $request)
     {
         Log::info('📝 CREATE DOCUMENT REQUEST RECEIVED', [
@@ -1580,9 +1598,9 @@ class ReservationController extends Controller
                 Log::debug('Validating material ' . ($index + 1), [
                     'material_code' => $material['material_code'] ?? 'N/A',
                     'requested_qty' => $material['requested_qty'] ?? 0,
-                    'sortf' => $material['sortf'] ?? 'N/A', // Log sortf
-                    'mathd' => $material['mathd'] ?? 'N/A', // Log mathd
-                    'makhd' => $material['makhd'] ?? 'N/A'  // Log makhd
+                    'sortf' => $material['sortf'] ?? 'N/A',
+                    'mathd' => $material['mathd'] ?? 'N/A',
+                    'makhd' => $material['makhd'] ?? 'N/A'
                 ]);
 
                 if (!isset($material['material_code']) || !isset($material['requested_qty'])) {
@@ -1632,7 +1650,7 @@ class ReservationController extends Controller
                 'plant' => $plant
             ]);
 
-            // Create document items dengan semua field tambahan
+            // Create document items dengan semua field termasuk sortf
             foreach ($materials as $index => $material) {
                 // Check if quantity is editable for MRP
                 $isQtyEditable = true;
@@ -1651,27 +1669,25 @@ class ReservationController extends Controller
 
                 $isQtyEditable = $this->isQtyEditableForMRP($dispo);
 
-                // Prepare item data dengan semua field tambahan
+                // Prepare item data - SAVE sortf directly to the item
                 $itemData = [
                     'document_id' => $document->id,
                     'material_code' => $material['material_code'],
                     'material_description' => $material['material_description'] ?? 'No Description',
                     'unit' => $material['unit'] ?? 'PC',
-                    'sortf' => $material['sortf'] ?? null,
+                    'sortf' => $material['sortf'] ?? null, // SIMPAN sortf langsung ke kolom
                     'dispo' => $dispo,
                     'is_qty_editable' => $isQtyEditable,
                     'requested_qty' => $material['requested_qty'],
                     'sources' => isset($material['sources']) ? json_encode($material['sources']) : json_encode([]),
                     'sales_orders' => isset($material['sales_orders']) ? json_encode($material['sales_orders']) : json_encode([]),
                     'pro_details' => isset($material['pro_details']) ? json_encode($material['pro_details']) : json_encode([]),
-                    // Simpan field tambahan untuk ditampilkan di view
-                    'additional_info' => json_encode([
-                        'mathd' => $material['mathd'] ?? null,
-                        'makhd' => $material['makhd'] ?? null,
-                        'groes' => $material['groes'] ?? null,
-                        'ferth' => $material['ferth'] ?? null,
-                        'zeinr' => $material['zeinr'] ?? null
-                    ]),
+                    // Simpan field tambahan lainnya ke kolom yang sesuai
+                    'mathd' => $material['mathd'] ?? null,
+                    'makhd' => $material['makhd'] ?? null,
+                    'groes' => $material['groes'] ?? null,
+                    'ferth' => $material['ferth'] ?? null,
+                    'zeinr' => $material['zeinr'] ?? null,
                 ];
 
                 // Validate required fields
@@ -1686,8 +1702,6 @@ class ReservationController extends Controller
                     'index' => $index,
                     'material_code' => $material['material_code'],
                     'sortf' => $material['sortf'] ?? 'N/A',
-                    'mathd' => $material['mathd'] ?? 'N/A',
-                    'makhd' => $material['makhd'] ?? 'N/A',
                     'qty' => $material['requested_qty'],
                     'dispo' => $dispo
                 ]);
@@ -2072,4 +2086,3 @@ class ReservationController extends Controller
         }
     }
 }
-

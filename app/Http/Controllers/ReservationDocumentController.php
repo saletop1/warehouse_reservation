@@ -55,11 +55,24 @@ class ReservationDocumentController extends Controller
     {
         $document = ReservationDocument::with('items')->findOrFail($id);
 
-        // Process items data
+        // Process items data - Ambil sortf dari pro_details dan process data lainnya
         $document->items->transform(function ($item) {
-            // Decode JSON fields
-            $sources = json_decode($item->sources, true) ?? [];
-            $proDetails = json_decode($item->pro_details, true) ?? [];
+            // Pastikan kita memiliki data yang konsisten
+            $sources = [];
+            $proDetails = [];
+
+            // Handle jika data masih string JSON atau sudah array
+            if (is_string($item->sources)) {
+                $sources = json_decode($item->sources, true) ?? [];
+            } elseif (is_array($item->sources)) {
+                $sources = $item->sources;
+            }
+
+            if (is_string($item->pro_details)) {
+                $proDetails = json_decode($item->pro_details, true) ?? [];
+            } elseif (is_array($item->pro_details)) {
+                $proDetails = $item->pro_details;
+            }
 
             // Process sources to remove leading zeros
             $processedSources = [];
@@ -67,8 +80,10 @@ class ReservationDocumentController extends Controller
                 $processedSources[] = \App\Helpers\NumberHelper::removeLeadingZeros($source);
             }
 
-            // Process PRO details to remove leading zeros
+            // Process PRO details to remove leading zeros dan ambil sortf
             $processedProDetails = [];
+            $sortf = null;
+
             foreach ($proDetails as $detail) {
                 $processedDetail = $detail;
                 if (isset($detail['pro_number'])) {
@@ -78,11 +93,19 @@ class ReservationDocumentController extends Controller
                     $processedDetail['reservation_no'] = \App\Helpers\NumberHelper::removeLeadingZeros($detail['reservation_no']);
                 }
                 $processedProDetails[] = $processedDetail;
+
+                // Ambil sortf dari pro_details pertama yang ada
+                if (!$sortf && isset($detail['sortf']) && !empty($detail['sortf'])) {
+                    $sortf = $detail['sortf'];
+                }
             }
 
-            // Add processed data as new properties (not modifying the original)
+            // Add processed data as new properties
             $item->processed_sources = $processedSources;
             $item->processed_pro_details = $processedProDetails;
+
+            // Set sortf dari pro_details atau dari kolom sortf langsung
+            $item->sortf = $sortf ?? $item->sortf ?? '-';
 
             return $item;
         });
@@ -110,16 +133,40 @@ class ReservationDocumentController extends Controller
                 fputcsv($file, [
                     'Document No', 'Plant', 'Status', 'Total Items', 'Total Qty',
                     'Created By', 'Created At', 'Material Code', 'Material Description',
-                    'Unit', 'Requested Qty', 'Source PRO Numbers'
+                    'Unit', 'Requested Qty', 'Source PRO Numbers', 'Sortf', 'MRP', 'Sales Orders'
                 ]);
 
                 // Data rows
                 foreach ($documents as $document) {
                     foreach ($document->items as $item) {
-                        $sources = json_decode($item->sources, true) ?? [];
+                        // Process sources
+                        $sources = [];
+                        if (is_string($item->sources)) {
+                            $sources = json_decode($item->sources, true) ?? [];
+                        } elseif (is_array($item->sources)) {
+                            $sources = $item->sources;
+                        }
+
                         $processedSources = array_map(function($source) {
                             return \App\Helpers\NumberHelper::removeLeadingZeros($source);
                         }, $sources);
+
+                        // Process sales orders
+                        $salesOrders = [];
+                        if (is_string($item->sales_orders)) {
+                            $salesOrders = json_decode($item->sales_orders, true) ?? [];
+                        } elseif (is_array($item->sales_orders)) {
+                            $salesOrders = $item->sales_orders;
+                        }
+
+                        // Get sortf from item
+                        $sortf = $item->sortf;
+                        if (empty($sortf) && is_string($item->pro_details)) {
+                            $proDetails = json_decode($item->pro_details, true) ?? [];
+                            if (!empty($proDetails) && isset($proDetails[0]['sortf'])) {
+                                $sortf = $proDetails[0]['sortf'];
+                            }
+                        }
 
                         fputcsv($file, [
                             $document->document_no,
@@ -133,7 +180,10 @@ class ReservationDocumentController extends Controller
                             $item->material_description,
                             $item->unit,
                             \App\Helpers\NumberHelper::formatQuantity($item->requested_qty),
-                            implode(', ', $processedSources)
+                            implode(', ', $processedSources),
+                            $sortf ?? '',
+                            $item->dispo ?? '',
+                            implode(', ', $salesOrders)
                         ]);
                     }
                 }
@@ -151,19 +201,39 @@ class ReservationDocumentController extends Controller
     {
         $document = ReservationDocument::with('items')->findOrFail($id);
 
-        // Process items data untuk print
+        // Process items data untuk print - ambil sortf dari pro_details
         $document->items->transform(function ($item) {
-            // Decode JSON fields
-            $sources = json_decode($item->sources, true) ?? [];
+            // Pastikan data konsisten
+            $sources = [];
+            $proDetails = [];
 
-            // Process sources untuk print - terapkan removeLeadingZeros
+            if (is_string($item->sources)) {
+                $sources = json_decode($item->sources, true) ?? [];
+            } elseif (is_array($item->sources)) {
+                $sources = $item->sources;
+            }
+
+            if (is_string($item->pro_details)) {
+                $proDetails = json_decode($item->pro_details, true) ?? [];
+            } elseif (is_array($item->pro_details)) {
+                $proDetails = $item->pro_details;
+            }
+
+            // Process sources untuk print
             $processedSources = [];
             foreach ($sources as $source) {
                 $processedSources[] = \App\Helpers\NumberHelper::removeLeadingZeros($source);
             }
 
-            // Add processed data as new properties
+            // Ambil sortf dari pro_details pertama
+            $sortf = null;
+            if (!empty($proDetails) && isset($proDetails[0]['sortf'])) {
+                $sortf = $proDetails[0]['sortf'];
+            }
+
+            // Add processed data
             $item->processed_sources = $processedSources;
+            $item->sortf = $sortf ?? $item->sortf ?? '-';
 
             return $item;
         });

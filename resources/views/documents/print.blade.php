@@ -177,6 +177,17 @@
         .bg-primary, .bg-success, .bg-danger, .bg-warning, .bg-info {
             background-color: transparent !important;
         }
+
+        /* Table column widths */
+        .col-no { width: 3%; }
+        .col-matcode { width: 12%; }
+        .col-desc { width: 25%; }
+        .col-addinfo { width: 10%; }
+        .col-so { width: 10%; }
+        .col-mrp { width: 5%; }
+        .col-qty { width: 8%; }
+        .col-uom { width: 5%; }
+        .col-pro { width: 22%; }
     </style>
 </head>
 <body class="text-black">
@@ -269,13 +280,15 @@
                     <table class="table table-bordered table-print compact-table">
                         <thead>
                             <tr>
-                                <th width="3%" style="font-size: 8pt;">No</th>
-                                <th width="12%" style="font-size: 8pt;">Material Code</th>
-                                <th width="25%" style="font-size: 8pt;">Description</th>
-                                <th width="10%" style="font-size: 8pt;">Add Info</th>
-                                <th width="10%" style="font-size: 8pt;">Req. Qty</th>
-                                <th width="5%" style="font-size: 8pt;">Uom</th>
-                                <th width="35%" style="font-size: 8pt;">PRO Numbers</th>
+                                <th class="col-no" style="font-size: 8pt;">No</th>
+                                <th class="col-matcode" style="font-size: 8pt;">Material Code</th>
+                                <th class="col-desc" style="font-size: 8pt;">Description</th>
+                                <th class="col-addinfo" style="font-size: 8pt;">Add Info</th>
+                                <th class="col-so" style="font-size: 8pt;">Sales Order</th>
+                                <th class="col-mrp" style="font-size: 8pt;">MRP</th>
+                                <th class="col-qty" style="font-size: 8pt;">Req. Qty</th>
+                                <th class="col-uom" style="font-size: 8pt;">Uom</th>
+                                <th class="col-pro" style="font-size: 8pt;">PRO Numbers</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -290,14 +303,38 @@
                                     // Convert unit: if ST then PC
                                     $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
 
-                                    // PERBAIKAN: Gunakan null coalescing untuk sortf
+                                    // Ambil sortf dari item
                                     $addInfo = $item->sortf ?? '-';
+
+                                    // PERBAIKAN: Ambil sales orders dengan cara yang aman
+                                    $salesOrders = [];
+                                    if (is_string($item->sales_orders)) {
+                                        $salesOrders = json_decode($item->sales_orders, true) ?? [];
+                                    } elseif (is_array($item->sales_orders)) {
+                                        $salesOrders = $item->sales_orders;
+                                    }
                                 @endphp
                                 <tr>
                                     <td style="font-size: 8pt;">{{ $index + 1 }}</td>
                                     <td style="font-size: 8pt;"><code style="font-size: 8pt;">{{ $materialCode }}</code></td>
                                     <td style="font-size: 8pt;">{{ \Illuminate\Support\Str::limit($item->material_description, 40) }}</td>
                                     <td style="font-size: 8pt;">{{ $addInfo }}</td>
+                                    <td style="font-size: 8pt;">
+                                        @if(!empty($salesOrders))
+                                            @foreach($salesOrders as $so)
+                                                <span class="badge bg-light text-dark border compact-badge">{{ $so }}</span>
+                                            @endforeach
+                                        @else
+                                            <span class="text-muted" style="font-size: 8pt;">-</span>
+                                        @endif
+                                    </td>
+                                    <td style="font-size: 8pt;">
+                                        @if($item->dispo)
+                                            <span class="badge bg-light text-dark border compact-badge">{{ $item->dispo }}</span>
+                                        @else
+                                            <span class="text-muted" style="font-size: 8pt;">-</span>
+                                        @endif
+                                    </td>
                                     <td style="font-size: 8pt;">{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</td>
                                     <td style="font-size: 8pt;">{{ $unit }}</td>
                                     <td style="font-size: 8pt;">

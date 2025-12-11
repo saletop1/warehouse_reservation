@@ -81,8 +81,9 @@
                                         <th>#</th>
                                         <th>Material Code</th>
                                         <th>Description</th>
-                                        <th>MRP</th>
                                         <th>Add Info</th>
+                                        <th>Sales Order</th>
+                                        <th>MRP</th>
                                         <th class="text-end">Requested Qty</th>
                                         <th>Uom</th>
                                         <th>Source PRO</th>
@@ -91,19 +92,17 @@
                                 <tbody>
                                     @foreach($document->items as $index => $item)
                                         @php
-                                            // Tentukan step berdasarkan apakah quantity desimal atau integer
-                                            $qtyValue = $item->requested_qty;
-                                            $isDecimal = fmod($qtyValue, 1) != 0;
-                                            $step = $isDecimal ? '0.001' : '1';
-                                            $minValue = 0;
-
                                             // Format nilai untuk ditampilkan
-                                            $displayValue = $isDecimal ? $qtyValue : intval($qtyValue);
+                                            $qtyValue = $item->requested_qty;
+                                            $displayValue = fmod($qtyValue, 1) != 0 ? $qtyValue : intval($qtyValue);
 
                                             // Check if quantity is editable based on MRP
                                             $isQtyEditable = $item->is_qty_editable ?? true;
                                             $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
-                                            if ($item->dispo && !in_array($item->dispo, $allowedMRP)) {
+
+                                            // Pastikan dispo ada di item
+                                            $dispo = $item->dispo ?? null;
+                                            if ($dispo && !in_array($dispo, $allowedMRP)) {
                                                 $isQtyEditable = false;
                                             }
 
@@ -116,45 +115,68 @@
                                             // Convert unit: if ST then PC
                                             $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
 
-                                            // Decode sources and remove leading zeros
-                                            $sources = json_decode($item->sources, true) ?? [];
+                                            // Decode sources dengan cara yang aman
+                                            $sources = [];
+                                            if (is_string($item->sources)) {
+                                                $sources = json_decode($item->sources, true) ?? [];
+                                            } elseif (is_array($item->sources)) {
+                                                $sources = $item->sources;
+                                            }
+
                                             $processedSources = array_map(function($source) {
                                                 return \App\Helpers\NumberHelper::removeLeadingZeros($source);
                                             }, $sources);
 
-                                            // PERBAIKAN: Gunakan null coalescing untuk sortf
+                                            // PERBAIKAN: Ambil sales orders dengan cara yang aman
+                                            $salesOrders = [];
+                                            if (is_string($item->sales_orders)) {
+                                                $salesOrders = json_decode($item->sales_orders, true) ?? [];
+                                            } elseif (is_array($item->sales_orders)) {
+                                                $salesOrders = $item->sales_orders;
+                                            }
+
+                                            // Ambil sortf dari item
                                             $addInfo = $item->sortf ?? '-';
                                         @endphp
                                         <tr>
                                             <td>{{ $index + 1 }}</td>
                                             <td><code>{{ $materialCode }}</code></td>
                                             <td style="white-space: normal; word-wrap: break-word; max-width: 300px;">{{ $item->material_description }}</td>
+                                            <td>{{ $addInfo }}</td>
+                                            <td>
+                                                @if(!empty($salesOrders))
+                                                    @foreach($salesOrders as $so)
+                                                        <span class="badge bg-secondary me-1 mb-1">{{ $so }}</span>
+                                                    @endforeach
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
+                                            </td>
                                             <td>
                                                 @if($item->dispo)
                                                     <span class="badge bg-info">{{ $item->dispo }}</span>
                                                     @if(!$isQtyEditable)
-                                                        <small class="text-muted d-block">(Fixed)</small>
+                                                        <small class="text-muted d-block">(Fixed Qty)</small>
                                                     @endif
                                                 @else
-                                                    -
+                                                    <span class="text-muted">-</span>
                                                 @endif
                                             </td>
-                                            <td>{{ $addInfo }}</td>
                                             <td>
                                                 @if($isQtyEditable)
                                                     <input type="number"
-                                                           step="{{ $step }}"
-                                                           min="{{ $minValue }}"
-                                                           class="form-control text-end"
+                                                           step="0.001"
+                                                           min="0"
+                                                           class="form-control text-end qty-input"
                                                            name="items[{{ $index }}][requested_qty]"
                                                            value="{{ old('items.'.$index.'.requested_qty', $displayValue) }}"
                                                            required>
                                                 @else
-                                                    <input type="number"
+                                                    <input type="text"
                                                            class="form-control text-end bg-light"
-                                                           value="{{ $displayValue }}"
+                                                           value="{{ \App\Helpers\NumberHelper::formatQuantity($displayValue) }}"
                                                            readonly
-                                                           title="Quantity cannot be changed for this MRP">
+                                                           title="Quantity cannot be changed for MRP: {{ $item->dispo }}">
                                                     <input type="hidden"
                                                            name="items[{{ $index }}][requested_qty]"
                                                            value="{{ $displayValue }}">
@@ -188,6 +210,36 @@
     </div>
 </div>
 
+<style>
+/* Hilangkan spinner tombol naik turun di semua browser */
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.qty-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+/* Hilangkan spinner untuk input readonly */
+input[readonly]::-webkit-outer-spin-button,
+input[readonly]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[readonly][type=number] {
+    -moz-appearance: textfield;
+}
+
+/* Styling untuk input yang non-editable */
+.bg-light {
+    background-color: #f8f9fa !important;
+    cursor: not-allowed;
+}
+</style>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Validasi form sebelum submit
@@ -196,14 +248,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let isValid = true;
         let errorMessages = [];
 
-        // Validasi quantity tidak boleh negatif hanya untuk yang editable
-        const qtyInputs = document.querySelectorAll('input[name^="items["][name$="][requested_qty]"]:not([readonly])');
+        // Validasi quantity hanya untuk yang editable
+        const qtyInputs = document.querySelectorAll('.qty-input');
         qtyInputs.forEach(input => {
             const value = parseFloat(input.value);
             if (isNaN(value) || value < 0) {
                 isValid = false;
                 input.classList.add('is-invalid');
-                errorMessages.push('Quantity must be a positive number');
+                errorMessages.push('Quantity must be a positive number for material');
             } else {
                 input.classList.remove('is-invalid');
             }
@@ -215,19 +267,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Auto-format quantity input
-    const qtyInputs = document.querySelectorAll('input[name^="items["][name$="][requested_qty]"]:not([readonly])');
+    // Auto-format quantity input untuk yang editable
+    const qtyInputs = document.querySelectorAll('.qty-input');
     qtyInputs.forEach(input => {
         input.addEventListener('blur', function() {
             let value = parseFloat(this.value);
             if (!isNaN(value)) {
-                // Jika step=1 (integer), bulatkan ke integer terdekat
-                if (this.step === '1') {
-                    value = Math.round(value);
-                }
                 // Pastikan tidak negatif
                 value = Math.max(value, 0);
+
+                // Format 3 digit desimal
+                value = Math.round(value * 1000) / 1000;
+
                 this.value = value;
+            }
+        });
+
+        // Prevent keyboard up/down arrows
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault();
             }
         });
     });

@@ -115,6 +115,8 @@
                                     <th>Material Code</th>
                                     <th>Description</th>
                                     <th>Add Info</th>
+                                    <th>Sales Order</th>
+                                    <th>MRP</th>
                                     <th class="text-center">Requested Qty</th>
                                     <th>Uom</th>
                                     <th>Source PRO</th>
@@ -132,17 +134,46 @@
                                         // Convert unit: if ST then PC
                                         $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
 
-                                        // Get processed sources (already handled in controller)
+                                        // Get processed sources
                                         $sources = $item->processed_sources ?? [];
 
-                                        // PERBAIKAN: Gunakan null coalescing untuk sortf
+                                        // Ambil sortf dari item (sudah diambil dari pro_details di controller)
                                         $addInfo = $item->sortf ?? '-';
+
+                                        // PERBAIKAN: Ambil sales orders dengan cara yang aman
+                                        $salesOrders = [];
+                                        if (is_string($item->sales_orders)) {
+                                            // Jika masih string JSON, decode
+                                            $salesOrders = json_decode($item->sales_orders, true) ?? [];
+                                        } elseif (is_array($item->sales_orders)) {
+                                            // Jika sudah array, langsung pakai
+                                            $salesOrders = $item->sales_orders;
+                                        } else {
+                                            // Default ke array kosong
+                                            $salesOrders = [];
+                                        }
                                     @endphp
                                     <tr>
                                         <td>{{ $index + 1 }}</td>
                                         <td><code>{{ $materialCode }}</code></td>
                                         <td>{{ $item->material_description }}</td>
                                         <td>{{ $addInfo }}</td>
+                                        <td>
+                                            @if(!empty($salesOrders))
+                                                @foreach($salesOrders as $so)
+                                                    <span class="badge bg-secondary me-1 mb-1">{{ $so }}</span>
+                                                @endforeach
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if($item->dispo)
+                                                <span class="badge bg-info">{{ $item->dispo }}</span>
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
                                         <td class="text-center"><strong>{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</strong></td>
                                         <td>{{ $unit }}</td>
                                         <td>
