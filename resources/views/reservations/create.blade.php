@@ -11,10 +11,11 @@
                 </ol>
             </nav>
 
+            <!-- PERUBAHAN: Ganti panah kiri dengan home -->
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h4 class="mb-0">Create New Reservation</h4>
-                <a href="{{ route('reservations.index') }}" class="btn btn-sm btn-secondary">
-                    <i class="fas fa-arrow-left"></i> Back
+                <a href="{{ route('reservations.index') }}" class="btn btn-sm btn-outline-secondary" title="Back to Home">
+                    <i class="fas fa-home"></i>
                 </a>
             </div>
 
@@ -61,8 +62,8 @@
                                 <div class="col-md-12">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <label class="form-label fw-bold mb-0">Select Plant *</label>
-                                        <button type="button" class="btn btn-sm btn-primary" id="btn-next-step1" disabled>
-                                            Next <i class="fas fa-arrow-right ms-1"></i>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-next-step1" disabled>
+                                            <i class="fas fa-arrow-right"></i>
                                         </button>
                                     </div>
 
@@ -76,11 +77,6 @@
                                                     </option>
                                                 @endforeach
                                             </select>
-                                            <span class="input-group-text bg-light">
-                                                <small id="plant-info" class="text-muted">
-                                                    <i class="fas fa-info-circle"></i> Select a plant to see details
-                                                </small>
-                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -89,40 +85,24 @@
 
                         <!-- Step 2: Material Type -->
                         <div class="tab-pane fade" id="step2">
-                            <div class="alert alert-info p-2 mb-2">
-                                <i class="fas fa-info-circle me-1"></i>
-                                <small>Material Type Descriptions:
-                                    <strong>FERT</strong> = Finished Product,
-                                    <strong>HALB</strong> = Semifinished Product,
-                                    <strong>HALM</strong> = Semifinished Prod. Metal,
-                                    <strong>VERP</strong> = Packaging,
-                                    <strong>ZR01</strong> = Wood Material,
-                                    <strong>ZR02</strong> = Metal Material,
-                                    <strong>ZR03</strong> = Hardware Material,
-                                    <strong>ZR04</strong> = Accessories Material,
-                                    <strong>ZR05</strong> = Paint Material,
-                                    <strong>ZR06</strong> = Upholstery Material,
-                                    <strong>ZR07</strong> = Packaging Material,
-                                    <strong>ZR08</strong> = Glass Material,
-                                    <strong>ZR09</strong> = Chemical Material
-                                </small>
-                            </div>
-
                             <div class="row">
                                 <div class="col-md-12">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <div>
+                                        <div class="d-flex align-items-center">
                                             <label class="form-label fw-bold mb-0">Material Type *</label>
                                             <small class="text-muted ms-2">
                                                 <span class="badge bg-primary" id="selected-types-count">0</span> types selected
                                             </small>
                                         </div>
-                                        <div>
-                                            <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step2">
-                                                <i class="fas fa-arrow-left me-1"></i> Back
+                                        <div class="d-flex align-items-center gap-2">
+                                            <button type="button" class="btn btn-link text-decoration-none text-dark small" id="toggle_all_types">
+                                                Select all
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-primary" id="btn-next-step2" disabled>
-                                                Next <i class="fas fa-arrow-right ms-1"></i>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-prev-step2">
+                                                <i class="fas fa-arrow-left"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-next-step2" disabled>
+                                                <i class="fas fa-arrow-right"></i>
                                             </button>
                                         </div>
                                     </div>
@@ -137,11 +117,6 @@
                                             </div>
                                         </div>
                                     </div>
-
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="checkbox" id="select_all_types">
-                                        <label class="form-check-label" for="select_all_types">Select all</label>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -151,18 +126,27 @@
                             <div class="row">
                                 <div class="col-md-12">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <div>
+                                        <div class="d-flex align-items-center">
                                             <label class="form-label fw-bold mb-0">Available Materials *</label>
                                             <small class="text-muted ms-2">
                                                 <span class="badge bg-primary" id="selected-materials-count">0</span> selected
                                             </small>
                                         </div>
-                                        <div>
-                                            <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step3">
-                                                <i class="fas fa-arrow-left me-1"></i> Back
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="input-group input-group-sm" style="width: 200px;">
+                                                <span class="input-group-text bg-transparent border-end-0">
+                                                    <i class="fas fa-search text-muted"></i>
+                                                </span>
+                                                <input type="text" class="form-control border-start-0" id="material-search" placeholder="Search...">
+                                            </div>
+                                            <button type="button" class="btn btn-link text-decoration-none text-dark" id="toggle_all_materials">
+                                                All
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-primary" id="btn-next-step3" disabled>
-                                                Next <i class="fas fa-arrow-right ms-1"></i>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-prev-step3">
+                                                <i class="fas fa-arrow-left"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-next-step3" disabled>
+                                                <i class="fas fa-arrow-right"></i>
                                             </button>
                                         </div>
                                     </div>
@@ -176,24 +160,6 @@
                                                 <p class="mt-2 small">Loading materials...</p>
                                             </div>
                                         </div>
-
-                                        <div class="d-flex justify-content-between align-items-center mt-2">
-                                            <div class="input-group input-group-sm" style="width: 300px;">
-                                                <span class="input-group-text"><i class="fas fa-search"></i></span>
-                                                <input type="text" class="form-control" id="material-search" placeholder="Search material code or description...">
-                                                <button class="btn btn-outline-secondary" type="button" id="clear-search">
-                                                    <i class="fas fa-times"></i>
-                                                </button>
-                                            </div>
-                                            <div>
-                                                <button type="button" class="btn btn-xs btn-outline-primary me-1" id="select-all-materials">
-                                                    <i class="fas fa-check-square"></i> All
-                                                </button>
-                                                <button type="button" class="btn btn-xs btn-outline-secondary" id="deselect-all-materials">
-                                                    <i class="fas fa-times-circle"></i> None
-                                                </button>
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -201,33 +167,24 @@
 
                         <!-- Step 4: PRO Selection -->
                         <div class="tab-pane fade" id="step4">
-                            <div class="alert alert-info mb-2 p-2" id="pro-selection-help">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="small">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        <strong>Tip:</strong> Make sure PRO numbers contain your selected materials
-                                    </div>
-                                    <button type="button" class="btn btn-xs btn-outline-primary" id="btn-find-suitable-pros">
-                                        <i class="fas fa-search me-1"></i>Find Suitable PROs
-                                    </button>
-                                </div>
-                            </div>
-
                             <div class="row">
                                 <div class="col-md-12">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <div>
+                                        <div class="d-flex align-items-center">
                                             <label class="form-label fw-bold mb-0">Available PRO Numbers *</label>
                                             <small class="text-muted ms-2">
                                                 <span class="badge bg-primary" id="selected-pro-count">0</span> selected
                                             </small>
                                         </div>
-                                        <div>
-                                            <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step4">
-                                                <i class="fas fa-arrow-left me-1"></i> Back
+                                        <div class="d-flex align-items-center gap-2">
+                                            <button type="button" class="btn btn-link text-decoration-none text-dark" id="toggle_all_pro">
+                                                All
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-primary" id="btn-next-step4" disabled>
-                                                Next <i class="fas fa-arrow-right ms-1"></i>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-prev-step4">
+                                                <i class="fas fa-arrow-left"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-next-step4" disabled>
+                                                <i class="fas fa-arrow-right"></i>
                                             </button>
                                         </div>
                                     </div>
@@ -241,15 +198,6 @@
                                                 <p class="mt-2 small">Loading PRO numbers...</p>
                                             </div>
                                         </div>
-
-                                        <div class="d-flex justify-content-end mt-2">
-                                            <button type="button" class="btn btn-xs btn-outline-primary me-1" id="select-all-pro">
-                                                <i class="fas fa-check-square"></i> All
-                                            </button>
-                                            <button type="button" class="btn btn-xs btn-outline-secondary" id="deselect-all-pro">
-                                                <i class="fas fa-times-circle"></i> None
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -261,9 +209,9 @@
                                 <div class="col-md-12">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <h5 class="mb-0">Review and Create Reservation</h5>
-                                        <div>
-                                            <button type="button" class="btn btn-sm btn-secondary" id="btn-prev-step5">
-                                                <i class="fas fa-arrow-left me-1"></i> Back
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-prev-step5">
+                                                <i class="fas fa-arrow-left"></i>
                                             </button>
                                             <button type="button" class="btn btn-sm btn-success" id="btn-create-reservation">
                                                 <i class="fas fa-file-alt me-1"></i> Create Reservation
@@ -278,12 +226,14 @@
                                                 <thead class="table-light">
                                                     <tr>
                                                         <th width="3%" class="text-center">#</th>
-                                                        <th width="12%" class="text-center">Source PRO Numbers</th>
-                                                        <th width="10%" class="text-center">Material Code</th>
-                                                        <th width="20%" class="text-center">Description</th>
+                                                        <th width="12%" class="text-center">Source PRO</th>
+                                                        <th width="10%" class="text-center">Material PRO</th>
+                                                        <th width="10%" class="text-center">Desc PRO</th>
                                                         <th width="8%" class="text-center">MRP</th>
                                                         <th width="10%" class="text-center">Sales Order</th>
-                                                        <th width="10%" class="text-center">Additional Info (sortf)</th>
+                                                        <th width="10%" class="text-center">Material Req</th>
+                                                        <th width="15%" class="text-center">Description</th>
+                                                        <th width="8%" class="text-center">Add Info</th>
                                                         <th width="10%" class="text-center">Required Qty</th>
                                                         <th width="12%" class="text-center">Requested Qty *</th>
                                                         <th width="5%" class="text-center">Unit</th>
@@ -327,6 +277,39 @@
 
 @push('styles')
 <style>
+    .full-description {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        line-height: 1.4;
+        max-width: none !important;
+        min-width: 200px;
+    }
+
+    /* Table responsive */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Adjust column widths for better display */
+    #materials-table th,
+    #materials-table td {
+        padding: 0.4rem 0.5rem;
+        vertical-align: middle;
+        font-size: 0.9rem;
+    }
+
+    #materials-table .text-center {
+        text-align: center;
+    }
+
+    /* Description column */
+    #materials-table td:nth-child(8) {
+        min-width: 250px;
+        max-width: 300px;
+    }
+
+    /* Step navigation - Updated with underline instead of background */
     .step-number {
         display: inline-block;
         width: 20px;
@@ -340,65 +323,214 @@
         font-size: 11px;
     }
 
-    .nav-pills .nav-link.active .step-number {
-        background-color: white;
-        color: #0d6efd;
-    }
-
     .nav-pills .nav-link {
         padding: 0.4rem 0.8rem;
         font-size: 0.9rem;
+        color: #6c757d;
+        border-radius: 0;
+        position: relative;
+    }
+
+    .nav-pills .nav-link:hover {
+        color: #495057;
+        background-color: transparent;
+    }
+
+    .nav-pills .nav-link.active {
+        color: #495057;
+        background-color: transparent;
+        font-weight: 500;
+    }
+
+    .nav-pills .nav-link.active::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 50px;
+        height: 2px;
+        background-color: #495057;
+    }
+
+    .nav-pills .nav-link.active .step-number {
+        background-color: #495057;
     }
 
     .card-header {
         padding: 0.5rem 1rem;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
     }
 
     .card-body {
         padding: 0.75rem;
     }
 
-    .checkbox-item {
-        padding: 6px 8px;
-        margin: 3px 0;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        transition: all 0.2s;
+    /* Material item container - COMPACT NO-GRID LAYOUT */
+    .material-item-container {
+        display: flex;
+        align-items: flex-start;
+        padding: 4px 0;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s;
+    }
+
+    .material-item-container:hover {
+        background-color: #f8f9fa;
+    }
+
+    .material-item-container:last-child {
+        border-bottom: none;
+    }
+
+    .material-checkbox-section {
+        flex: 0 0 30px;
+        padding-top: 2px;
+    }
+
+    .material-content-section {
+        flex: 1;
         display: flex;
         align-items: flex-start;
     }
 
-    .checkbox-item:hover {
-        background-color: #f8f9fa;
+    .material-left-section {
+        flex: 0 0 200px;
     }
 
-    .checkbox-item.selected {
-        background-color: #e7f1ff;
-        border-color: #0d6efd;
+    .material-center-section {
+        flex: 1;
+        min-width: 300px;
+        padding: 0 10px;
+        max-width: calc(100% - 500px);
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
 
-    .checkbox-item .material-code {
+    .material-right-section {
+        flex: 0 0 200px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .material-basic-info {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 2px;
+    }
+
+    .material-code {
         font-weight: bold;
         font-family: monospace;
         color: #212529;
         font-size: 0.9rem;
-    }
-
-    .checkbox-item .material-desc {
-        font-size: 0.9rem;
-        color: #666;
-        white-space: normal;
-        word-wrap: break-word;
-        line-height: 1.4;
-        margin-top: 3px;
-    }
-
-    .selected-materials-item {
-        padding: 4px 6px;
-        margin: 2px 0;
         background-color: #e9ecef;
+        padding: 2px 6px;
         border-radius: 3px;
+    }
+
+    .material-type-badge {
+        background-color: #6c757d;
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+
+    .mrp-badge-small {
+        background-color: #6f42c1;
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+
+    .sales-order-badge-small {
+        background-color: #20c997;
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+
+    .material-desc {
+        font-size: 0.9rem;
+        color: #555;
+        line-height: 1.4;
+        margin: 0;
+        padding-top: 2px;
+    }
+
+    .material-type-description {
+        font-size: 0.85rem;
+        color: #666;
+        font-weight: 500;
+        margin-bottom: 2px;
+        padding: 0;
+    }
+
+    .additional-info-section {
         font-size: 0.8rem;
+        color: #6c757d;
+        margin-top: 2px;
+        padding-top: 2px;
+        border-top: 1px dashed #dee2e6;
+    }
+
+    /* Right section info - COMPACT STYLE */
+    .material-pro-section {
+        margin-top: 2px;
+    }
+
+    .material-pro-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 1px;
+    }
+
+    .material-pro-value {
+        font-size: 0.85rem;
+        color: #495057;
+        font-weight: 500;
+        font-family: 'Consolas', monospace;
+        background-color: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 3px;
+        display: inline-block;
+        margin-top: 1px;
+        word-break: break-all;
+    }
+
+    .desc-pro-section {
+        margin-top: 4px;
+    }
+
+    .desc-pro-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 1px;
+    }
+
+    .desc-pro-value {
+        font-size: 0.85rem;
+        color: #495057;
+        font-weight: 500;
+        font-family: 'Consolas', monospace;
+        background-color: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 3px;
+        display: inline-block;
+        margin-top: 1px;
+        word-break: break-all;
     }
 
     .form-check {
@@ -407,7 +539,7 @@
     }
 
     .form-check-input {
-        margin-top: 2px;
+        margin-top: 0;
     }
 
     .form-check-label {
@@ -422,23 +554,13 @@
         font-size: 0.75rem;
     }
 
-    .material-type-badge {
-        cursor: pointer;
-        transition: all 0.2s;
-        font-size: 0.8rem;
-    }
-
-    .material-type-badge:hover {
-        opacity: 0.8;
-    }
-
     .quantity-input {
         text-align: center;
         padding: 0.2rem 0.4rem;
         font-size: 0.9rem;
     }
 
-    /* Hilangkan spinner pada input number */
+    /* Remove spinner on number input */
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button {
         -webkit-appearance: none;
@@ -449,41 +571,20 @@
         -moz-appearance: textfield;
     }
 
-    /* Alignment untuk table */
-    #materials-table th,
-    #materials-table td {
-        padding: 0.4rem 0.5rem;
-        vertical-align: middle;
-        font-size: 0.9rem;
-    }
-
-    #materials-table .text-center {
-        text-align: center;
-    }
-
-    /* Styling untuk quantity columns */
+    /* Quantity columns */
     .quantity-cell {
         font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
         font-weight: 500;
     }
 
-    .source-count {
-        font-size: 0.8rem;
-        color: #666;
-    }
-
-    /* Highlight untuk materials yang dikonsolidasi */
+    /* Highlight consolidated rows */
     .consolidated-row {
         background-color: #fff8e1 !important;
     }
 
-    .badge-sm {
-        font-size: 0.7rem;
-        padding: 0.2rem 0.4rem;
-    }
-
     h4, h5, h6 {
         margin-bottom: 0.5rem;
+        color: #343a40;
     }
 
     .alert {
@@ -556,7 +657,7 @@
         }
     }
 
-    /* Style untuk PRO number dengan material info */
+    /* PRO number with material info */
     .pro-item-info {
         font-size: 0.8rem;
         color: #666;
@@ -564,7 +665,7 @@
         font-style: italic;
     }
 
-    /* Style untuk simple list tanpa block cell */
+    /* Simple list without block cell */
     .simple-list-item {
         padding: 6px 0;
         border-bottom: 1px solid #f0f0f0;
@@ -586,7 +687,7 @@
         color: white;
     }
 
-    /* Description full view in table */
+    /* Description in table */
     .table-description {
         white-space: normal;
         word-wrap: break-word;
@@ -601,11 +702,108 @@
         cursor: not-allowed;
     }
 
-    /* Additional Info cell style */
+    /* Additional Info cell */
     .additional-info-cell {
         max-width: 150px;
         word-wrap: break-word;
         font-size: 0.85rem;
+    }
+
+    /* Material PRO and Desc PRO */
+    .material-pro-cell, .desc-pro-cell {
+        font-size: 0.85rem;
+        word-wrap: break-word;
+        max-width: 150px;
+    }
+
+    /* Compact header buttons */
+    .compact-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Search input */
+    .search-input-group {
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+    }
+
+    .search-input-group .input-group-text {
+        background-color: transparent;
+        border: none;
+    }
+
+    .search-input-group .form-control {
+        border: none;
+        box-shadow: none;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 1200px) {
+        .material-content-section {
+            flex-wrap: wrap;
+        }
+
+        .material-left-section,
+        .material-center-section,
+        .material-right-section {
+            flex: 0 0 100%;
+            padding: 0;
+            margin-bottom: 6px;
+        }
+
+        .material-center-section {
+            padding: 4px 0;
+            max-width: 100%;
+        }
+
+        .material-right-section {
+            padding-top: 4px;
+            border-top: 1px dashed #e0e0e0;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .compact-controls {
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .nav-pills .nav-link {
+            font-size: 0.8rem;
+            padding: 0.3rem 0.5rem;
+        }
+
+        .nav-pills .nav-link.active::after {
+            width: 30px;
+        }
+    }
+
+    /* Breadcrumb styling */
+    .breadcrumb {
+        background-color: transparent;
+        padding: 0;
+        margin-bottom: 1rem;
+    }
+
+    .breadcrumb-item a {
+        color: #6c757d;
+        text-decoration: none;
+    }
+
+    .breadcrumb-item a:hover {
+        color: #495057;
+        text-decoration: underline;
+    }
+
+    .breadcrumb-item.active {
+        color: #495057;
+    }
+
+    /* Button spacing */
+    .gap-2 {
+        gap: 0.5rem;
     }
 </style>
 @endpush
@@ -704,6 +902,17 @@
         return proNumber;
     }
 
+    // PERUBAHAN: Fungsi khusus untuk format Material PRO (mathd) numerik tanpa leading zero
+    function formatMaterialProForUI(value) {
+        if (!value) return '';
+        // Hanya format jika value hanya berisi angka (numerik)
+        if (/^\d+$/.test(value)) {
+            return value.replace(/^0+/, '');
+        }
+        // Jika bukan numerik (misal mengandung huruf atau karakter lain), biarkan asli
+        return value;
+    }
+
     function getMaterialTypeDescription(type) {
         return materialTypeDescriptions[type] || 'No description available';
     }
@@ -720,16 +929,11 @@
         // Step 1: Plant selection
         $('#plant_select').on('change', function() {
             selectedPlant = $(this).val();
-            const plantCode = $(this).find(':selected').data('code');
-            const plantText = $(this).find(':selected').text();
-
             if (selectedPlant) {
                 $('#btn-next-step1').prop('disabled', false);
-                $('#plant-info').html(`<span class="text-success"><strong>${plantText}</strong> (${plantCode})</span>`);
                 loadMaterialTypes(selectedPlant);
             } else {
                 $('#btn-next-step1').prop('disabled', true);
-                $('#plant-info').html('<i class="fas fa-info-circle"></i> Select a plant to see details');
             }
         });
 
@@ -739,10 +943,20 @@
             updateStepNavigation();
         });
 
-        // Step 2: Material type selection
-        $('#select_all_types').on('change', function() {
-            const isChecked = $(this).is(':checked');
-            $('.material-type-checkbox').prop('checked', isChecked).trigger('change');
+        // Step 2: Material type selection - toggle all
+        let allTypesSelected = false;
+        $('#toggle_all_types').on('click', function() {
+            if (allTypesSelected) {
+                // Deselect all
+                $('.material-type-checkbox').prop('checked', false).trigger('change');
+                $(this).text('Select all');
+                allTypesSelected = false;
+            } else {
+                // Select all
+                $('.material-type-checkbox').prop('checked', true).trigger('change');
+                $(this).text('Deselect all');
+                allTypesSelected = true;
+            }
         });
 
         $('#btn-prev-step2').on('click', function() {
@@ -760,23 +974,25 @@
             loadMaterials(selectedPlant, selectedMaterialTypes);
         });
 
-        // Step 3: Material selection
-        $('#select-all-materials').on('click', function() {
-            $('.material-checkbox').prop('checked', true).trigger('change');
-        });
-
-        $('#deselect-all-materials').on('click', function() {
-            $('.material-checkbox').prop('checked', false).trigger('change');
+        // Step 3: Material selection - toggle all
+        let allMaterialsSelected = false;
+        $('#toggle_all_materials').on('click', function() {
+            if (allMaterialsSelected) {
+                // Deselect all
+                $('.material-checkbox').prop('checked', false).trigger('change');
+                $(this).text('All');
+                allMaterialsSelected = false;
+            } else {
+                // Select all
+                $('.material-checkbox').prop('checked', true).trigger('change');
+                $(this).text('None');
+                allMaterialsSelected = true;
+            }
         });
 
         $('#material-search').on('keyup', function() {
             const searchTerm = $(this).val().toLowerCase();
             filterMaterials(searchTerm);
-        });
-
-        $('#clear-search').on('click', function() {
-            $('#material-search').val('');
-            filterMaterials('');
         });
 
         $('#btn-prev-step3').on('click', function() {
@@ -841,21 +1057,20 @@
             });
         });
 
-        // Step 4: PRO selection
-        $('#select-all-pro').on('click', function() {
-            $('.pro-checkbox').prop('checked', true).trigger('change');
-        });
-
-        $('#deselect-all-pro').on('click', function() {
-            $('.pro-checkbox').prop('checked', false).trigger('change');
-        });
-
-        $('#btn-find-suitable-pros').on('click', function() {
-            if (selectedMaterials.length === 0) {
-                showNotification('Please select materials first in Step 3', 'warning', 3000);
-                return;
+        // Step 4: PRO selection - toggle all
+        let allProSelected = false;
+        $('#toggle_all_pro').on('click', function() {
+            if (allProSelected) {
+                // Deselect all
+                $('.pro-checkbox').prop('checked', false).trigger('change');
+                $(this).text('All');
+                allProSelected = false;
+            } else {
+                // Select all
+                $('.pro-checkbox').prop('checked', true).trigger('change');
+                $(this).text('None');
+                allProSelected = true;
             }
-            suggestProNumbersForMaterials();
         });
 
         $('#btn-prev-step4').on('click', function() {
@@ -884,65 +1099,11 @@
                 method: 'POST',
                 data: requestData,
                 success: function(response) {
+                    console.log('✅ Step 5 Response:', response);
+
                     if (response.success && response.data && response.data.length > 0) {
                         loadedMaterials = response.data;
                         hideLoading();
-
-                        // Group materials by code and combine quantities
-                        const materialMap = {};
-
-                        loadedMaterials.forEach(function(material) {
-                            const key = material.material_code;
-                            if (!materialMap[key]) {
-                                materialMap[key] = {
-                                    material_code: material.material_code,
-                                    material_description: material.material_description,
-                                    sortf: material.sortf, // Ensure sortf is included
-                                    dispo: material.dispo,
-                                    unit: material.unit === 'ST' ? 'PC' : material.unit,
-                                    total_qty: 0,
-                                    sources: [],
-                                    sales_orders: [],
-                                    pro_details: []
-                                };
-                            }
-
-                            // Add quantity
-                            materialMap[key].total_qty += parseFloat(material.total_qty) || 0;
-
-                            // Add sources if not already present
-                            if (material.sources) {
-                                material.sources.forEach(function(source) {
-                                    if (!materialMap[key].sources.includes(source)) {
-                                        materialMap[key].sources.push(source);
-                                    }
-                                });
-                            }
-
-                            // Add sales orders if not already present
-                            if (material.sales_orders) {
-                                material.sales_orders.forEach(function(so) {
-                                    if (so && !materialMap[key].sales_orders.includes(so)) {
-                                        materialMap[key].sales_orders.push(so);
-                                    }
-                                });
-                            }
-
-                            // Add pro details - preserve sortf from pro details
-                            if (material.pro_details) {
-                                materialMap[key].pro_details = materialMap[key].pro_details.concat(material.pro_details);
-                            }
-                        });
-
-                        // Convert back to array
-                        loadedMaterials = Object.values(materialMap);
-
-                        // Debug: Log loaded materials with sortf
-                        console.log('📋 Loaded materials with sortf:', loadedMaterials.map(m => ({
-                            code: m.material_code,
-                            sortf: m.sortf,
-                            has_sortf: !!m.sortf
-                        })));
 
                         currentStep = 5;
                         updateStepNavigation();
@@ -1052,10 +1213,30 @@
 
                         $('#selected-types-count').text(selectedMaterialTypes.length);
                         $('#btn-next-step2').prop('disabled', selectedMaterialTypes.length === 0);
+
+                        // Update toggle button text
+                        let allChecked = $('.material-type-checkbox:checked').length === materialTypes.length;
+                        if (allChecked) {
+                            $('#toggle_all_types').text('Deselect all');
+                            window.allTypesSelected = true;
+                        } else {
+                            $('#toggle_all_types').text('Select all');
+                            window.allTypesSelected = false;
+                        }
                     });
 
                     $('#selected-types-count').text(selectedMaterialTypes.length);
                     $('#btn-next-step2').prop('disabled', selectedMaterialTypes.length === 0);
+
+                    // Set initial toggle button text
+                    let allChecked = selectedMaterialTypes.length === materialTypes.length;
+                    if (allChecked) {
+                        $('#toggle_all_types').text('Deselect all');
+                        window.allTypesSelected = true;
+                    } else {
+                        $('#toggle_all_types').text('Select all');
+                        window.allTypesSelected = false;
+                    }
                 }
             },
             error: function(xhr) {
@@ -1065,133 +1246,185 @@
         });
     }
 
-            // Fungsi loadMaterials() yang DIPERBAIKI
-        function loadMaterials(plant, materialTypes) {
-            $('#materials-checkbox-container').html(`
-                <div class="text-center py-3">
-                    <div class="spinner-border text-primary spinner-border-sm" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2 small">Loading materials...</p>
+    // ==============================================
+    // COMPACT MATERIALS DISPLAY FOR STEP 3 - NO GRID
+    // ==============================================
+    function loadMaterials(plant, materialTypes) {
+        $('#materials-checkbox-container').html(`
+            <div class="text-center py-3">
+                <div class="spinner-border text-primary spinner-border-sm" role="status">
+                    <span class="visually-hidden">Loading...</span>
                 </div>
-            `);
+                <p class="mt-2 small">Loading materials...</p>
+            </div>
+        `);
 
-            $.ajax({
-                url: '/reservations/get-materials-by-type',
-                method: 'POST',
-                data: {
-                    plant: plant,
-                    material_types: materialTypes,
-                    _token: '{{ csrf_token() }}'
-                },
-                success: function(response) {
-                    console.log('📋 Step 3 - Materials response:', response); // Debug log
+        $.ajax({
+            url: '/reservations/get-materials-by-type',
+            method: 'POST',
+            data: {
+                plant: plant,
+                material_types: materialTypes,
+                _token: '{{ csrf_token() }}'
+            },
+            success: function(response) {
+                console.log('📋 Step 3 - Materials response:', response);
 
-                    if (response.success) {
-                        allMaterials = response.materials;
+                if (response.success) {
+                    allMaterials = response.materials;
 
-                        let containerHtml = '';
-                        if (allMaterials.length > 0) {
-                            allMaterials.forEach(function(material) {
-                                const displayMatnr = formatMaterialCodeForUI(material.matnr);
-                                const isChecked = selectedMaterials.includes(material.matnr);
-                                const typeDescription = getMaterialTypeDescription(material.mtart);
+                    let containerHtml = '';
+                    if (allMaterials.length > 0) {
+                        allMaterials.forEach(function(material) {
+                            const displayMatnr = formatMaterialCodeForUI(material.matnr);
+                            const isChecked = selectedMaterials.includes(material.matnr);
+                            const typeDescription = getMaterialTypeDescription(material.mtart);
 
-                                // MRP information
-                                const mrp = material.dispo ? `<span class="badge mrp-badge badge-sm">${material.dispo}</span>` : '';
+                            // MRP information
+                            const mrpBadge = material.dispo ?
+                                `<span class="mrp-badge-small">${material.dispo}</span>` : '';
 
-                                // Sales Order information
-                                let salesOrder = '';
-                                if (material.kdauf && material.kdpos) {
-                                    salesOrder = `<span class="badge sales-order-badge badge-sm">${material.kdauf}-${material.kdpos}</span>`;
-                                } else if (material.kdauf) {
-                                    salesOrder = `<span class="badge sales-order-badge badge-sm">${material.kdauf}</span>`;
-                                }
-
-                                // PERBAIKAN: Tampilkan sortf dengan jelas
-                                const sortfValue = material.sortf || '';
-                                const sortfDisplay = sortfValue ?
-                                    `<div class="mt-1">
-                                        <small class="text-muted">
-                                            <strong>Additional Info:</strong> ${sortfValue}
-                                        </small>
-                                    </div>` :
-                                    '';
-
-                                containerHtml += `
-                                    <div class="simple-list-item">
-                                        <div class="form-check">
-                                            <input class="form-check-input material-checkbox" type="checkbox"
-                                                id="mat_${material.matnr}" value="${material.matnr}" ${isChecked ? 'checked' : ''}>
-                                            <label class="form-check-label" for="mat_${material.matnr}">
-                                                <div class="d-flex justify-content-between align-items-start">
-                                                    <div style="flex: 1;">
-                                                        <div>
-                                                            <span class="material-code">${displayMatnr}</span>
-                                                            <small class="text-muted ms-2">${material.mtart}</small>
-                                                            ${mrp}
-                                                            ${salesOrder}
-                                                        </div>
-                                                        <div class="material-desc table-description">${material.maktx}</div>
-                                                        ${sortfDisplay}
-                                                    </div>
-                                                    <div class="text-end" style="min-width: 80px;">
-                                                        <small class="text-muted d-block">${typeDescription}</small>
-                                                    </div>
-                                                </div>
-                                            </label>
-                                        </div>
-                                    </div>
-                                `;
-                            });
-                        } else {
-                            containerHtml = '<p class="text-muted text-center py-3 small">No materials found</p>';
-                        }
-
-                        $('#materials-checkbox-container').html(containerHtml);
-
-                        // Add click handlers for checkboxes
-                        $('.material-checkbox').on('change', function() {
-                            const materialCode = $(this).val();
-                            const isChecked = $(this).is(':checked');
-
-                            if (isChecked && !selectedMaterials.includes(materialCode)) {
-                                selectedMaterials.push(materialCode);
-                            } else if (!isChecked) {
-                                selectedMaterials = selectedMaterials.filter(m => m !== materialCode);
+                            // Sales Order information
+                            let salesOrderBadge = '';
+                            if (material.kdauf && material.kdpos) {
+                                salesOrderBadge = `<span class="sales-order-badge-small">${material.kdauf}-${material.kdpos}</span>`;
+                            } else if (material.kdauf) {
+                                salesOrderBadge = `<span class="sales-order-badge-small">${material.kdauf}</span>`;
                             }
 
-                            $('#selected-materials-count').text(selectedMaterials.length);
-                            $('#btn-next-step3').prop('disabled', selectedMaterials.length === 0);
+                            // Additional Info (sortf)
+                            const sortfValue = material.sortf || '';
+                            const additionalInfo = sortfValue ?
+                                `<div class="additional-info-section">
+                                    <strong>Add Info:</strong> ${sortfValue}
+                                </div>` : '';
+
+                            // PERUBAHAN: Format Material PRO (mathd) numerik tanpa leading zero
+                            // Desc PRO (makhd) biarkan asli
+                            const mathdValue = formatMaterialProForUI(material.mathd || '');
+                            const makhdValue = material.makhd || '';
+
+                            containerHtml += `
+                                <div class="material-item-container">
+                                    <div class="material-checkbox-section">
+                                        <input class="form-check-input material-checkbox" type="checkbox"
+                                            id="mat_${material.matnr}" value="${material.matnr}" ${isChecked ? 'checked' : ''}>
+                                    </div>
+                                    <div class="material-content-section">
+                                        <!-- LEFT: Material code, type, badges, type description -->
+                                        <div class="material-left-section">
+                                            <div class="material-basic-info">
+                                                <span class="material-code">${displayMatnr}</span>
+                                                <span class="material-type-badge">${material.mtart}</span>
+                                                ${mrpBadge}
+                                                ${salesOrderBadge}
+                                            </div>
+                                            <div class="material-type-description">
+                                                ${typeDescription}
+                                            </div>
+                                            ${additionalInfo}
+                                        </div>
+
+                                        <!-- CENTER: Material description -->
+                                        <div class="material-center-section">
+                                            <div class="material-desc">
+                                                ${material.maktx}
+                                            </div>
+                                        </div>
+
+                                        <!-- RIGHT: Material PRO and Desc PRO -->
+                                        <div class="material-right-section">
+                                            ${mathdValue ? `
+                                                <div class="material-pro-section">
+                                                    <div class="material-pro-label">Material PRO</div>
+                                                    <div class="material-pro-value">${mathdValue}</div>
+                                                </div>
+                                            ` : ''}
+                                            ${makhdValue ? `
+                                                <div class="desc-pro-section">
+                                                    <div class="desc-pro-label">Desc PRO</div>
+                                                    <div class="desc-pro-value">${makhdValue}</div>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
                         });
+                    } else {
+                        containerHtml = '<p class="text-muted text-center py-3 small">No materials found</p>';
+                    }
+
+                    $('#materials-checkbox-container').html(containerHtml);
+
+                    // Add click handlers for checkboxes
+                    $('.material-checkbox').on('change', function() {
+                        const materialCode = $(this).val();
+                        const isChecked = $(this).is(':checked');
+
+                        if (isChecked && !selectedMaterials.includes(materialCode)) {
+                            selectedMaterials.push(materialCode);
+                        } else if (!isChecked) {
+                            selectedMaterials = selectedMaterials.filter(m => m !== materialCode);
+                        }
 
                         $('#selected-materials-count').text(selectedMaterials.length);
                         $('#btn-next-step3').prop('disabled', selectedMaterials.length === 0);
+
+                        // Update toggle button text
+                        let allChecked = $('.material-checkbox:checked').length === allMaterials.length;
+                        if (allChecked) {
+                            $('#toggle_all_materials').text('None');
+                            window.allMaterialsSelected = true;
+                        } else {
+                            $('#toggle_all_materials').text('All');
+                            window.allMaterialsSelected = false;
+                        }
+                    });
+
+                    $('#selected-materials-count').text(selectedMaterials.length);
+                    $('#btn-next-step3').prop('disabled', selectedMaterials.length === 0);
+
+                    // Set initial toggle button text
+                    let allChecked = selectedMaterials.length === allMaterials.length;
+                    if (allChecked && allMaterials.length > 0) {
+                        $('#toggle_all_materials').text('None');
+                        window.allMaterialsSelected = true;
+                    } else {
+                        $('#toggle_all_materials').text('All');
+                        window.allMaterialsSelected = false;
                     }
-                },
-                error: function(xhr) {
-                    console.error('Materials error:', xhr);
-                    showNotification('Failed to load materials', 'error', 4000);
                 }
-            });
-        }
+            },
+            error: function(xhr) {
+                console.error('Materials error:', xhr);
+                showNotification('Failed to load materials', 'error', 4000);
+            }
+        });
+    }
 
     function filterMaterials(searchTerm) {
         if (!searchTerm) {
-            $('.simple-list-item').show();
+            $('.material-item-container').show();
             return;
         }
 
-        $('.simple-list-item').each(function() {
+        $('.material-item-container').each(function() {
             const materialCode = $(this).find('.material-code').text().toLowerCase();
             const materialDesc = $(this).find('.material-desc').text().toLowerCase();
-            const typeCode = $(this).find('small.text-muted').first().text().toLowerCase();
-            const additionalInfo = $(this).find('small.text-muted.d-block').text().toLowerCase();
+            const typeCode = $(this).find('.material-type-badge').text().toLowerCase();
+            const additionalInfo = $(this).find('.additional-info-section').text().toLowerCase();
+            const typeDescription = $(this).find('.material-type-description').text().toLowerCase();
+            const materialPro = $(this).find('.material-pro-value').text().toLowerCase();
+            const descPro = $(this).find('.desc-pro-value').text().toLowerCase();
 
             if (materialCode.includes(searchTerm) ||
                 materialDesc.includes(searchTerm) ||
                 typeCode.includes(searchTerm) ||
-                additionalInfo.includes(searchTerm)) {
+                additionalInfo.includes(searchTerm) ||
+                typeDescription.includes(searchTerm) ||
+                materialPro.includes(searchTerm) ||
+                descPro.includes(searchTerm)) {
                 $(this).show();
             } else {
                 $(this).hide();
@@ -1244,10 +1477,30 @@
 
             $('#selected-pro-count').text(selectedProNumbers.length);
             $('#btn-next-step4').prop('disabled', selectedProNumbers.length === 0);
+
+            // Update toggle button text
+            let allChecked = $('.pro-checkbox:checked').length === proNumbers.length;
+            if (allChecked) {
+                $('#toggle_all_pro').text('None');
+                window.allProSelected = true;
+            } else {
+                $('#toggle_all_pro').text('All');
+                window.allProSelected = false;
+            }
         });
 
         $('#selected-pro-count').text(selectedProNumbers.length);
         $('#btn-next-step4').prop('disabled', selectedProNumbers.length === 0);
+
+        // Set initial toggle button text
+        let allChecked = selectedProNumbers.length === proNumbers.length;
+        if (allChecked && proNumbers.length > 0) {
+            $('#toggle_all_pro').text('None');
+            window.allProSelected = true;
+        } else {
+            $('#toggle_all_pro').text('All');
+            window.allProSelected = false;
+        }
     }
 
     function formatQuantity(qty) {
@@ -1269,7 +1522,7 @@
         if (!loadedMaterials || loadedMaterials.length === 0) {
             html = `
                 <tr>
-                    <td colspan="10" class="text-center text-muted py-3">
+                    <td colspan="12" class="text-center text-muted py-3">
                         <h6>No materials data available</h6>
                     </td>
                 </tr>
@@ -1317,29 +1570,48 @@
             // Format Additional Info (sortf)
             const additionalInfo = material.sortf || '-';
 
+            // PERUBAHAN: Format Material PRO (mathd) numerik tanpa leading zero
+            // Desc PRO (makhd) biarkan asli
+            const materialPro = formatMaterialProForUI(material.mathd || '-');
+            const descPro = material.makhd || '-';
+
             const isConsolidated = displaySources.length > 1;
             const rowClass = isConsolidated ? 'consolidated-row' : '';
 
+            // Simpan data tambahan sebagai data attribute
+            const additionalData = {};
+            if (material.groes && material.groes !== 'null' && material.groes !== '0') {
+                additionalData.groes = material.groes;
+            }
+            if (material.ferth && material.ferth !== 'null' && material.ferth !== '0') {
+                additionalData.ferth = material.ferth;
+            }
+            if (material.zeinr && material.zeinr !== 'null' && material.zeinr !== '0') {
+                additionalData.zeinr = material.zeinr;
+            }
+
             html += `
-                <tr class="${rowClass}">
+                <tr class="${rowClass}" data-additional='${JSON.stringify(additionalData)}' data-index="${index}">
                     <td class="text-center">${index + 1}</td>
                     <td class="text-center">${sourceBadges}</td>
-                    <td class="text-center"><code>${formatMaterialCodeForUI(material.material_code)}</code></td>
-                    <td class="table-description">${material.material_description || 'No description'}</td>
+                    <td class="text-center material-pro-cell">${materialPro}</td>
+                    <td class="text-center desc-pro-cell">${descPro}</td>
                     <td class="text-center">
                         ${material.dispo ? `<span class="badge mrp-badge">${material.dispo}</span>` : '-'}
                     </td>
                     <td class="text-center">${salesOrderBadges}</td>
+                    <td class="text-center"><code>${formatMaterialCodeForUI(material.material_code)}</code></td>
+                    <td class="table-description full-description">${material.material_description || 'No description'}</td>
                     <td class="additional-info-cell">${additionalInfo}</td>
                     <td class="text-center quantity-cell">${formattedOriginalQty}</td>
                     <td class="text-center">
                         <input type="number" class="form-control quantity-input requested-qty text-center ${!isQtyEditable ? 'qty-disabled' : ''}"
-                               value="${formattedOriginalQty}"
-                               step="0.0001" min="0.0001"
-                               data-index="${index}"
-                               data-material="${material.material_code}"
-                               data-dispo="${material.dispo || ''}"
-                               ${!isQtyEditable ? 'readonly title="Quantity cannot be changed for this MRP"' : ''}>
+                            value="${formattedOriginalQty}"
+                            step="0.0001" min="0.0001"
+                            data-index="${index}"
+                            data-material="${material.material_code}"
+                            data-dispo="${material.dispo || ''}"
+                            ${!isQtyEditable ? 'readonly title="Quantity cannot be changed for this MRP"' : ''}>
                         ${!isQtyEditable ? '<small class="text-muted d-block">Fixed</small>' : ''}
                     </td>
                     <td class="text-center">${material.unit || '-'}</td>
@@ -1388,31 +1660,46 @@
             return;
         }
 
-        // Prepare materials data dengan sortf
+        // Prepare materials data dengan semua field tambahan
         loadedMaterials.forEach(function(material, index) {
             const qtyInput = $(`.requested-qty[data-index="${index}"]`);
             const requestedQty = parseFloat(qtyInput.val()) || 0;
             const isQtyEditable = !qtyInput.hasClass('qty-disabled');
+
+            // Ambil data tambahan dari data attribute
+            const row = $(`tr[data-index="${index}"]`);
+            const additionalData = row.length ? JSON.parse(row.attr('data-additional') || '{}') : {};
 
             materialsData.push({
                 material_code: material.material_code,
                 material_code_display: formatMaterialCodeForUI(material.material_code),
                 material_description: material.material_description,
                 unit: material.unit,
-                sortf: material.sortf, // Include sortf in data
+                sortf: material.sortf,
                 dispo: material.dispo,
                 requested_qty: requestedQty,
                 is_qty_editable: isQtyEditable,
                 sources: material.sources || [],
                 sales_orders: material.sales_orders || [],
-                pro_details: material.pro_details || []
+                pro_details: material.pro_details || [],
+                // Field tambahan untuk ditampilkan di tabel
+                mathd: material.mathd || null,
+                makhd: material.makhd || null,
+                // Field tambahan untuk disimpan (tidak ditampilkan)
+                groes: additionalData.groes || null,
+                ferth: additionalData.ferth || null,
+                zeinr: additionalData.zeinr || null
             });
         });
 
         // Debug logging
         console.log('📤 Sending materials data to server:', materialsData.map(m => ({
             code: m.material_code_display,
-            sortf: m.sortf,
+            mathd: m.mathd,
+            makhd: m.makhd,
+            groes: m.groes,
+            ferth: m.ferth,
+            zeinr: m.zeinr,
             qty: m.requested_qty
         })));
 

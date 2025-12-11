@@ -114,20 +114,46 @@
                                     <th>#</th>
                                     <th>Material Code</th>
                                     <th>Description</th>
-                                    <th>SORTF</th>
-                                    <th>Unit</th>
+                                    <th>Add Info</th>
                                     <th class="text-center">Requested Qty</th>
+                                    <th>Uom</th>
+                                    <th>Source PRO</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach($document->items as $index => $item)
+                                    @php
+                                        // Format material code: remove leading zeros if numeric
+                                        $materialCode = $item->material_code;
+                                        if (ctype_digit($materialCode)) {
+                                            $materialCode = ltrim($materialCode, '0');
+                                        }
+
+                                        // Convert unit: if ST then PC
+                                        $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
+
+                                        // Get processed sources (already handled in controller)
+                                        $sources = $item->processed_sources ?? [];
+
+                                        // PERBAIKAN: Gunakan null coalescing untuk sortf
+                                        $addInfo = $item->sortf ?? '-';
+                                    @endphp
                                     <tr>
                                         <td>{{ $index + 1 }}</td>
-                                        <td><code>{{ $item->material_code }}</code></td>
+                                        <td><code>{{ $materialCode }}</code></td>
                                         <td>{{ $item->material_description }}</td>
-                                        <td>{{ $item->sortf ?? '-' }}</td>
-                                        <td>{{ $item->unit }}</td>
+                                        <td>{{ $addInfo }}</td>
                                         <td class="text-center"><strong>{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</strong></td>
+                                        <td>{{ $unit }}</td>
+                                        <td>
+                                            @if(!empty($sources))
+                                                @foreach($sources as $source)
+                                                    <span class="badge bg-info me-1 mb-1">{{ $source }}</span>
+                                                @endforeach
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>

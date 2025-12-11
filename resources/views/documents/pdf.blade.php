@@ -192,21 +192,25 @@
                 <th width="3%">#</th>
                 <th width="12%">Material Code</th>
                 <th width="25%">Description</th>
-                <th width="5%">SORTF</th>
-                <th width="5%">Unit</th>
+                <th width="10%">Add Info</th>
                 <th width="8%" class="text-right">Req. Qty</th>
-                <th width="42%">Source PRO Numbers</th>
+                <th width="5%">Uom</th>
+                <th width="37%">Source PRO Numbers</th>
             </tr>
         </thead>
         <tbody>
             @foreach($document->items as $index => $item)
+                @php
+                    // PERBAIKAN: Gunakan null coalescing untuk sortf
+                    $addInfo = $item->sortf ?? '-';
+                @endphp
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
                     <td style="font-weight: bold;">{{ $item->material_code }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($item->material_description, 40) }}</td>
-                    <td class="text-center">{{ $item->sortf ?? '-' }}</td>
-                    <td class="text-center">{{ $item->unit }}</td>
+                    <td class="text-center">{{ $addInfo }}</td>
                     <td class="text-right">{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</td>
+                    <td class="text-center">{{ $item->unit == 'ST' ? 'PC' : $item->unit }}</td>
                     <td>
                         @if(!empty($item->processed_sources))
                             @foreach($item->processed_sources as $source)
@@ -221,8 +225,9 @@
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="5" class="text-right"><strong>TOTAL:</strong></td>
+                <td colspan="4" class="text-right"><strong>TOTAL:</strong></td>
                 <td class="text-right"><strong>{{ \App\Helpers\NumberHelper::formatQuantity($document->total_qty) }}</strong></td>
+                <td></td>
                 <td></td>
             </tr>
         </tfoot>

@@ -212,9 +212,11 @@
                         <div class="col-7">
                             <div class="document-title text-black">RESERVATION DOCUMENT</div>
                             <div class="company-info text-black">
-                                <strong>PT. Example Company</strong><br>
-                                Jl. Contoh No. 123, Jakarta<br>
-                                Phone: (021) 12345678 | Fax: (021) 87654321
+                                <strong>PT. Kayu Mebel Indonesia</strong><br>
+                                Jl. Manunggaljati KM No, 23, Jatikalang,
+                                Kec. Krian, Kabupaten Sidoarjo, Jawa Timur 61262, Indonesia<br>
+                                Factory. Jl. Jend. Urip Sumoharjo No.134 50244 Ngaliyan Jawa Tengah
+                                Phone: (031) 8971048. | Phone: (024) 8665996
                             </div>
                         </div>
                         <div class="col-5 text-end">
@@ -270,10 +272,10 @@
                                 <th width="3%" style="font-size: 8pt;">No</th>
                                 <th width="12%" style="font-size: 8pt;">Material Code</th>
                                 <th width="25%" style="font-size: 8pt;">Description</th>
-                                <th width="5%" style="font-size: 8pt;">SORTF</th>
-                                <th width="5%" style="font-size: 8pt;">Unit</th>
+                                <th width="10%" style="font-size: 8pt;">Add Info</th>
                                 <th width="10%" style="font-size: 8pt;">Req. Qty</th>
-                                <th width="40%" style="font-size: 8pt;">Source PRO Numbers</th>
+                                <th width="5%" style="font-size: 8pt;">Uom</th>
+                                <th width="35%" style="font-size: 8pt;">PRO Numbers</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -284,14 +286,20 @@
                                     if (ctype_digit($materialCode)) {
                                         $materialCode = ltrim($materialCode, '0');
                                     }
+
+                                    // Convert unit: if ST then PC
+                                    $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
+
+                                    // PERBAIKAN: Gunakan null coalescing untuk sortf
+                                    $addInfo = $item->sortf ?? '-';
                                 @endphp
                                 <tr>
                                     <td style="font-size: 8pt;">{{ $index + 1 }}</td>
                                     <td style="font-size: 8pt;"><code style="font-size: 8pt;">{{ $materialCode }}</code></td>
                                     <td style="font-size: 8pt;">{{ \Illuminate\Support\Str::limit($item->material_description, 40) }}</td>
-                                    <td style="font-size: 8pt;">{{ $item->sortf ?? '-' }}</td>
-                                    <td style="font-size: 8pt;">{{ $item->unit }}</td>
+                                    <td style="font-size: 8pt;">{{ $addInfo }}</td>
                                     <td style="font-size: 8pt;">{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</td>
+                                    <td style="font-size: 8pt;">{{ $unit }}</td>
                                     <td style="font-size: 8pt;">
                                         @if(!empty($item->processed_sources))
                                             @foreach($item->processed_sources as $source)

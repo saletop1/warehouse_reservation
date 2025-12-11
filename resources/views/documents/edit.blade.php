@@ -82,9 +82,10 @@
                                         <th>Material Code</th>
                                         <th>Description</th>
                                         <th>MRP</th>
-                                        <th>SORTF</th>
-                                        <th>Unit</th>
+                                        <th>Add Info</th>
                                         <th class="text-end">Requested Qty</th>
+                                        <th>Uom</th>
+                                        <th>Source PRO</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -105,10 +106,28 @@
                                             if ($item->dispo && !in_array($item->dispo, $allowedMRP)) {
                                                 $isQtyEditable = false;
                                             }
+
+                                            // Format material code: remove leading zeros if numeric
+                                            $materialCode = $item->material_code;
+                                            if (ctype_digit($materialCode)) {
+                                                $materialCode = ltrim($materialCode, '0');
+                                            }
+
+                                            // Convert unit: if ST then PC
+                                            $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
+
+                                            // Decode sources and remove leading zeros
+                                            $sources = json_decode($item->sources, true) ?? [];
+                                            $processedSources = array_map(function($source) {
+                                                return \App\Helpers\NumberHelper::removeLeadingZeros($source);
+                                            }, $sources);
+
+                                            // PERBAIKAN: Gunakan null coalescing untuk sortf
+                                            $addInfo = $item->sortf ?? '-';
                                         @endphp
                                         <tr>
                                             <td>{{ $index + 1 }}</td>
-                                            <td><code>{{ $item->material_code }}</code></td>
+                                            <td><code>{{ $materialCode }}</code></td>
                                             <td style="white-space: normal; word-wrap: break-word; max-width: 300px;">{{ $item->material_description }}</td>
                                             <td>
                                                 @if($item->dispo)
@@ -120,8 +139,7 @@
                                                     -
                                                 @endif
                                             </td>
-                                            <td>{{ $item->sortf ?? '-' }}</td>
-                                            <td>{{ $item->unit }}</td>
+                                            <td>{{ $addInfo }}</td>
                                             <td>
                                                 @if($isQtyEditable)
                                                     <input type="number"
@@ -142,6 +160,16 @@
                                                            value="{{ $displayValue }}">
                                                 @endif
                                                 <input type="hidden" name="items[{{ $index }}][id]" value="{{ $item->id }}">
+                                            </td>
+                                            <td>{{ $unit }}</td>
+                                            <td>
+                                                @if(!empty($processedSources))
+                                                    @foreach($processedSources as $source)
+                                                        <span class="badge bg-info me-1 mb-1">{{ $source }}</span>
+                                                    @endforeach
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach
