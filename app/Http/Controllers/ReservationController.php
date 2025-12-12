@@ -224,7 +224,7 @@ class ReservationController extends Controller
         return in_array($dispo, $allowedMRP);
     }
 
-     /**
+    /**
      * Update the specified document in storage.
      */
     public function updateDocument(Request $request, $id)
@@ -1120,7 +1120,23 @@ class ReservationController extends Controller
     public function getMaterialTypes(Request $request)
     {
         try {
+            // Debug log untuk melihat request
+            \Log::info('getMaterialTypes Request:', [
+                'plant' => $request->input('plant'),
+                'headers' => $request->headers->all(),
+                'token' => $request->input('_token'),
+                'session_token' => $request->session()->token()
+            ]);
+
             $plant = $request->input('plant');
+
+            // Validasi plant harus diisi
+            if (empty($plant)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Plant parameter is required'
+                ], 400);
+            }
 
             // Get material types from sap_reservations table
             $materialTypes = DB::table('sap_reservations')
@@ -1131,16 +1147,37 @@ class ReservationController extends Controller
                 ->orderBy('mtart')
                 ->pluck('mtart');
 
+            \Log::info('getMaterialTypes Response:', [
+                'plant' => $plant,
+                'count' => $materialTypes->count(),
+                'material_types' => $materialTypes->toArray()
+            ]);
+
             return response()->json([
                 'success' => true,
                 'material_types' => $materialTypes
             ]);
         } catch (\Exception $e) {
+            \Log::error('Failed to get material types: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get material types: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Constructor
+     */
+    public function __construct()
+    {
+        // Kecualikan route API dari CSRF verification jika diperlukan
+        $this->middleware('auth');
+
+        // Jika menggunakan Laravel Sanctum atau API, tambahkan middleware berikut
+        // $this->middleware('auth:sanctum')->only(['getMaterialTypes', 'getMaterialsByType', 'getProNumbers']);
     }
 
     /**
@@ -1279,341 +1316,380 @@ class ReservationController extends Controller
         }
     }
 
-                /**
-             * AJAX: Load multiple PRO - DIPERBAIKI untuk include data tambahan
-             */
-            /**
-     * AJAX: Load multiple PRO - DIPERBAIKI untuk include data tambahan
+    /**
+     * AJAX: Load multiple PRO - DIPERBAIKI untuk include data tambahan dan konsolidasi material
      */
-            public function loadMultiplePro(Request $request)
-            {
-                try {
-                    $plant = $request->input('plant');
-                    $materialTypes = $request->input('material_types', []);
-                    $materials = $request->input('materials', []);
-                    $proNumbers = $request->input('pro_numbers', []);
+    public function loadMultiplePro(Request $request)
+    {
+        try {
+            $plant = $request->input('plant');
+            $materialTypes = $request->input('material_types', []);
+            $materials = $request->input('materials', []);
+            $proNumbers = $request->input('pro_numbers', []);
 
-                    Log::info('🔍 DEBUG - Starting loadMultiplePro', [
-                        'plant' => $plant,
-                        'materials_raw' => $materials,
-                        'pro_numbers_raw' => $proNumbers,
-                        'material_types' => $materialTypes
-                    ]);
+            Log::info('🔍 DEBUG - Starting loadMultiplePro', [
+                'plant' => $plant,
+                'materials_raw' => $materials,
+                'pro_numbers_raw' => $proNumbers,
+                'material_types' => $materialTypes
+            ]);
 
-                    if (empty($proNumbers) || empty($materials)) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'No PRO numbers or materials selected'
-                        ], 400);
-                    }
-
-                    // Format material codes to 18-digit
-                    $formattedMaterials = array_map(function($material) {
-                        if (ctype_digit($material)) {
-                            return str_pad($material, 18, '0', STR_PAD_LEFT);
-                        }
-                        return $material;
-                    }, $materials);
-
-                    // Format PRO numbers to 12-digit
-                    $formattedProNumbers = array_map(function($pro) {
-                        $pro = trim($pro);
-                        if (ctype_digit($pro)) {
-                            return str_pad($pro, 12, '0', STR_PAD_LEFT);
-                        }
-                        return $pro;
-                    }, $proNumbers);
-
-                    // Main query dengan semua field tambahan yang diperlukan
-                    $materialData = DB::table('sap_reservations')
-                        ->select(
-                            'matnr as material_code',
-                            'maktx as material_description',
-                            'meins as unit',
-                            'sortf',
-                            'dispo',
-                            // Tambahan field baru sesuai permintaan - PASTIKAN FIELD INI ADA DI TABEL
-                            'mathd',
-                            'makhd',
-                            'groes',
-                            'ferth',
-                            'zeinr',
-                            DB::raw('SUM(psmng) as total_qty'),
-                            DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'),
-                            DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
-                            DB::raw('COUNT(DISTINCT sap_order) as pro_count')
-                        )
-                        ->where('sap_plant', $plant)
-                        ->whereIn('matnr', $formattedMaterials)
-                        ->where(function($query) use ($formattedProNumbers) {
-                            $query->whereIn('sap_order', $formattedProNumbers)
-                                ->orWhereIn('aufnr', $formattedProNumbers);
-                        })
-                        ->groupBy('matnr', 'maktx', 'meins', 'sortf', 'dispo', 'mathd', 'makhd', 'groes', 'ferth', 'zeinr')
-                        ->orderBy('matnr')
-                        ->get();
-
-                    // Debug: Log semua data yang diambil
-                    Log::info('Step 5 - Loaded material data with additional fields', [
-                        'count' => $materialData->count(),
-                        'sample_data' => $materialData->take(2)->map(function($item) {
-                            return [
-                                'matnr' => $item->material_code,
-                                'sortf' => $item->sortf,
-                                'mathd' => $item->mathd,
-                                'makhd' => $item->makhd,
-                                'groes' => $item->groes,
-                                'ferth' => $item->ferth,
-                                'zeinr' => $item->zeinr
-                            ];
-                        })
-                    ]);
-
-                    if ($materialData->isEmpty()) {
-                        // Try alternative format
-                        $altFormattedMaterials = array_map(function($material) {
-                            return ltrim($material, '0');
-                        }, $formattedMaterials);
-
-                        $altFormattedProNumbers = array_map(function($pro) {
-                            return ltrim($pro, '0');
-                        }, $formattedProNumbers);
-
-                        $alternativeData = DB::table('sap_reservations')
-                            ->select(
-                                'matnr as material_code',
-                                'maktx as material_description',
-                                'meins as unit',
-                                'sortf',
-                                'dispo',
-                                // Tambahan field baru
-                                'mathd',
-                                'makhd',
-                                'groes',
-                                'ferth',
-                                'zeinr',
-                                DB::raw('SUM(psmng) as total_qty'),
-                                DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'),
-                                DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
-                                DB::raw('COUNT(DISTINCT sap_order) as pro_count')
-                            )
-                            ->where('sap_plant', $plant)
-                            ->where(function($query) use ($altFormattedMaterials, $formattedMaterials) {
-                                $query->whereIn('matnr', $formattedMaterials)
-                                    ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM matnr)'), $altFormattedMaterials);
-                            })
-                            ->where(function($query) use ($altFormattedProNumbers, $formattedProNumbers) {
-                                $query->whereIn('sap_order', $formattedProNumbers)
-                                    ->orWhereIn('aufnr', $formattedProNumbers)
-                                    ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM sap_order)'), $altFormattedProNumbers)
-                                    ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM aufnr)'), $altFormattedProNumbers);
-                            })
-                            ->groupBy('matnr', 'maktx', 'meins', 'sortf', 'dispo', 'mathd', 'makhd', 'groes', 'ferth', 'zeinr')
-                            ->orderBy('matnr')
-                            ->get();
-
-                        if ($alternativeData->isEmpty()) {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'The selected materials do not exist in the chosen PRO numbers',
-                                'details' => [
-                                    'Plant: ' . $plant,
-                                    'Materials selected (UI format): ' . implode(', ', $materials),
-                                    'PRO numbers selected (UI format): ' . implode(', ', $proNumbers)
-                                ]
-                            ], 404);
-                        }
-
-                        $materialData = $alternativeData;
-                    }
-
-                    // Transform data dengan field tambahan
-                    $transformedData = [];
-                    foreach ($materialData as $item) {
-                        $sources = $item->source_pro_numbers ? explode(',', $item->source_pro_numbers) : [];
-                        $salesOrders = $item->sales_orders ? explode(',', $item->sales_orders) : [];
-
-                        // Format material code untuk display
-                        $displayMaterialCode = $item->material_code;
-                        if (ctype_digit($displayMaterialCode)) {
-                            $displayMaterialCode = ltrim($displayMaterialCode, '0');
-                        }
-
-                        // Format sources untuk display
-                        $displaySources = array_map(function($source) {
-                            if (ctype_digit($source)) {
-                                return ltrim($source, '0');
-                            }
-                            return $source;
-                        }, $sources);
-
-                        // Get PRO details dengan field tambahan - PERBAIKI UNTUK MENGAMBIL mathd dan makhd
-                        $proDetails = [];
-                        foreach ($sources as $source) {
-                            $proData = DB::table('sap_reservations')
-                                ->where('sap_plant', $plant)
-                                ->where('matnr', $item->material_code)
-                                ->where('sap_order', $source)
-                                ->select('psmng', 'kdauf', 'kdpos', 'dispo', 'sortf', 'mathd', 'makhd', 'groes', 'ferth', 'zeinr')
-                                ->first();
-
-                            $displayPro = $source;
-                            if (ctype_digit($displayPro)) {
-                                $displayPro = ltrim($displayPro, '0');
-                            }
-
-                            $salesOrder = ($proData && $proData->kdauf && $proData->kdpos)
-                                ? $proData->kdauf . '-' . $proData->kdpos
-                                : (($proData && $proData->kdauf) ? $proData->kdauf : null);
-
-                            // Hanya ambil field tambahan jika bukan null atau 0
-                            $additionalData = [];
-                            if ($proData) {
-                                // Simpan mathd dan makhd dari proData jika ada
-                                if (!empty($proData->mathd) && $proData->mathd != '0' && strtolower($proData->mathd) != 'null') {
-                                    $additionalData['mathd'] = $proData->mathd;
-                                }
-                                if (!empty($proData->makhd) && $proData->makhd != '0' && strtolower($proData->makhd) != 'null') {
-                                    $additionalData['makhd'] = $proData->makhd;
-                                }
-                                if (!empty($proData->groes) && $proData->groes != '0' && strtolower($proData->groes) != 'null') {
-                                    $additionalData['groes'] = $proData->groes;
-                                }
-                                if (!empty($proData->ferth) && $proData->ferth != '0' && strtolower($proData->ferth) != 'null') {
-                                    $additionalData['ferth'] = $proData->ferth;
-                                }
-                                if (!empty($proData->zeinr) && $proData->zeinr != '0' && strtolower($proData->zeinr) != 'null') {
-                                    $additionalData['zeinr'] = $proData->zeinr;
-                                }
-                            }
-
-                            $proDetails[] = array_merge([
-                                'pro_number' => $displayPro,
-                                'pro_number_raw' => $source,
-                                'quantity' => $proData ? $proData->psmng : 0,
-                                'kdauf' => $proData ? $proData->kdauf : null,
-                                'kdpos' => $proData ? $proData->kdpos : null,
-                                'sales_order' => $salesOrder,
-                                'dispo' => $proData ? $proData->dispo : null,
-                                'sortf' => $proData ? $proData->sortf : null
-                            ], $additionalData);
-                        }
-
-                        // Filter field tambahan di level material (hanya ambil jika bukan null atau 0)
-                        $materialAdditionalData = [];
-                        // Pastikan mathd dan makhd disimpan
-                        if (!empty($item->mathd) && $item->mathd != '0' && strtolower($item->mathd) != 'null') {
-                            $materialAdditionalData['mathd'] = $item->mathd;
-                        }
-                        if (!empty($item->makhd) && $item->makhd != '0' && strtolower($item->makhd) != 'null') {
-                            $materialAdditionalData['makhd'] = $item->makhd;
-                        }
-                        if (!empty($item->groes) && $item->groes != '0' && strtolower($item->groes) != 'null') {
-                            $materialAdditionalData['groes'] = $item->groes;
-                        }
-                        if (!empty($item->ferth) && $item->ferth != '0' && strtolower($item->ferth) != 'null') {
-                            $materialAdditionalData['ferth'] = $item->ferth;
-                        }
-                        if (!empty($item->zeinr) && $item->zeinr != '0' && strtolower($item->zeinr) != 'null') {
-                            $materialAdditionalData['zeinr'] = $item->zeinr;
-                        }
-
-                        $transformedData[] = array_merge([
-                            'material_code' => $item->material_code,
-                            'material_code_display' => $displayMaterialCode,
-                            'material_description' => $item->material_description,
-                            'unit' => $item->unit,
-                            'sortf' => $item->sortf, // PASTIKAN sortf DISERTAKAN
-                            'dispo' => $item->dispo,
-                            'total_qty' => $item->total_qty,
-                            'sources' => $displaySources,
-                            'sources_raw' => $sources,
-                            'sales_orders' => $salesOrders,
-                            'sales_orders_raw' => $salesOrders,
-                            'pro_details' => $proDetails,
-                            'source_count' => $item->pro_count
-                        ], $materialAdditionalData);
-                    }
-
-                    Log::info('✅ Step 5 - Successfully loaded material data with all fields', [
-                        'transformed_count' => count($transformedData),
-                        'fields_included' => array_keys($transformedData[0] ?? []),
-                        'sample_data' => $transformedData[0] ?? []
-                    ]);
-
-                    return response()->json([
-                        'success' => true,
-                        'data' => $transformedData,
-                        'count' => count($transformedData)
-                    ]);
-
-                } catch (\Exception $e) {
-                    Log::error('🔥 Failed to load PRO data: ' . $e->getMessage(), [
-                        'trace' => $e->getTraceAsString(),
-                        'request_data' => $request->all()
-                    ]);
-
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'System error: ' . $e->getMessage()
-                    ], 500);
-                }
+            if (empty($proNumbers) || empty($materials)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No PRO numbers or materials selected'
+                ], 400);
             }
 
+            // Format material codes to 18-digit
+            $formattedMaterials = array_map(function($material) {
+                if (ctype_digit($material)) {
+                    return str_pad($material, 18, '0', STR_PAD_LEFT);
+                }
+                return $material;
+            }, $materials);
+
+            // Format PRO numbers to 12-digit
+            $formattedProNumbers = array_map(function($pro) {
+                $pro = trim($pro);
+                if (ctype_digit($pro)) {
+                    return str_pad($pro, 12, '0', STR_PAD_LEFT);
+                }
+                return $pro;
+            }, $proNumbers);
+
+            // PERUBAHAN: Set group_concat_max_len untuk menangani banyak data
+            DB::statement("SET SESSION group_concat_max_len = 1000000;");
+
+            // PERUBAHAN: Query utama dengan GROUP BY matnr untuk konsolidasi
+            $materialData = DB::table('sap_reservations')
+                ->select(
+                    'matnr as material_code',
+                    DB::raw('MAX(maktx) as material_description'),
+                    DB::raw('MAX(meins) as unit'),
+                    DB::raw('MAX(sortf) as sortf'), // Ambil salah satu sortf
+                    DB::raw('MAX(dispo) as dispo'), // Ambil salah satu dispo
+                    // Tambahan field baru
+                    DB::raw('MAX(mathd) as mathd'),
+                    DB::raw('MAX(makhd) as makhd'),
+                    DB::raw('MAX(groes) as groes'),
+                    DB::raw('MAX(ferth) as ferth'),
+                    DB::raw('MAX(zeinr) as zeinr'),
+                    DB::raw('SUM(psmng) as total_qty'), // Jumlahkan semua qty
+                    DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'), // Gabungkan semua PRO
+                    DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
+                    DB::raw('COUNT(DISTINCT sap_order) as pro_count')
+                )
+                ->where('sap_plant', $plant)
+                ->whereIn('matnr', $formattedMaterials)
+                ->where(function($query) use ($formattedProNumbers) {
+                    $query->whereIn('sap_order', $formattedProNumbers)
+                        ->orWhereIn('aufnr', $formattedProNumbers);
+                })
+                ->groupBy('matnr') // PERUBAHAN: Hanya group by matnr untuk konsolidasi
+                ->orderBy('matnr')
+                ->get();
+
+            // Debug: Log semua data yang diambil
+            Log::info('Step 5 - Loaded consolidated material data', [
+                'count' => $materialData->count(),
+                'sample_data' => $materialData->take(2)->map(function($item) {
+                    return [
+                        'matnr' => $item->material_code,
+                        'sortf' => $item->sortf,
+                        'mathd' => $item->mathd,
+                        'makhd' => $item->makhd,
+                        'total_qty' => $item->total_qty,
+                        'pro_count' => $item->pro_count
+                    ];
+                })
+            ]);
+
+            if ($materialData->isEmpty()) {
+                // Try alternative format
+                $altFormattedMaterials = array_map(function($material) {
+                    return ltrim($material, '0');
+                }, $formattedMaterials);
+
+                $altFormattedProNumbers = array_map(function($pro) {
+                    return ltrim($pro, '0');
+                }, $formattedProNumbers);
+
+                $alternativeData = DB::table('sap_reservations')
+                    ->select(
+                        'matnr as material_code',
+                        DB::raw('MAX(maktx) as material_description'),
+                        DB::raw('MAX(meins) as unit'),
+                        DB::raw('MAX(sortf) as sortf'),
+                        DB::raw('MAX(dispo) as dispo'),
+                        // Tambahan field baru
+                        DB::raw('MAX(mathd) as mathd'),
+                        DB::raw('MAX(makhd) as makhd'),
+                        DB::raw('MAX(groes) as groes'),
+                        DB::raw('MAX(ferth) as ferth'),
+                        DB::raw('MAX(zeinr) as zeinr'),
+                        DB::raw('SUM(psmng) as total_qty'),
+                        DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'),
+                        DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
+                        DB::raw('COUNT(DISTINCT sap_order) as pro_count')
+                    )
+                    ->where('sap_plant', $plant)
+                    ->where(function($query) use ($altFormattedMaterials, $formattedMaterials) {
+                        $query->whereIn('matnr', $formattedMaterials)
+                            ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM matnr)'), $altFormattedMaterials);
+                    })
+                    ->where(function($query) use ($altFormattedProNumbers, $formattedProNumbers) {
+                        $query->whereIn('sap_order', $formattedProNumbers)
+                            ->orWhereIn('aufnr', $formattedProNumbers)
+                            ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM sap_order)'), $altFormattedProNumbers)
+                            ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM aufnr)'), $altFormattedProNumbers);
+                    })
+                    ->groupBy('matnr')
+                    ->orderBy('matnr')
+                    ->get();
+
+                if ($alternativeData->isEmpty()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'The selected materials do not exist in the chosen PRO numbers',
+                        'details' => [
+                            'Plant: ' . $plant,
+                            'Materials selected (UI format): ' . implode(', ', $materials),
+                            'PRO numbers selected (UI format): ' . implode(', ', $proNumbers)
+                        ]
+                    ], 404);
+                }
+
+                $materialData = $alternativeData;
+            }
+
+            // Transform data dengan field tambahan
+            $transformedData = [];
+            foreach ($materialData as $item) {
+                $sources = $item->source_pro_numbers ? explode(',', $item->source_pro_numbers) : [];
+                $salesOrders = $item->sales_orders ? explode(',', $item->sales_orders) : [];
+
+                // Format material code untuk display
+                $displayMaterialCode = $item->material_code;
+                if (ctype_digit($displayMaterialCode)) {
+                    $displayMaterialCode = ltrim($displayMaterialCode, '0');
+                }
+
+                // Format sources untuk display
+                $displaySources = array_map(function($source) {
+                    if (ctype_digit($source)) {
+                        return ltrim($source, '0');
+                    }
+                    return $source;
+                }, $sources);
+
+                // Get PRO details dengan field tambahan
+                $proDetails = [];
+                foreach ($sources as $source) {
+                    $proData = DB::table('sap_reservations')
+                        ->where('sap_plant', $plant)
+                        ->where('matnr', $item->material_code)
+                        ->where('sap_order', $source)
+                        ->select('psmng', 'kdauf', 'kdpos', 'dispo', 'sortf', 'mathd', 'makhd', 'groes', 'ferth', 'zeinr')
+                        ->first();
+
+                    $displayPro = $source;
+                    if (ctype_digit($displayPro)) {
+                        $displayPro = ltrim($displayPro, '0');
+                    }
+
+                    $salesOrder = ($proData && $proData->kdauf && $proData->kdpos)
+                        ? $proData->kdauf . '-' . $proData->kdpos
+                        : (($proData && $proData->kdauf) ? $proData->kdauf : null);
+
+                    // Hanya ambil field tambahan jika bukan null atau 0
+                    $additionalData = [];
+                    if ($proData) {
+                        if (!empty($proData->mathd) && $proData->mathd != '0' && strtolower($proData->mathd) != 'null') {
+                            $additionalData['mathd'] = $proData->mathd;
+                        }
+                        if (!empty($proData->makhd) && $proData->makhd != '0' && strtolower($proData->makhd) != 'null') {
+                            $additionalData['makhd'] = $proData->makhd;
+                        }
+                        if (!empty($proData->groes) && $proData->groes != '0' && strtolower($proData->groes) != 'null') {
+                            $additionalData['groes'] = $proData->groes;
+                        }
+                        if (!empty($proData->ferth) && $proData->ferth != '0' && strtolower($proData->ferth) != 'null') {
+                            $additionalData['ferth'] = $proData->ferth;
+                        }
+                        if (!empty($proData->zeinr) && $proData->zeinr != '0' && strtolower($proData->zeinr) != 'null') {
+                            $additionalData['zeinr'] = $proData->zeinr;
+                        }
+                    }
+
+                    $proDetails[] = array_merge([
+                        'pro_number' => $displayPro,
+                        'pro_number_raw' => $source,
+                        'quantity' => $proData ? $proData->psmng : 0,
+                        'kdauf' => $proData ? $proData->kdauf : null,
+                        'kdpos' => $proData ? $proData->kdpos : null,
+                        'sales_order' => $salesOrder,
+                        'dispo' => $proData ? $proData->dispo : null,
+                        'sortf' => $proData ? $proData->sortf : null
+                    ], $additionalData);
+                }
+
+                // Filter field tambahan di level material
+                $materialAdditionalData = [];
+                if (!empty($item->mathd) && $item->mathd != '0' && strtolower($item->mathd) != 'null') {
+                    $materialAdditionalData['mathd'] = $item->mathd;
+                }
+                if (!empty($item->makhd) && $item->makhd != '0' && strtolower($item->makhd) != 'null') {
+                    $materialAdditionalData['makhd'] = $item->makhd;
+                }
+                if (!empty($item->groes) && $item->groes != '0' && strtolower($item->groes) != 'null') {
+                    $materialAdditionalData['groes'] = $item->groes;
+                }
+                if (!empty($item->ferth) && $item->ferth != '0' && strtolower($item->ferth) != 'null') {
+                    $materialAdditionalData['ferth'] = $item->ferth;
+                }
+                if (!empty($item->zeinr) && $item->zeinr != '0' && strtolower($item->zeinr) != 'null') {
+                    $materialAdditionalData['zeinr'] = $item->zeinr;
+                }
+
+                $transformedData[] = array_merge([
+                    'material_code' => $item->material_code,
+                    'material_code_display' => $displayMaterialCode,
+                    'material_description' => $item->material_description,
+                    'unit' => $item->unit,
+                    'sortf' => $item->sortf,
+                    'dispo' => $item->dispo,
+                    'total_qty' => $item->total_qty,
+                    'sources' => $displaySources,
+                    'sources_raw' => $sources,
+                    'sales_orders' => $salesOrders,
+                    'sales_orders_raw' => $salesOrders,
+                    'pro_details' => $proDetails,
+                    'source_count' => $item->pro_count,
+                    'is_consolidated' => count($sources) > 1 // Flag untuk material yang dikonsolidasi
+                ], $materialAdditionalData);
+            }
+
+            Log::info('✅ Step 5 - Successfully loaded consolidated material data', [
+                'transformed_count' => count($transformedData),
+                'consolidated_materials' => count(array_filter($transformedData, function($item) {
+                    return $item['is_consolidated'];
+                })),
+                'sample_data' => $transformedData[0] ?? []
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $transformedData,
+                'count' => count($transformedData),
+                'consolidated_count' => count(array_filter($transformedData, function($item) {
+                    return $item['is_consolidated'];
+                }))
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('🔥 Failed to load PRO data: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'System error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Create document dengan CSRF protection dan chunk processing untuk banyak data
+     */
     public function createDocument(Request $request)
     {
+        ini_set('max_execution_time', 300);
+        ini_set('memory_limit', '1024M');
+
         Log::info('📝 CREATE DOCUMENT REQUEST RECEIVED', [
             'timestamp' => now()->toISOString(),
             'user_id' => auth()->id(),
             'user_name' => auth()->user()->name,
-            'request_data_summary' => [
-                'plant' => $request->input('plant'),
-                'materials_count' => count($request->input('materials', [])),
-                'pro_numbers_count' => count($request->input('pro_numbers', [])),
-                'material_types_count' => count($request->input('material_types', []))
-            ]
+            'request_method' => $request->method(),
+            'content_type' => $request->header('Content-Type'),
+            'is_json' => $request->isJson(),
+            'input_data' => $request->all()
         ]);
+
+        // Check if request is JSON
+        if ($request->isJson()) {
+            $data = $request->json()->all();
+        } else {
+            $data = $request->all();
+        }
+
+        Log::info('📝 CREATE DOCUMENT DATA PARSED', [
+            'data_keys' => array_keys($data),
+            'materials_count' => isset($data['materials']) ? count($data['materials']) : 0,
+            'pro_numbers_count' => isset($data['pro_numbers']) ? count($data['pro_numbers']) : 0
+        ]);
+
+        // Validate CSRF token
+        $token = $data['_token'] ?? $request->input('_token');
+        if (!hash_equals($request->session()->token(), $token)) {
+            Log::error('❌ CSRF token mismatch', [
+                'session_token' => $request->session()->token(),
+                'provided_token' => $token
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'CSRF token mismatch. Please refresh the page and try again.'
+            ], 419);
+        }
 
         DB::beginTransaction();
 
         try {
-            $plant = $request->input('plant');
-            $materials = $request->input('materials', []);
-            $proNumbers = $request->input('pro_numbers', []);
-            $materialTypes = $request->input('material_types', []);
+            $plant = $data['plant'] ?? $request->input('plant');
+            $materials = $data['materials'] ?? $request->input('materials', []);
+            $proNumbers = $data['pro_numbers'] ?? $request->input('pro_numbers', []);
+            $materialTypes = $data['material_types'] ?? $request->input('material_types', []);
 
             Log::info('🔧 Processing createDocument', [
                 'plant' => $plant,
-                'materials_count' => count($materials),
-                'pro_numbers_count' => count($proNumbers)
+                'materials_count' => is_array($materials) ? count($materials) : 0,
+                'pro_numbers_count' => is_array($proNumbers) ? count($proNumbers) : 0,
+                'materials_sample' => is_array($materials) && count($materials) > 0 ? $materials[0] : 'No materials'
             ]);
 
-            if (empty($materials)) {
-                Log::error('❌ No materials selected for document creation');
-                throw new \Exception('No materials selected');
+            // Validasi data yang diperlukan
+            if (empty($plant)) {
+                throw new \Exception('Plant is required');
             }
 
-            // Validate materials
+            if (empty($materials) || !is_array($materials)) {
+                throw new \Exception('No materials selected or invalid materials data');
+            }
+
+            // Validate materials data structure
             foreach ($materials as $index => $material) {
-                Log::debug('Validating material ' . ($index + 1), [
-                    'material_code' => $material['material_code'] ?? 'N/A',
-                    'requested_qty' => $material['requested_qty'] ?? 0,
-                    'sortf' => $material['sortf'] ?? 'N/A',
-                    'mathd' => $material['mathd'] ?? 'N/A',
-                    'makhd' => $material['makhd'] ?? 'N/A'
-                ]);
-
-                if (!isset($material['material_code']) || !isset($material['requested_qty'])) {
-                    throw new \Exception("Material data incomplete at index {$index}");
+                if (!is_array($material)) {
+                    throw new \Exception("Material data at index {$index} is not an array");
                 }
 
-                if ($material['requested_qty'] <= 0) {
-                    throw new \Exception("Requested quantity must be greater than 0 for material: " .
-                        ($material['material_code_display'] ?? $material['material_code']));
+                if (!isset($material['material_code']) || empty($material['material_code'])) {
+                    throw new \Exception("Material code is required at index {$index}");
+                }
+
+                if (!isset($material['requested_qty'])) {
+                    throw new \Exception("Requested quantity is required at index {$index}");
+                }
+
+                $requestedQty = floatval($material['requested_qty']);
+                if ($requestedQty <= 0) {
+                    $materialDisplay = $material['material_code_display'] ?? $material['material_code'];
+                    throw new \Exception("Requested quantity must be greater than 0 for material: {$materialDisplay}");
                 }
             }
 
-            // Generate document number menggunakan metode baru
+            // Generate document number
             $documentNo = $this->generateGlobalDocumentNumberWithPlantPrefix($plant);
 
             Log::info('📄 Generated document number', [
@@ -1642,23 +1718,30 @@ class ReservationController extends Controller
                 'total_qty' => $totalQty,
                 'created_by' => Auth::id(),
                 'created_by_name' => Auth::user()->name,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
 
             Log::info('✅ Document created successfully', [
                 'document_id' => $document->id,
                 'document_no' => $documentNo,
-                'plant' => $plant
+                'plant' => $plant,
+                'total_items' => $totalItems,
+                'total_qty' => $totalQty
             ]);
 
-            // Create document items dengan semua field termasuk sortf
+            // Insert items in chunks to avoid memory issues
+            $itemsToCreate = [];
+            $chunkSize = 100;
+            $insertedItems = 0;
+
             foreach ($materials as $index => $material) {
                 // Check if quantity is editable for MRP
                 $isQtyEditable = true;
-                $dispo = null;
+                $dispo = $material['dispo'] ?? null;
 
-                if (isset($material['dispo'])) {
-                    $dispo = $material['dispo'];
-                } elseif (isset($material['pro_details']) && is_array($material['pro_details']) && count($material['pro_details']) > 0) {
+                // If dispo not provided in material, check pro_details
+                if (!$dispo && isset($material['pro_details']) && is_array($material['pro_details']) && count($material['pro_details']) > 0) {
                     foreach ($material['pro_details'] as $proDetail) {
                         if (isset($proDetail['dispo']) && $proDetail['dispo']) {
                             $dispo = $proDetail['dispo'];
@@ -1669,46 +1752,56 @@ class ReservationController extends Controller
 
                 $isQtyEditable = $this->isQtyEditableForMRP($dispo);
 
-                // Prepare item data - SAVE sortf directly to the item
+                // Ensure arrays are properly formatted
+                $sources = isset($material['sources']) && is_array($material['sources']) ? $material['sources'] : [];
+                $salesOrders = isset($material['sales_orders']) && is_array($material['sales_orders']) ? $material['sales_orders'] : [];
+                $proDetails = isset($material['pro_details']) && is_array($material['pro_details']) ? $material['pro_details'] : [];
+
+                // Prepare item data
                 $itemData = [
                     'document_id' => $document->id,
                     'material_code' => $material['material_code'],
                     'material_description' => $material['material_description'] ?? 'No Description',
                     'unit' => $material['unit'] ?? 'PC',
-                    'sortf' => $material['sortf'] ?? null, // SIMPAN sortf langsung ke kolom
+                    'sortf' => $material['sortf'] ?? null,
                     'dispo' => $dispo,
                     'is_qty_editable' => $isQtyEditable,
-                    'requested_qty' => $material['requested_qty'],
-                    'sources' => isset($material['sources']) ? json_encode($material['sources']) : json_encode([]),
-                    'sales_orders' => isset($material['sales_orders']) ? json_encode($material['sales_orders']) : json_encode([]),
-                    'pro_details' => isset($material['pro_details']) ? json_encode($material['pro_details']) : json_encode([]),
-                    // Simpan field tambahan lainnya ke kolom yang sesuai
+                    'requested_qty' => floatval($material['requested_qty']),
+                    'sources' => json_encode($sources),
+                    'sales_orders' => json_encode($salesOrders),
+                    'pro_details' => json_encode($proDetails),
                     'mathd' => $material['mathd'] ?? null,
                     'makhd' => $material['makhd'] ?? null,
                     'groes' => $material['groes'] ?? null,
                     'ferth' => $material['ferth'] ?? null,
                     'zeinr' => $material['zeinr'] ?? null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ];
 
-                // Validate required fields
-                if (empty($itemData['material_code']) || empty($itemData['requested_qty'])) {
-                    throw new \Exception("Missing required fields for material at index {$index}");
+                $itemsToCreate[] = $itemData;
+
+                // Insert in chunks to avoid memory issues
+                if (count($itemsToCreate) >= $chunkSize) {
+                    DB::table('reservation_document_items')->insert($itemsToCreate);
+                    $insertedItems += count($itemsToCreate);
+                    $itemsToCreate = [];
+
+                    Log::info("📝 Inserted {$chunkSize} items chunk for document {$documentNo}");
                 }
-
-                // Create item
-                $document->items()->create($itemData);
-
-                Log::debug('✅ Document item created', [
-                    'index' => $index,
-                    'material_code' => $material['material_code'],
-                    'sortf' => $material['sortf'] ?? 'N/A',
-                    'qty' => $material['requested_qty'],
-                    'dispo' => $dispo
-                ]);
             }
 
-            // Delete used sync data
-            $deletedCount = $this->deleteUsedSyncData($plant, $materials, $proNumbers);
+            // Insert remaining items
+            if (!empty($itemsToCreate)) {
+                DB::table('reservation_document_items')->insert($itemsToCreate);
+                $insertedItems += count($itemsToCreate);
+                Log::info("📝 Inserted final chunk of " . count($itemsToCreate) . " items");
+            }
+
+            Log::info("✅ Total {$insertedItems} items inserted for document {$documentNo}");
+
+            // Delete used sync data in smaller chunks
+            $deletedCount = $this->deleteUsedSyncDataInChunks($plant, $materials, $proNumbers);
 
             DB::commit();
 
@@ -1735,7 +1828,8 @@ class ReservationController extends Controller
             DB::rollBack();
             Log::error('🔥 Failed to create document: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
-                'request_data' => $request->all()
+                'request_data' => $request->all(),
+                'json_data' => $data ?? []
             ]);
 
             return response()->json([
@@ -1758,89 +1852,109 @@ class ReservationController extends Controller
      */
     private function generateGlobalDocumentNumberWithPlantPrefix($plant)
     {
-        DB::beginTransaction();
-
         try {
             // Tentukan prefix berdasarkan plant
             $prefix = ($plant == '3000') ? 'RSMG' : 'RSBY';
 
-            // Ambil dokumen terakhir secara global (tanpa filter plant)
-            $latestDoc = DB::table('reservation_documents')
-                ->lockForUpdate()
-                ->orderBy('id', 'desc')
-                ->first();
+            // Gunakan database sequence untuk menghindari race condition
+            $latestSeq = DB::table('reservation_documents')
+                ->select(DB::raw('COALESCE(MAX(CAST(SUBSTRING(document_no, 5) AS UNSIGNED)), 0) as max_seq'))
+                ->where('document_no', 'LIKE', $prefix . '%')
+                ->value('max_seq');
 
-            $sequence = 1;
-            if ($latestDoc) {
-                $latestNumber = $latestDoc->document_no;
-                // Ambil angka dari nomor dokumen (buang prefix apapun)
-                $latestSeq = intval(preg_replace('/\D/', '', $latestNumber));
-                $sequence = $latestSeq + 1;
-            }
-
-            // Nomor dokumen baru dengan prefix per plant
+            $sequence = $latestSeq + 1;
             $documentNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
 
-            // Simpan dokumen baru (ini opsional, sebenarnya hanya untuk testing)
-            // DB::table('reservation_documents')->insert([
-            //     'plant' => $plant,
-            //     'document_no' => $documentNo,
-            //     'created_at' => now(),
-            //     'updated_at' => now(),
-            // ]);
+            // Verifikasi nomor belum digunakan
+            $counter = 0;
+            while (DB::table('reservation_documents')->where('document_no', $documentNo)->exists()) {
+                $sequence++;
+                $documentNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
+                $counter++;
+                if ($counter > 100) {
+                    throw new \Exception('Failed to generate unique document number');
+                }
+            }
 
-            DB::commit();
+            \Log::info('Generated document number', [
+                'prefix' => $prefix,
+                'sequence' => $sequence,
+                'document_no' => $documentNo
+            ]);
 
             return $documentNo;
         } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Failed to generate document number: ' . $e->getMessage());
+            \Log::error('Failed to generate document number: ' . $e->getMessage());
             throw new \Exception('Failed to generate document number: ' . $e->getMessage());
         }
     }
 
     /**
-     * Delete used sync data from sap_reservations table
+     * Delete used sync data in chunks to avoid memory issues
      */
-    private function deleteUsedSyncData($plant, $materials, $proNumbers)
+    private function deleteUsedSyncDataInChunks($plant, $materials, $proNumbers)
     {
-        $deletedCount = 0;
+        $totalDeleted = 0;
 
         try {
-            Log::info('🗑️ Starting sync data deletion', [
+            Log::info('🗑️ Starting sync data deletion in chunks', [
                 'plant' => $plant,
-                'materials_count' => count($materials),
-                'pro_numbers_count' => count($proNumbers)
+                'materials_count' => is_array($materials) ? count($materials) : 0,
+                'pro_numbers_count' => is_array($proNumbers) ? count($proNumbers) : 0
             ]);
+
+            if (empty($proNumbers) || !is_array($proNumbers)) {
+                Log::warning('No PRO numbers provided for deletion');
+                return 0;
+            }
 
             // Format PRO numbers to 12-digit
-            $formattedProNumbers = array_map(function($pro) {
+            $formattedProNumbers = [];
+            foreach ($proNumbers as $pro) {
                 $pro = trim($pro);
                 if (ctype_digit($pro)) {
-                    return str_pad($pro, 12, '0', STR_PAD_LEFT);
+                    $formattedProNumbers[] = str_pad($pro, 12, '0', STR_PAD_LEFT);
+                } else {
+                    $formattedProNumbers[] = $pro;
                 }
-                return $pro;
-            }, $proNumbers);
+            }
 
-            // Delete ALL data from selected PRO numbers
-            $deletedCount = DB::table('sap_reservations')
-                ->where('sap_plant', $plant)
-                ->where(function($query) use ($formattedProNumbers) {
-                    $query->whereIn('sap_order', $formattedProNumbers)
-                        ->orWhereIn('aufnr', $formattedProNumbers);
-                })
-                ->delete();
+            // Delete in chunks of 1000 records
+            $chunkSize = 1000;
+            $offset = 0;
 
-            Log::info('✅ Deleted sync data', [
+            do {
+                $query = DB::table('sap_reservations')
+                    ->where('sap_plant', $plant)
+                    ->where(function($query) use ($formattedProNumbers) {
+                        $query->whereIn('sap_order', $formattedProNumbers)
+                            ->orWhereIn('aufnr', $formattedProNumbers);
+                    });
+
+                $deletedCount = $query->limit($chunkSize)->delete();
+                $totalDeleted += $deletedCount;
+
+                Log::info("🗑️ Deleted chunk: {$deletedCount} records, Total: {$totalDeleted}");
+
+                if ($deletedCount < $chunkSize) {
+                    break;
+                }
+
+                // Small delay to avoid overloading the database
+                usleep(100000); // 0.1 second
+
+            } while (true);
+
+            Log::info('✅ Deleted sync data in chunks', [
                 'plant' => $plant,
                 'pro_numbers_count' => count($proNumbers),
-                'deleted_count' => $deletedCount
+                'total_deleted' => $totalDeleted
             ]);
 
-            return $deletedCount;
+            return $totalDeleted;
 
         } catch (\Exception $e) {
-            Log::error('❌ Failed to delete sync data: ' . $e->getMessage());
+            Log::error('❌ Failed to delete sync data in chunks: ' . $e->getMessage());
             return 0;
         }
     }

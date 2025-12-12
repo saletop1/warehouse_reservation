@@ -249,6 +249,8 @@
                                         <div class="text-muted small mt-2">
                                             <i class="fas fa-info-circle"></i>
                                             Adjust the "Requested Qty" if needed. Used sync data will be deleted after document creation.
+                                            <br><i class="fas fa-info-circle"></i>
+                                            <strong>Note:</strong> Materials with same code are consolidated. Qty is accumulated from all selected PRO numbers.
                                         </div>
                                     </div>
                                 </div>
@@ -502,7 +504,7 @@
         font-family: 'Consolas', monospace;
         background-color: #f8f9fa;
         padding: 2px 6px;
-        border-radius: 3px;
+                border-radius: 3px;
         display: inline-block;
         margin-top: 1px;
         word-break: break-all;
@@ -740,6 +742,12 @@
         box-shadow: none;
     }
 
+    /* Consolidated row style */
+    .consolidated-highlight {
+        background-color: #e8f4fd !important;
+        border-left: 3px solid #0d6efd;
+    }
+
     /* Responsive adjustments */
     @media (max-width: 1200px) {
         .material-content-section {
@@ -816,6 +824,9 @@
 
 @push('scripts')
 <script>
+    // ============================
+    // GLOBAL VARIABLES
+    // ============================
     let currentStep = 1;
     let selectedPlant = '';
     let selectedMaterialTypes = [];
@@ -825,6 +836,7 @@
     let allMaterials = [];
     let proNumbers = [];
     let loadedMaterials = [];
+    let csrfToken = '';
 
     // Material Type descriptions mapping
     const materialTypeDescriptions = {
@@ -934,229 +946,40 @@
     }
 
     // ============================
-    // CORE FUNCTIONS
+    // CSRF ERROR HANDLING
     // ============================
 
-    // Initialize
-    $(document).ready(function() {
-        // Initialize tooltips
-        $('[data-bs-toggle="tooltip"]').tooltip();
+    function handleCsrfError() {
+        showNotification(
+            'Session expired. Please refresh the page and try again.<br>' +
+            'If the problem persists, clear your browser cache and cookies.',
+            'error',
+            10000
+        );
 
-        // Step 1: Plant selection
-        $('#plant_select').on('change', function() {
-            selectedPlant = $(this).val();
-            if (selectedPlant) {
-                $('#btn-next-step1').prop('disabled', false);
-                loadMaterialTypes(selectedPlant);
-            } else {
-                $('#btn-next-step1').prop('disabled', true);
-            }
-        });
+        // Auto refresh setelah 5 detik
+        setTimeout(() => {
+            window.location.reload();
+        }, 5000);
+    }
 
-        $('#btn-next-step1').on('click', function() {
-            if (!selectedPlant) return;
-            currentStep = 2;
-            updateStepNavigation();
-        });
+    // ============================
+    // LOADING MODAL FUNCTIONS
+    // ============================
 
-        // Step 2: Material type selection - toggle all
-        let allTypesSelected = false;
-        $('#toggle_all_types').on('click', function() {
-            if (allTypesSelected) {
-                // Deselect all
-                $('.material-type-checkbox').prop('checked', false).trigger('change');
-                $(this).text('Select all');
-                allTypesSelected = false;
-            } else {
-                // Select all
-                $('.material-type-checkbox').prop('checked', true).trigger('change');
-                $(this).text('Deselect all');
-                allTypesSelected = true;
-            }
-        });
+    function showLoading(message, details) {
+        $('#loading-message').text(message);
+        $('#loading-details').text(details);
+        $('#loadingModal').modal('show');
+    }
 
-        $('#btn-prev-step2').on('click', function() {
-            currentStep = 1;
-            updateStepNavigation();
-        });
+    function hideLoading() {
+        $('#loadingModal').modal('hide');
+    }
 
-        $('#btn-next-step2').on('click', function() {
-            if (selectedMaterialTypes.length === 0) {
-                showNotification('Please select at least one material type', 'warning', 3000);
-                return;
-            }
-            currentStep = 3;
-            updateStepNavigation();
-            loadMaterials(selectedPlant, selectedMaterialTypes);
-        });
-
-        // Step 3: Material selection - toggle all
-        let allMaterialsSelected = false;
-        $('#toggle_all_materials').on('click', function() {
-            if (allMaterialsSelected) {
-                // Deselect all
-                $('.material-checkbox').prop('checked', false).trigger('change');
-                $(this).text('All');
-                allMaterialsSelected = false;
-            } else {
-                // Select all
-                $('.material-checkbox').prop('checked', true).trigger('change');
-                $(this).text('None');
-                allMaterialsSelected = true;
-            }
-        });
-
-        $('#material-search').on('keyup', function() {
-            const searchTerm = $(this).val().toLowerCase();
-            filterMaterials(searchTerm);
-        });
-
-        $('#btn-prev-step3').on('click', function() {
-            currentStep = 2;
-            updateStepNavigation();
-        });
-
-        $('#btn-next-step3').on('click', function() {
-            if (selectedMaterials.length === 0) {
-                showNotification('Please select at least one material', 'warning', 3000);
-                return;
-            }
-
-            showLoading('Loading PRO numbers...', 'Please wait');
-
-            const materialsForAPI = selectedMaterials.map(m => formatMaterialCodeForDB(m));
-
-            $.ajax({
-                url: '/reservations/get-pro-numbers-for-materials',
-                method: 'POST',
-                data: {
-                    plant: selectedPlant,
-                    material_types: selectedMaterialTypes,
-                    materials: materialsForAPI,
-                    _token: '{{ csrf_token() }}'
-                },
-                success: function(response) {
-                    hideLoading();
-
-                    if (response.success) {
-                        if (response.pro_numbers && Array.isArray(response.pro_numbers)) {
-                            proNumbers = response.pro_numbers.map(item => {
-                                if (typeof item === 'string') return {pro_number: item, material_count: 0};
-                                if (typeof item === 'object' && item !== null) {
-                                    return {
-                                        pro_number: item.sap_order || item.pro_number || item.aufnr || item.pro || item.value || String(item),
-                                        material_count: item.material_count || 0
-                                    };
-                                }
-                                return {pro_number: String(item), material_count: 0};
-                            });
-
-                            selectedProNumbers = [];
-                            currentStep = 4;
-                            updateStepNavigation();
-                            populateProNumbersContainer();
-                        } else {
-                            showNotification('Error: PRO numbers data format is incorrect', 'error', 4000);
-                        }
-                    } else {
-                        showNotification('Error: ' + (response.message || 'Failed to load PRO numbers'), 'error', 4000);
-                    }
-                },
-                error: function(xhr) {
-                    hideLoading();
-                    let errorMsg = 'Failed to load PRO numbers. ';
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        errorMsg += xhr.responseJSON.message;
-                    }
-                    showNotification(errorMsg, 'error', 5000);
-                }
-            });
-        });
-
-        // Step 4: PRO selection - toggle all
-        let allProSelected = false;
-        $('#toggle_all_pro').on('click', function() {
-            if (allProSelected) {
-                // Deselect all
-                $('.pro-checkbox').prop('checked', false).trigger('change');
-                $(this).text('All');
-                allProSelected = false;
-            } else {
-                // Select all
-                $('.pro-checkbox').prop('checked', true).trigger('change');
-                $(this).text('None');
-                allProSelected = true;
-            }
-        });
-
-        $('#btn-prev-step4').on('click', function() {
-            currentStep = 3;
-            updateStepNavigation();
-        });
-
-        $('#btn-next-step4').on('click', function() {
-            if (selectedProNumbers.length === 0) {
-                showNotification('Please select at least one PRO number', 'warning', 3000);
-                return;
-            }
-
-            const requestData = {
-                plant: selectedPlant,
-                material_types: selectedMaterialTypes,
-                materials: selectedMaterials,
-                pro_numbers: selectedProNumbers,
-                _token: '{{ csrf_token() }}'
-            };
-
-            showLoading('Loading material data...', 'Formatting data for database matching');
-
-            $.ajax({
-                url: '/reservations/load-multiple-pro',
-                method: 'POST',
-                data: requestData,
-                success: function(response) {
-                    console.log('✅ Step 5 Response:', response);
-
-                    if (response.success && response.data && response.data.length > 0) {
-                        loadedMaterials = response.data;
-                        hideLoading();
-
-                        currentStep = 5;
-                        updateStepNavigation();
-                        populateMaterialsTable();
-                    } else {
-                        hideLoading();
-                        let errorMsg = response.message || 'No material data found.';
-                        showNotification(errorMsg, 'warning', 4000);
-                        currentStep = 4;
-                        updateStepNavigation();
-                    }
-                },
-                error: function(xhr) {
-                    hideLoading();
-                    let errorMsg = 'Server error occurred.';
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        errorMsg = xhr.responseJSON.message;
-                    }
-                    showNotification(errorMsg, 'error', 5000);
-                    currentStep = 4;
-                    updateStepNavigation();
-                }
-            });
-        });
-
-        // Step 5: Review and create
-        $('#btn-prev-step5').on('click', function() {
-            currentStep = 4;
-            updateStepNavigation();
-        });
-
-        $('#btn-create-reservation').on('click', function() {
-            if (confirm('Create reservation document?')) {
-                createReservationDocument();
-            }
-        });
-    });
+    // ============================
+    // STEP NAVIGATION FUNCTIONS
+    // ============================
 
     function updateStepNavigation() {
         $('.nav-link').removeClass('active');
@@ -1171,7 +994,42 @@
         }
     }
 
+    // ============================
+    // STEP 1: PLANT SELECTION
+    // ============================
+
+    function initializePlantSelection() {
+        $('#plant_select').on('change', function() {
+            selectedPlant = $(this).val();
+            if (selectedPlant) {
+                $('#btn-next-step1').prop('disabled', false);
+                loadMaterialTypes(selectedPlant);
+            } else {
+                $('#btn-next-step1').prop('disabled', true);
+            }
+        });
+
+        $('#btn-next-step1').on('click', function() {
+            if (!selectedPlant) {
+                showNotification('Please select a plant first', 'warning', 3000);
+                return;
+            }
+            currentStep = 2;
+            updateStepNavigation();
+        });
+    }
+
+    // ============================
+    // STEP 2: MATERIAL TYPE SELECTION
+    // ============================
+
     function loadMaterialTypes(plant) {
+        // Validasi plant
+        if (!plant || plant.trim() === '') {
+            showNotification('Plant is required', 'error', 3000);
+            return;
+        }
+
         $('#material-types-checkbox-container').html(`
             <div class="text-center py-2">
                 <div class="spinner-border text-primary spinner-border-sm" role="status">
@@ -1181,14 +1039,22 @@
             </div>
         `);
 
+        const requestData = {
+            plant: plant,
+            _token: csrfToken
+        };
+
+        console.log('🔧 Sending request to get-material-types:', requestData);
+
         $.ajax({
             url: '/reservations/get-material-types',
             method: 'POST',
-            data: {
-                plant: plant,
-                _token: '{{ csrf_token() }}'
-            },
+            data: requestData,
+            dataType: 'json',
+            timeout: 30000,
             success: function(response) {
+                console.log('✅ Material types response:', response);
+
                 if (response.success) {
                     materialTypes = response.material_types;
 
@@ -1214,6 +1080,7 @@
                     } else {
                         containerHtml = '<p class="text-muted text-center py-2 small">No material types found</p>';
                     }
+
                     $('#material-types-checkbox-container').html(containerHtml);
 
                     // Add click handlers for checkboxes
@@ -1253,18 +1120,85 @@
                         $('#toggle_all_types').text('Select all');
                         window.allTypesSelected = false;
                     }
+                } else {
+                    showNotification(response.message || 'Failed to load material types', 'error', 4000);
                 }
             },
-            error: function(xhr) {
-                console.error('Material types error:', xhr);
-                showNotification('Failed to load material types', 'error', 4000);
+            error: function(xhr, status, error) {
+                console.error('❌ Material types AJAX error:', {
+                    status: xhr.status,
+                    statusText: xhr.statusText,
+                    responseText: xhr.responseText,
+                    error: error
+                });
+
+                let errorMessage = 'Failed to load material types. ';
+
+                if (xhr.status === 419) {
+                    handleCsrfError();
+                    return;
+                } else if (xhr.status === 422) {
+                    errorMessage += 'Validation error. Please check your input.';
+                } else if (xhr.status === 500) {
+                    errorMessage += 'Server error. Please contact administrator.';
+                } else if (xhr.status === 0) {
+                    errorMessage += 'Network error. Please check your internet connection.';
+                } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage += xhr.responseJSON.message;
+                }
+
+                showNotification(errorMessage, 'error', 5000);
+
+                // Reset UI
+                $('#material-types-checkbox-container').html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Failed to load material types.
+                        <button class="btn btn-sm btn-outline-danger mt-2" onclick="loadMaterialTypes('${plant}')">
+                            <i class="fas fa-redo"></i> Retry
+                        </button>
+                    </div>
+                `);
             }
         });
     }
 
-    // ==============================================
-    // COMPACT MATERIALS DISPLAY FOR STEP 3 - NO GRID
-    // ==============================================
+    function initializeMaterialTypeSelection() {
+        let allTypesSelected = false;
+
+        $('#toggle_all_types').on('click', function() {
+            if (allTypesSelected) {
+                // Deselect all
+                $('.material-type-checkbox').prop('checked', false).trigger('change');
+                $(this).text('Select all');
+                allTypesSelected = false;
+            } else {
+                // Select all
+                $('.material-type-checkbox').prop('checked', true).trigger('change');
+                $(this).text('Deselect all');
+                allTypesSelected = true;
+            }
+        });
+
+        $('#btn-prev-step2').on('click', function() {
+            currentStep = 1;
+            updateStepNavigation();
+        });
+
+        $('#btn-next-step2').on('click', function() {
+            if (selectedMaterialTypes.length === 0) {
+                showNotification('Please select at least one material type', 'warning', 3000);
+                return;
+            }
+            currentStep = 3;
+            updateStepNavigation();
+            loadMaterials(selectedPlant, selectedMaterialTypes);
+        });
+    }
+
+    // ============================
+    // STEP 3: MATERIAL SELECTION
+    // ============================
+
     function loadMaterials(plant, materialTypes) {
         $('#materials-checkbox-container').html(`
             <div class="text-center py-3">
@@ -1281,7 +1215,7 @@
             data: {
                 plant: plant,
                 material_types: materialTypes,
-                _token: '{{ csrf_token() }}'
+                _token: csrfToken
             },
             success: function(response) {
                 console.log('📋 Step 3 - Materials response:', response);
@@ -1448,6 +1382,95 @@
         });
     }
 
+    function initializeMaterialSelection() {
+        let allMaterialsSelected = false;
+
+        $('#toggle_all_materials').on('click', function() {
+            if (allMaterialsSelected) {
+                // Deselect all
+                $('.material-checkbox').prop('checked', false).trigger('change');
+                $(this).text('All');
+                allMaterialsSelected = false;
+            } else {
+                // Select all
+                $('.material-checkbox').prop('checked', true).trigger('change');
+                $(this).text('None');
+                allMaterialsSelected = true;
+            }
+        });
+
+        $('#material-search').on('keyup', function() {
+            const searchTerm = $(this).val().toLowerCase();
+            filterMaterials(searchTerm);
+        });
+
+        $('#btn-prev-step3').on('click', function() {
+            currentStep = 2;
+            updateStepNavigation();
+        });
+
+        $('#btn-next-step3').on('click', function() {
+            if (selectedMaterials.length === 0) {
+                showNotification('Please select at least one material', 'warning', 3000);
+                return;
+            }
+
+            showLoading('Loading PRO numbers...', 'Please wait');
+
+            const materialsForAPI = selectedMaterials.map(m => formatMaterialCodeForDB(m));
+
+            $.ajax({
+                url: '/reservations/get-pro-numbers-for-materials',
+                method: 'POST',
+                data: {
+                    plant: selectedPlant,
+                    material_types: selectedMaterialTypes,
+                    materials: materialsForAPI,
+                    _token: csrfToken
+                },
+                success: function(response) {
+                    hideLoading();
+
+                    if (response.success) {
+                        if (response.pro_numbers && Array.isArray(response.pro_numbers)) {
+                            proNumbers = response.pro_numbers.map(item => {
+                                if (typeof item === 'string') return {pro_number: item, material_count: 0};
+                                if (typeof item === 'object' && item !== null) {
+                                    return {
+                                        pro_number: item.sap_order || item.pro_number || item.aufnr || item.pro || item.value || String(item),
+                                        material_count: item.material_count || 0
+                                    };
+                                }
+                                return {pro_number: String(item), material_count: 0};
+                            });
+
+                            selectedProNumbers = [];
+                            currentStep = 4;
+                            updateStepNavigation();
+                            populateProNumbersContainer();
+                        } else {
+                            showNotification('Error: PRO numbers data format is incorrect', 'error', 4000);
+                        }
+                    } else {
+                        showNotification('Error: ' + (response.message || 'Failed to load PRO numbers'), 'error', 4000);
+                    }
+                },
+                error: function(xhr) {
+                    hideLoading();
+                    let errorMsg = 'Failed to load PRO numbers. ';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg += xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error', 5000);
+                }
+            });
+        });
+    }
+
+    // ============================
+    // STEP 4: PRO NUMBER SELECTION
+    // ============================
+
     function populateProNumbersContainer() {
         let containerHtml = '';
         if (proNumbers.length > 0) {
@@ -1519,6 +1542,84 @@
         }
     }
 
+    function initializeProNumberSelection() {
+        let allProSelected = false;
+
+        $('#toggle_all_pro').on('click', function() {
+            if (allProSelected) {
+                // Deselect all
+                $('.pro-checkbox').prop('checked', false).trigger('change');
+                $(this).text('All');
+                allProSelected = false;
+            } else {
+                // Select all
+                $('.pro-checkbox').prop('checked', true).trigger('change');
+                $(this).text('None');
+                allProSelected = true;
+            }
+        });
+
+        $('#btn-prev-step4').on('click', function() {
+            currentStep = 3;
+            updateStepNavigation();
+        });
+
+        $('#btn-next-step4').on('click', function() {
+            if (selectedProNumbers.length === 0) {
+                showNotification('Please select at least one PRO number', 'warning', 3000);
+                return;
+            }
+
+            const requestData = {
+                plant: selectedPlant,
+                material_types: selectedMaterialTypes,
+                materials: selectedMaterials,
+                pro_numbers: selectedProNumbers,
+                _token: csrfToken
+            };
+
+            showLoading('Loading material data...', 'Formatting data for database matching');
+
+            $.ajax({
+                url: '/reservations/load-multiple-pro',
+                method: 'POST',
+                data: requestData,
+                success: function(response) {
+                    console.log('✅ Step 5 Response:', response);
+
+                    if (response.success && response.data && response.data.length > 0) {
+                        loadedMaterials = response.data;
+                        hideLoading();
+
+                        currentStep = 5;
+                        updateStepNavigation();
+                        populateMaterialsTable();
+                    } else {
+                        hideLoading();
+                        let errorMsg = response.message || 'No material data found.';
+                        showNotification(errorMsg, 'warning', 4000);
+                        currentStep = 4;
+                        updateStepNavigation();
+                    }
+                },
+                error: function(xhr) {
+                    hideLoading();
+                    let errorMsg = 'Server error occurred.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error', 5000);
+                    currentStep = 4;
+                    updateStepNavigation();
+                }
+            });
+        });
+    }
+
+    // ============================
+    // STEP 5: REVIEW & CREATE
+    // ============================
+
     function formatQuantity(qty) {
         if (!qty && qty !== 0) return '0';
         const num = parseFloat(qty);
@@ -1560,19 +1661,59 @@
             $('#add-info-header').addClass('column-hidden');
         }
 
+        // PERUBAHAN: Group materials by material_code untuk konsolidasi
+        const consolidatedMaterials = {};
+
         loadedMaterials.forEach(function(material, index) {
-            const originalQty = parseFloat(material.total_qty) || 0;
+            const materialCode = material.material_code;
+
+            if (!consolidatedMaterials[materialCode]) {
+                consolidatedMaterials[materialCode] = {
+                    material: material,
+                    sources: new Set(),
+                    salesOrders: new Set(),
+                    totalQty: 0,
+                    indices: [index]
+                };
+            }
+
+            // Accumulate data
+            const consolidated = consolidatedMaterials[materialCode];
+            consolidated.totalQty += parseFloat(material.total_qty) || 0;
+
+            // Add sources
+            if (material.sources && Array.isArray(material.sources)) {
+                material.sources.forEach(source => {
+                    if (source) consolidated.sources.add(source);
+                });
+            }
+
+            // Add sales orders
+            if (material.sales_orders && Array.isArray(material.sales_orders)) {
+                material.sales_orders.forEach(so => {
+                    if (so && so !== 'null-null' && so !== 'null') {
+                        consolidated.salesOrders.add(so);
+                    }
+                });
+            }
+        });
+
+        // Convert Set to Array and prepare display
+        let consolidatedIndex = 0;
+        Object.values(consolidatedMaterials).forEach((consolidated, groupIndex) => {
+            const material = consolidated.material;
+            const sourcesArray = Array.from(consolidated.sources);
+            const salesOrdersArray = Array.from(consolidated.salesOrders);
+            const originalQty = consolidated.totalQty;
             const formattedOriginalQty = formatQuantity(originalQty);
 
             // Check if quantity is editable based on MRP
             const isQtyEditable = isMRPAllowedForEdit(material.dispo);
 
-            // Format source PRO badges (display format)
+            // Format source PRO badges (display format) - PERUBAHAN: tanpa badge count
             let sourceBadges = '';
-            const displaySources = material.sources || [];
-
-            if (displaySources.length > 0) {
-                displaySources.forEach(function(source) {
+            if (sourcesArray.length > 0) {
+                sourcesArray.forEach(function(source) {
                     const formattedSource = formatProNumberForUI(source);
                     sourceBadges += `<span class="badge bg-info source-pro-badge">${formattedSource}</span>`;
                 });
@@ -1582,10 +1723,8 @@
 
             // Format Sales Order badges
             let salesOrderBadges = '';
-            const displaySalesOrders = material.sales_orders || [];
-
-            if (displaySalesOrders.length > 0) {
-                displaySalesOrders.forEach(function(so) {
+            if (salesOrdersArray.length > 0) {
+                salesOrdersArray.forEach(function(so) {
                     if (so && so !== 'null-null' && so !== 'null') {
                         salesOrderBadges += `<span class="badge sales-order-badge source-pro-badge">${so}</span>`;
                     }
@@ -1607,8 +1746,8 @@
             // PERUBAHAN 2: Format satuan - jika "ST" ubah menjadi "PC"
             const unitDisplay = formatUnit(material.unit);
 
-            const isConsolidated = displaySources.length > 1;
-            const rowClass = isConsolidated ? 'consolidated-row' : '';
+            const isConsolidated = sourcesArray.length > 1;
+            const rowClass = isConsolidated ? 'consolidated-highlight' : '';
 
             // Simpan data tambahan sebagai data attribute
             const additionalData = {};
@@ -1626,8 +1765,8 @@
             const addInfoClass = hasAddInfoData ? '' : 'column-hidden';
 
             html += `
-                <tr class="${rowClass}" data-additional='${JSON.stringify(additionalData)}' data-index="${index}">
-                    <td class="text-center">${index + 1}</td>
+                <tr class="${rowClass}" data-additional='${JSON.stringify(additionalData)}' data-index="${consolidatedIndex}" data-material="${material.material_code}">
+                    <td class="text-center">${groupIndex + 1}</td>
                     <td class="text-center">${sourceBadges}</td>
                     <td class="text-center material-pro-cell">${materialPro}</td>
                     <td class="text-center desc-pro-cell">${descPro}</td>
@@ -1643,7 +1782,7 @@
                         <input type="number" class="form-control quantity-input requested-qty text-center ${!isQtyEditable ? 'qty-disabled' : ''}"
                             value="${formattedOriginalQty}"
                             step="0.0001" min="0.0001"
-                            data-index="${index}"
+                            data-index="${consolidatedIndex}"
                             data-material="${material.material_code}"
                             data-dispo="${material.dispo || ''}"
                             ${!isQtyEditable ? 'readonly title="Quantity cannot be changed for this MRP"' : ''}>
@@ -1652,6 +1791,8 @@
                     <td class="text-center">${unitDisplay}</td>
                 </tr>
             `;
+
+            consolidatedIndex++;
         });
 
         tbody.html(html);
@@ -1696,30 +1837,34 @@
         }
 
         // Prepare materials data dengan semua field tambahan
-        loadedMaterials.forEach(function(material, index) {
-            const qtyInput = $(`.requested-qty[data-index="${index}"]`);
+        $('tr[data-material]').each(function() {
+            const materialCode = $(this).data('material');
+            const qtyInput = $(this).find('.requested-qty');
             const requestedQty = parseFloat(qtyInput.val()) || 0;
             const isQtyEditable = !qtyInput.hasClass('qty-disabled');
 
+            // Cari material asli dari loadedMaterials
+            const originalMaterial = loadedMaterials.find(m => m.material_code === materialCode);
+            if (!originalMaterial) return;
+
             // Ambil data tambahan dari data attribute
-            const row = $(`tr[data-index="${index}"]`);
-            const additionalData = row.length ? JSON.parse(row.attr('data-additional') || '{}') : {};
+            const additionalData = $(this).data('additional') || {};
 
             materialsData.push({
-                material_code: material.material_code,
-                material_code_display: formatMaterialCodeForUI(material.material_code),
-                material_description: material.material_description,
-                unit: material.unit, // PERUBAHAN: Simpan unit asli (ST) bukan format tampilan (PC)
-                sortf: material.sortf,
-                dispo: material.dispo,
+                material_code: originalMaterial.material_code,
+                material_code_display: formatMaterialCodeForUI(originalMaterial.material_code),
+                material_description: originalMaterial.material_description,
+                unit: originalMaterial.unit,
+                sortf: originalMaterial.sortf,
+                dispo: originalMaterial.dispo,
                 requested_qty: requestedQty,
                 is_qty_editable: isQtyEditable,
-                sources: material.sources || [],
-                sales_orders: material.sales_orders || [],
-                pro_details: material.pro_details || [],
+                sources: originalMaterial.sources || [],
+                sales_orders: originalMaterial.sales_orders || [],
+                pro_details: originalMaterial.pro_details || [],
                 // Field tambahan untuk ditampilkan di tabel
-                mathd: material.mathd || null,
-                makhd: material.makhd || null,
+                mathd: originalMaterial.mathd || null,
+                makhd: originalMaterial.makhd || null,
                 // Field tambahan untuk disimpan (tidak ditampilkan)
                 groes: additionalData.groes || null,
                 ferth: additionalData.ferth || null,
@@ -1727,33 +1872,50 @@
             });
         });
 
-        // Debug logging
-        console.log('📤 Sending materials data to server:', materialsData.map(m => ({
-            code: m.material_code_display,
-            mathd: m.mathd,
-            makhd: m.makhd,
-            groes: m.groes,
-            ferth: m.ferth,
-            zeinr: m.zeinr,
-            qty: m.requested_qty,
-            unit: m.unit // Unit asli (ST)
-        })));
+        // Debug logging untuk melihat data yang akan dikirim
+        console.log('📤 Preparing to send materials data:', {
+            plant: selectedPlant,
+            material_types: selectedMaterialTypes,
+            materials_count: materialsData.length,
+            pro_numbers_count: selectedProNumbers.length,
+            first_material: materialsData[0] ? {
+                code: materialsData[0].material_code_display,
+                qty: materialsData[0].requested_qty,
+                mathd: materialsData[0].mathd,
+                makhd: materialsData[0].makhd
+            } : 'No data'
+        });
 
         showLoading('Creating reservation document...', 'Used sync data will be deleted automatically');
+
+        // Format data untuk dikirim
+        const requestData = {
+            plant: selectedPlant,
+            material_types: selectedMaterialTypes,
+            materials: materialsData,
+            selected_materials: selectedMaterials,
+            pro_numbers: selectedProNumbers,
+            _token: csrfToken
+        };
+
+        console.log('📤 Sending create-document request:', {
+            url: '/reservations/create-document',
+            data_summary: {
+                plant: selectedPlant,
+                materials_count: materialsData.length,
+                first_material: materialsData[0]?.material_code_display
+            }
+        });
 
         $.ajax({
             url: '/reservations/create-document',
             method: 'POST',
-            data: {
-                plant: selectedPlant,
-                material_types: selectedMaterialTypes,
-                materials: materialsData,
-                selected_materials: selectedMaterials,
-                pro_numbers: selectedProNumbers,
-                _token: '{{ csrf_token() }}'
-            },
+            data: JSON.stringify(requestData),
+            contentType: 'application/json',
+            dataType: 'json',
+            timeout: 300000, // 5 minutes timeout for large data
             success: function(response) {
-                console.log('✅ SUCCESS Response from server:', response);
+                console.log('✅ CREATE DOCUMENT SUCCESS Response:', response);
                 hideLoading();
 
                 if (response.success) {
@@ -1762,7 +1924,7 @@
                         <strong>Document Number:</strong> ${response.document_no}<br>
                         <small>ID: ${response.document_id} | Deleted: ${response.deleted_sync_data_count} sync records</small>`,
                         'success',
-                        5000
+                        10000
                     );
 
                     // Redirect setelah delay
@@ -1772,153 +1934,125 @@
                         } else {
                             window.location.href = '/documents';
                         }
-                    }, 2000);
+                    }, 3000);
                 } else {
                     let errorMsg = 'Error: ' + (response.message || 'Unknown error');
-                    showNotification(errorMsg, 'error', 6000);
+                    console.error('❌ Create document failed:', response);
+                    showNotification(errorMsg, 'error', 8000);
                 }
             },
-            error: function(xhr) {
-                console.error('🔥 AJAX ERROR:', xhr);
+            error: function(xhr, status, error) {
+                console.error('🔥 CREATE DOCUMENT AJAX ERROR:', {
+                    status: xhr.status,
+                    statusText: xhr.statusText,
+                    error: error,
+                    responseText: xhr.responseText
+                });
                 hideLoading();
 
                 let errorMessage = 'Failed to create document. ';
 
                 if (xhr.status === 0) {
                     errorMessage += 'Network error. Check your internet connection.';
+                } else if (xhr.status === 419) {
+                    handleCsrfError();
+                    return;
                 } else if (xhr.status === 401) {
                     errorMessage += 'Unauthorized. Please log in again.';
                 } else if (xhr.status === 403) {
                     errorMessage += 'Forbidden. You don\'t have permission.';
                 } else if (xhr.status === 404) {
                     errorMessage += 'Endpoint not found.';
-                } else if (xhr.status === 419) {
-                    errorMessage += 'Session expired. Please refresh the page.';
                 } else if (xhr.status === 422) {
                     errorMessage += 'Validation error. Please check your data.';
+                    // Try to parse validation errors
+                    try {
+                        const errors = JSON.parse(xhr.responseText);
+                        if (errors.errors) {
+                            errorMessage += '<br><br><strong>Validation Errors:</strong><br>';
+                            for (const field in errors.errors) {
+                                errorMessage += `• ${field}: ${errors.errors[field].join(', ')}<br>`;
+                            }
+                        }
+                    } catch (e) {
+                        // Ignore if can't parse
+                    }
                 } else if (xhr.status === 500) {
                     errorMessage += 'Server error. Please contact administrator.';
                 }
 
                 if (xhr.responseJSON && xhr.responseJSON.message) {
                     errorMessage += '<br><strong>Details:</strong> ' + xhr.responseJSON.message;
-                }
-
-                showNotification(errorMessage, 'error', 6000);
-            }
-        });
-    }
-
-    function showLoading(message, details) {
-        $('#loading-message').text(message);
-        $('#loading-details').text(details);
-        $('#loadingModal').modal('show');
-    }
-
-    function hideLoading() {
-        $('#loadingModal').modal('hide');
-    }
-
-    function suggestProNumbersForMaterials() {
-        showLoading('Finding PRO numbers...', 'Please wait');
-
-        $.ajax({
-            url: '/reservations/get-pro-numbers-for-materials',
-            method: 'POST',
-            data: {
-                plant: selectedPlant,
-                material_types: selectedMaterialTypes,
-                materials: selectedMaterials.map(m => formatMaterialCodeForDB(m)),
-                _token: '{{ csrf_token() }}'
-            },
-            success: function(response) {
-                hideLoading();
-
-                if (response.success && response.pro_numbers.length > 0) {
-                    let suggestionHtml = '<div class="mt-1" style="max-height: 150px; overflow-y: auto;">';
-                    response.pro_numbers.forEach(function(pro) {
-                        const displayPro = formatProNumberForUI(pro.pro_number);
-                        suggestionHtml += `
-                            <div class="form-check">
-                                <input class="form-check-input suggested-pro-checkbox"
-                                       type="checkbox" value="${pro.pro_number}"
-                                       id="suggested_pro_${pro.pro_number}">
-                                <label class="form-check-label small" for="suggested_pro_${pro.pro_number}">
-                                    ${displayPro} (${pro.material_count || 0} materials)
-                                </label>
-                            </div>
-                        `;
-                    });
-                    suggestionHtml += '</div>';
-
-                    showSuggestionModal('PRO Suggestions', suggestionHtml, function() {
-                        const selectedSuggestedPros = [];
-                        $('.suggested-pro-checkbox:checked').each(function() {
-                            selectedSuggestedPros.push($(this).val());
-                        });
-
-                        if (selectedSuggestedPros.length > 0) {
-                            selectedProNumbers = selectedSuggestedPros;
-                            $('#selected-pro-count').text(selectedProNumbers.length);
-                            populateProNumbersContainer();
-                            $('#btn-next-step4').prop('disabled', false);
+                } else if (xhr.responseText) {
+                    try {
+                        const errorResponse = JSON.parse(xhr.responseText);
+                        if (errorResponse.message) {
+                            errorMessage += '<br><strong>Details:</strong> ' + errorResponse.message;
                         }
-                    });
-                } else {
-                    showNotification('No PRO numbers found containing the selected materials.', 'info', 4000);
+                    } catch (e) {
+                        errorMessage += '<br><strong>Response:</strong> ' + xhr.responseText.substring(0, 200);
+                    }
                 }
+
+                showNotification(errorMessage, 'error', 10000);
+            }
+        });
+    }
+
+    function initializeReviewAndCreate() {
+        $('#btn-prev-step5').on('click', function() {
+            currentStep = 4;
+            updateStepNavigation();
+        });
+
+        $('#btn-create-reservation').on('click', function() {
+            if (confirm('Are you sure you want to create the reservation document?\n\nThis will delete used sync data from the database.')) {
+                createReservationDocument();
+            }
+        });
+    }
+
+    // ============================
+    // MAIN INITIALIZATION
+    // ============================
+
+    $(document).ready(function() {
+        // Ambil CSRF token dari meta tag
+        csrfToken = $('meta[name="csrf-token"]').attr('content');
+        console.log('CSRF Token loaded:', csrfToken ? 'Yes' : 'No');
+
+        // Setup global AJAX headers
+        $.ajaxSetup({
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
             },
-            error: function() {
-                hideLoading();
-                showNotification('Failed to get PRO number suggestions.', 'error', 4000);
-            }
-        });
-    }
-
-    function showSuggestionModal(title, content, onConfirm) {
-        const modalId = 'suggestionModal';
-        $(`#${modalId}`).remove();
-
-        const modalHtml = `
-            <div class="modal fade" id="${modalId}" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header bg-info text-white p-2">
-                            <h5 class="modal-title"><i class="fas fa-lightbulb me-2"></i>${title}</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body p-2">
-                            <div class="alert alert-info m-0">
-                                ${content}
-                            </div>
-                        </div>
-                        <div class="modal-footer p-2">
-                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-sm btn-primary" id="apply-suggestion-btn">
-                                Apply Selection
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        $('body').append(modalHtml);
-
-        const modal = new bootstrap.Modal(document.getElementById(modalId));
-        modal.show();
-
-        $('#apply-suggestion-btn').off('click').on('click', function() {
-            if (typeof onConfirm === 'function') {
-                onConfirm();
-            }
-            modal.hide();
+            timeout: 300000 // 5 minutes
         });
 
-        if ($('.suggested-pro-checkbox').length === 1) {
-            $('.suggested-pro-checkbox').prop('checked', true);
-        }
-    }
+        // Intercept AJAX errors untuk handle CSRF
+        $(document).ajaxError(function(event, jqxhr, settings, thrownError) {
+            console.log('AJAX Error:', {
+                url: settings.url,
+                status: jqxhr.status,
+                error: thrownError
+            });
+
+            if (jqxhr.status === 419) {
+                handleCsrfError();
+            }
+        });
+
+        // Initialize semua step
+        initializePlantSelection();
+        initializeMaterialTypeSelection();
+        initializeMaterialSelection();
+        initializeProNumberSelection();
+        initializeReviewAndCreate();
+
+        // Initialize tooltips
+        $('[data-bs-toggle="tooltip"]').tooltip();
+    });
 </script>
 @endpush
 @endsection

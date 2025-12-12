@@ -23,7 +23,11 @@ Route::middleware(['guest'])->group(function () {
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Protected Routes (Require Authentication)
-Route::middleware(['auth'])->group(function () {
+    Route::middleware(['auth'])->group(function () {
+    Route::middleware(['auth', 'web'])->group(function () {
+    Route::post('/reservations/get-material-types', [ReservationController::class, 'getMaterialTypes'])
+        ->name('reservations.get-material-types');
+    });
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/profile', function () {
         return view('profile.index');
