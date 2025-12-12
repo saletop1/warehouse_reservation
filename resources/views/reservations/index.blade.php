@@ -102,6 +102,10 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
                             <h6 class="mb-0 fw-bold">Reservation Data</h6>
+                            {{-- Clear Sync Button --}}
+                            <button class="btn btn-warning btn-sm ms-3" id="clearSyncBtn" title="Clear all synced data">
+                                <i class="fas fa-broom me-1"></i>Clear Sync
+                            </button>
                         </div>
 
                         <div class="d-flex align-items-center">
@@ -473,6 +477,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const pasteProBtn = document.getElementById('paste-pro');
     const syncButton = document.getElementById('syncButton');
     const syncForm = document.getElementById('syncForm');
+    const clearSyncBtn = document.getElementById('clearSyncBtn');
 
     // Modal elements
     const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
@@ -646,6 +651,69 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Unable to access clipboard. Please paste manually.');
         }
     });
+
+    // Clear Sync Button handler
+    if (clearSyncBtn) {
+        clearSyncBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to clear all synced data from the sap_reservations table? This action will delete all data and cannot be undone.')) {
+                // Disable button and show loading
+                const originalText = clearSyncBtn.innerHTML;
+                clearSyncBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Clearing...';
+                clearSyncBtn.disabled = true;
+
+                // AJAX request to clear sync data
+                fetch('{{ route("reservations.clearAllSyncData") }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(response => {
+                    if (response.success) {
+                        showResultModal(
+                            'Clear Sync Successful',
+                            `
+                            <div class="alert alert-success mb-3">
+                                All sync data has been cleared successfully
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <div class="border p-2 text-center">
+                                        <h6 class="text-primary mb-1">${response.deleted_count || 0}</h6>
+                                        <small class="text-muted">Records Deleted</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="border-top pt-2">
+                                <small class="text-muted">Time: ${response.timestamp || ''}</small><br>
+                                <small class="text-muted">The sap_reservations table has been cleared</small>
+                            </div>
+                            `
+                        );
+
+                        // Reload page after 2 seconds if successful
+                        setTimeout(function() {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        alert('Failed to clear sync data: ' + response.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Network error occurred while clearing sync data.');
+                })
+                .finally(() => {
+                    // Restore button
+                    clearSyncBtn.innerHTML = originalText;
+                    clearSyncBtn.disabled = false;
+                });
+            }
+        });
+    }
 
     // Form submission with AJAX
     if (syncForm) {

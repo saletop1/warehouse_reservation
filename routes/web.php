@@ -6,17 +6,6 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\ReservationDocumentController;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
-|
-*/
-
 // Redirect root to login page
 Route::get('/', function () {
     return redirect()->route('login');
@@ -56,7 +45,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/sync', [ReservationController::class, 'sync'])->name('sync');
         Route::post('/sync-from-sap', [ReservationController::class, 'syncFromSAP'])->name('sync.from-sap');
         Route::post('/clear-and-create', [ReservationController::class, 'clearAndCreate'])->name('clear-and-create');
-        Route::post('/clear-all-sync-data', [ReservationController::class, 'clearAllSyncData'])->name('clear-all-sync-data');
+        Route::post('/clear-all-sync-data', [ReservationController::class, 'clearAllSyncData'])->name('clearAllSyncData');
 
         // Sync status checking
         Route::get('/check-sync-data', [ReservationController::class, 'checkSyncData'])->name('check-sync-data');
@@ -81,19 +70,14 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('documents')->name('documents.')->group(function () {
         Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
-        Route::get('/{id}/edit', [ReservationController::class, 'editDocument'])->name('edit');
-        Route::put('/{id}', [ReservationController::class, 'updateDocument'])->name('update');
+        Route::get('/{id}/edit', [ReservationDocumentController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [ReservationDocumentController::class, 'update'])->name('update');
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
         Route::get('/export/{type}', [ReservationDocumentController::class, 'export'])->name('export');
         Route::post('/export/selected/excel', [ReservationDocumentController::class, 'exportSelectedExcel'])->name('export.selected.excel');
         Route::post('/export/selected/pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('export.selected.pdf');
         Route::get('/check-flask-endpoint', [ReservationController::class, 'checkFlaskEndpoint'])->name('checkFlaskEndpoint');
-        Route::put('/documents/{id}', [ReservationDocumentController::class, 'update'])->name('documents.update');
-        Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
-        Route::get('/{id}/edit', [ReservationDocumentController::class, 'edit'])->name('edit');
-        Route::put('/{id}', [ReservationDocumentController::class, 'update'])->name('update');
-        Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
-        Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
     });
 });
+
