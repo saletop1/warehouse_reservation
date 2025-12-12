@@ -108,7 +108,13 @@
         .signature-line {
             border-top: 1px solid #000;
             width: 180px;
-            margin-top: 60px; /* Gap lebih besar untuk tanda tangan */
+            margin: 60px auto 0 auto; /* Center the line and add margin on top */
+        }
+
+        .signature-text {
+            text-align: center;
+            margin-top: 5px;
+            font-size: 8pt;
         }
 
         /* Compact styling for print */
@@ -178,16 +184,27 @@
             background-color: transparent !important;
         }
 
-        /* Table column widths */
+        /* Table column widths - adjusted for new columns */
         .col-no { width: 3%; }
-        .col-matcode { width: 12%; }
-        .col-desc { width: 25%; }
-        .col-addinfo { width: 10%; }
-        .col-so { width: 10%; }
-        .col-mrp { width: 5%; }
-        .col-qty { width: 8%; }
-        .col-uom { width: 5%; }
-        .col-pro { width: 22%; }
+        .col-matcode { width: 10%; }
+        .col-desc { width: 20%; }
+        .col-addinfo { width: 8%; }
+        .col-qty { width: 5%; }
+        .col-uom { width: 4%; }
+        .col-so { width: 8%; }
+        .col-pro { width: 15%; }
+        .col-mrp { width: 4%; }
+        .col-groes { width: 8%; }
+        .col-ferth { width: 8%; }
+        .col-zeinr { width: 7%; }
+
+        /* Debug info */
+        .debug-info {
+            border: 1px solid red;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #ffe6e6;
+        }
     </style>
 </head>
 <body class="text-black">
@@ -237,15 +254,25 @@
                             <div class="mt-1">
                                 <table class="table table-sm table-borderless compact-text" style="margin-bottom: 0;">
                                     <tr>
-                                        <td style="padding: 1px;"><strong>Plant:</strong></td>
+                                        <td style="padding: 1px; text-align: right;"><strong>Plant Request:</strong></td>
                                         <td style="padding: 1px;">{{ $document->plant }}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 1px;"><strong>Date:</strong></td>
+                                        <td style="padding: 1px; text-align: right;"><strong>Sloc Supply:</strong></td>
+                                        <td style="padding: 1px;">
+                                            @if(!empty($document->sloc_supply) && $document->sloc_supply !== '-' && $document->sloc_supply !== 'null' && $document->sloc_supply !== 'NULL')
+                                                {{ strtoupper($document->sloc_supply) }}
+                                            @else
+                                                <span class="text-muted" style="font-style: italic;">Not set</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 1px; text-align: right;"><strong>Date:</strong></td>
                                         <td style="padding: 1px;">{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y') }}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 1px;"><strong>Status:</strong></td>
+                                        <td style="padding: 1px; text-align: right;"><strong>Status:</strong></td>
                                         <td style="padding: 1px;">
                                             @if($document->status == 'created')
                                                 <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #ffc107; color: #000;">Created</span>
@@ -255,14 +282,6 @@
                                                 <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #dc3545; color: #fff;">Cancelled</span>
                                             @endif
                                         </td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding: 1px;"><strong>Created By:</strong></td>
-                                        <td style="padding: 1px;">{{ $document->created_by_name }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding: 1px;"><strong>Created At:</strong></td>
-                                        <td style="padding: 1px;">{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</td>
                                     </tr>
                                 </table>
                             </div>
@@ -277,18 +296,71 @@
 
                 <!-- Items Table -->
                 <div class="mb-3 compact-margin">
+                    @php
+                        // Check if any item has add info (sortf) data
+                        $hasAddInfo = false;
+                        $hasGroes = false;
+                        $hasFerth = false;
+                        $hasZeinr = false;
+
+                        // Check each item for data
+                        foreach ($document->items as $item) {
+                            // Decode pro_details to check for data
+                            $proDetails = [];
+                            if (is_string($item->pro_details)) {
+                                $proDetails = json_decode($item->pro_details, true) ?? [];
+                            } elseif (is_array($item->pro_details)) {
+                                $proDetails = $item->pro_details;
+                            }
+
+                            // Check for data in pro_details
+                            foreach ($proDetails as $proDetail) {
+                                if (!empty($proDetail['sortf']) && $proDetail['sortf'] != '-' && !$hasAddInfo) {
+                                    $hasAddInfo = true;
+                                }
+                                if (!empty($proDetail['groes']) && $proDetail['groes'] != '-' && !$hasGroes) {
+                                    $hasGroes = true;
+                                }
+                                if (!empty($proDetail['ferth']) && $proDetail['ferth'] != '-' && !$hasFerth) {
+                                    $hasFerth = true;
+                                }
+                                if (!empty($proDetail['zeinr']) && $proDetail['zeinr'] != '-' && !$hasZeinr) {
+                                    $hasZeinr = true;
+                                }
+                            }
+                        }
+
+                        // Calculate column widths based on visible columns
+                        $columnCount = 8; // No, Mat Code, Desc, Req Qty, Uom, Sales Order, PRO Numbers, MRP
+                        if ($hasAddInfo) $columnCount++;
+                        if ($hasGroes) $columnCount++;
+                        if ($hasFerth) $columnCount++;
+                        if ($hasZeinr) $columnCount++;
+                    @endphp
+
                     <table class="table table-bordered table-print compact-table">
                         <thead>
                             <tr>
-                                <th class="col-no" style="font-size: 8pt;">No</th>
-                                <th class="col-matcode" style="font-size: 8pt;">Material Code</th>
-                                <th class="col-desc" style="font-size: 8pt;">Description</th>
-                                <th class="col-addinfo" style="font-size: 8pt;">Add Info</th>
-                                <th class="col-so" style="font-size: 8pt;">Sales Order</th>
-                                <th class="col-mrp" style="font-size: 8pt;">MRP</th>
-                                <th class="col-qty" style="font-size: 8pt;">Req. Qty</th>
-                                <th class="col-uom" style="font-size: 8pt;">Uom</th>
-                                <th class="col-pro" style="font-size: 8pt;">PRO Numbers</th>
+                                <th style="width: 3%; font-size: 8pt;">No</th>
+                                <th style="width: {{ $hasAddInfo ? '10%' : '12%' }}; font-size: 8pt;">Material Code</th>
+                                <th style="width: {{ $hasAddInfo ? '20%' : '22%' }}; font-size: 8pt;">Description</th>
+                                @if($hasAddInfo)
+                                <th style="width: 8%; font-size: 8pt;">Add Info</th>
+                                @endif
+                                <th style="width: 5%; font-size: 8pt;">Req. Qty</th>
+                                <th style="width: 4%; font-size: 8pt;">Uom</th>
+                                <th style="width: 8%; font-size: 8pt;">Sales Order</th>
+                                <th style="width: 15%; font-size: 8pt;">PRO Numbers</th>
+                                <th style="width: 4%; font-size: 8pt;">MRP</th>
+                                @if($hasGroes)
+                                <th style="width: 8%; font-size: 8pt;">Size Fin</th>
+                                @endif
+                                @if($hasFerth)
+                                <th style="width: 8%; font-size: 8pt;">Size Mat</th>
+                                @endif
+                                @if($hasZeinr)
+                                <th style="width: 7%; font-size: 8pt;">Jenis</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -303,9 +375,6 @@
                                     // Convert unit: if ST then PC
                                     $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
 
-                                    // Ambil sortf dari item
-                                    $addInfo = $item->sortf ?? '-';
-
                                     // PERBAIKAN: Ambil sales orders dengan cara yang aman
                                     $salesOrders = [];
                                     if (is_string($item->sales_orders)) {
@@ -313,12 +382,59 @@
                                     } elseif (is_array($item->sales_orders)) {
                                         $salesOrders = $item->sales_orders;
                                     }
+
+                                    // PERBAIKAN: Ambil data dari pro_details jika ada
+                                    $addInfo = '-';
+                                    $groes = '-';
+                                    $ferth = '-';
+                                    $zeinr = '-';
+
+                                    // Decode pro_details JSON
+                                    $proDetails = [];
+                                    if (is_string($item->pro_details)) {
+                                        $proDetails = json_decode($item->pro_details, true) ?? [];
+                                    } elseif (is_array($item->pro_details)) {
+                                        $proDetails = $item->pro_details;
+                                    }
+
+                                    // Ambil data dari pro_details pertama yang ada data
+                                    foreach ($proDetails as $proDetail) {
+                                        if (!empty($proDetail['sortf']) && $proDetail['sortf'] != '-' && $proDetail['sortf'] != 'null' && $proDetail['sortf'] != '0') {
+                                            $addInfo = $proDetail['sortf'];
+                                            break;
+                                        }
+                                    }
+
+                                    foreach ($proDetails as $proDetail) {
+                                        if (!empty($proDetail['groes']) && $proDetail['groes'] != '-' && $proDetail['groes'] != 'null' && $proDetail['groes'] != '0') {
+                                            $groes = $proDetail['groes'];
+                                            break;
+                                        }
+                                    }
+
+                                    foreach ($proDetails as $proDetail) {
+                                        if (!empty($proDetail['ferth']) && $proDetail['ferth'] != '-' && $proDetail['ferth'] != 'null' && $proDetail['ferth'] != '0') {
+                                            $ferth = $proDetail['ferth'];
+                                            break;
+                                        }
+                                    }
+
+                                    foreach ($proDetails as $proDetail) {
+                                        if (!empty($proDetail['zeinr']) && $proDetail['zeinr'] != '-' && $proDetail['zeinr'] != 'null' && $proDetail['zeinr'] != '0') {
+                                            $zeinr = $proDetail['zeinr'];
+                                            break;
+                                        }
+                                    }
                                 @endphp
                                 <tr>
                                     <td style="font-size: 8pt;">{{ $index + 1 }}</td>
                                     <td style="font-size: 8pt;"><code style="font-size: 8pt;">{{ $materialCode }}</code></td>
                                     <td style="font-size: 8pt;">{{ \Illuminate\Support\Str::limit($item->material_description, 40) }}</td>
+                                    @if($hasAddInfo)
                                     <td style="font-size: 8pt;">{{ $addInfo }}</td>
+                                    @endif
+                                    <td style="font-size: 8pt;">{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</td>
+                                    <td style="font-size: 8pt;">{{ $unit }}</td>
                                     <td style="font-size: 8pt;">
                                         @if(!empty($salesOrders))
                                             @foreach($salesOrders as $so)
@@ -329,15 +445,6 @@
                                         @endif
                                     </td>
                                     <td style="font-size: 8pt;">
-                                        @if($item->dispo)
-                                            <span class="badge bg-light text-dark border compact-badge">{{ $item->dispo }}</span>
-                                        @else
-                                            <span class="text-muted" style="font-size: 8pt;">-</span>
-                                        @endif
-                                    </td>
-                                    <td style="font-size: 8pt;">{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</td>
-                                    <td style="font-size: 8pt;">{{ $unit }}</td>
-                                    <td style="font-size: 8pt;">
                                         @if(!empty($item->processed_sources))
                                             @foreach($item->processed_sources as $source)
                                                 <span class="badge bg-light text-dark border compact-badge">{{ $source }}</span>
@@ -346,6 +453,22 @@
                                             <span class="text-muted" style="font-size: 8pt;">No sources</span>
                                         @endif
                                     </td>
+                                    <td style="font-size: 8pt;">
+                                        @if($item->dispo)
+                                            <span class="badge bg-light text-dark border compact-badge">{{ $item->dispo }}</span>
+                                        @else
+                                            <span class="text-muted" style="font-size: 8pt;">-</span>
+                                        @endif
+                                    </td>
+                                    @if($hasGroes)
+                                    <td style="font-size: 8pt;">{{ $groes }}</td>
+                                    @endif
+                                    @if($hasFerth)
+                                    <td style="font-size: 8pt;">{{ $ferth }}</td>
+                                    @endif
+                                    @if($hasZeinr)
+                                    <td style="font-size: 8pt;">{{ $zeinr }}</td>
+                                    @endif
                                 </tr>
                             @endforeach
                         </tbody>
@@ -362,35 +485,35 @@
                 </div>
                 @endif
 
-                <!-- Signatures -->
+                <!-- Signatures - Diperbaiki alignment -->
                 <div class="signature-section">
                     <div class="row">
                         <div class="col-4">
                             <div class="text-center">
                                 <div class="signature-line"></div>
-                                <div class="mt-1" style="font-size: 8pt; color: #000;">Prepared By</div>
+                                <div class="signature-text">Prepared By</div>
                             </div>
                         </div>
                         <div class="col-4">
                             <div class="text-center">
                                 <div class="signature-line"></div>
-                                <div class="mt-1" style="font-size: 8pt; color: #000;">Checked By</div>
+                                <div class="signature-text">Checked By</div>
                             </div>
                         </div>
                         <div class="col-4">
                             <div class="text-center">
                                 <div class="signature-line"></div>
-                                <div class="mt-1" style="font-size: 8pt; color: #000;">Approved By</div>
+                                <div class="signature-text">Approved By</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Footer -->
+                <!-- Footer dengan informasi created by dan created at -->
                 <div class="mt-3 pt-2 border-top" style="font-size: 7pt; line-height: 1.1;">
                     <div class="text-center text-muted text-black">
                         Document generated on {{ now()->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB |
-                        Page 1 of 1 |
+                        Created by {{ $document->created_by_name }} on {{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB |
                         {{ $document->document_no }}
                     </div>
                 </div>

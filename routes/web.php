@@ -89,5 +89,11 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/export/selected/excel', [ReservationDocumentController::class, 'exportSelectedExcel'])->name('export.selected.excel');
         Route::post('/export/selected/pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('export.selected.pdf');
         Route::get('/check-flask-endpoint', [ReservationController::class, 'checkFlaskEndpoint'])->name('checkFlaskEndpoint');
+        Route::put('/documents/{id}', [ReservationDocumentController::class, 'update'])->name('documents.update');
+        Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
+        Route::get('/{id}/edit', [ReservationDocumentController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [ReservationDocumentController::class, 'update'])->name('update');
+        Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
+        Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
     });
 });

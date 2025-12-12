@@ -47,16 +47,32 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="mb-3">
                                     <label class="form-label">Document No</label>
                                     <input type="text" class="form-control" value="{{ $document->document_no }}" readonly>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="mb-3">
-                                    <label class="form-label">Plant</label>
+                                    <label class="form-label">Plant Request</label>
                                     <input type="text" class="form-control" value="{{ $document->plant }}" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="sloc_supply" class="form-label">Sloc Supply *</label>
+                                    <input type="text"
+                                           class="form-control @error('sloc_supply') is-invalid @enderror"
+                                           id="sloc_supply"
+                                           name="sloc_supply"
+                                           value="{{ old('sloc_supply', $document->sloc_supply ?? '') }}"
+                                           placeholder="Enter storage location (e.g., 1001, 2001)"
+                                           required>
+                                    @error('sloc_supply')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                    <small class="text-muted">Enter the storage location for supply</small>
                                 </div>
                             </div>
                         </div>
@@ -247,6 +263,16 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function(e) {
         let isValid = true;
         let errorMessages = [];
+
+        // Validasi Sloc Supply
+        const slocSupply = document.getElementById('sloc_supply');
+        if (!slocSupply.value.trim()) {
+            isValid = false;
+            slocSupply.classList.add('is-invalid');
+            errorMessages.push('Sloc Supply is required');
+        } else {
+            slocSupply.classList.remove('is-invalid');
+        }
 
         // Validasi quantity hanya untuk yang editable
         const qtyInputs = document.querySelectorAll('.qty-input');

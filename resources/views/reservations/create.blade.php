@@ -233,14 +233,15 @@
                                                         <th width="10%" class="text-center">Sales Order</th>
                                                         <th width="10%" class="text-center">Material Req</th>
                                                         <th width="15%" class="text-center">Description</th>
-                                                        <th width="8%" class="text-center">Add Info</th>
+                                                        <!-- Add Info column - akan disembunyikan jika tidak ada data -->
+                                                        <th width="8%" class="text-center add-info-column" id="add-info-header">Add Info</th>
                                                         <th width="10%" class="text-center">Required Qty</th>
                                                         <th width="12%" class="text-center">Requested Qty *</th>
                                                         <th width="5%" class="text-center">Unit</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="materials-table-body">
-                                                    <!-- Data will be loaded here -->
+                                                    <!-- Data akan di-load di sini -->
                                                 </tbody>
                                             </table>
                                         </div>
@@ -805,6 +806,11 @@
     .gap-2 {
         gap: 0.5rem;
     }
+
+    /* Hide column when no data */
+    .column-hidden {
+        display: none !important;
+    }
 </style>
 @endpush
 
@@ -915,6 +921,16 @@
 
     function getMaterialTypeDescription(type) {
         return materialTypeDescriptions[type] || 'No description available';
+    }
+
+    // PERUBAHAN: Fungsi untuk format satuan
+    function formatUnit(unit) {
+        if (!unit) return '-';
+        // Jika satuan adalah "ST", ubah menjadi "PC"
+        if (unit.trim().toUpperCase() === 'ST') {
+            return 'PC';
+        }
+        return unit;
     }
 
     // ============================
@@ -1531,6 +1547,19 @@
             return;
         }
 
+        // PERUBAHAN 1: Cek apakah ada minimal satu item yang memiliki data di kolom Add Info (sortf)
+        const hasAddInfoData = loadedMaterials.some(material => {
+            const sortfValue = material.sortf || '';
+            return sortfValue.trim() !== '';
+        });
+
+        // PERUBAHAN: Tampilkan atau sembunyikan kolom Add Info berdasarkan kondisi
+        if (hasAddInfoData) {
+            $('#add-info-header').removeClass('column-hidden');
+        } else {
+            $('#add-info-header').addClass('column-hidden');
+        }
+
         loadedMaterials.forEach(function(material, index) {
             const originalQty = parseFloat(material.total_qty) || 0;
             const formattedOriginalQty = formatQuantity(originalQty);
@@ -1575,6 +1604,9 @@
             const materialPro = formatMaterialProForUI(material.mathd || '-');
             const descPro = material.makhd || '-';
 
+            // PERUBAHAN 2: Format satuan - jika "ST" ubah menjadi "PC"
+            const unitDisplay = formatUnit(material.unit);
+
             const isConsolidated = displaySources.length > 1;
             const rowClass = isConsolidated ? 'consolidated-row' : '';
 
@@ -1590,6 +1622,9 @@
                 additionalData.zeinr = material.zeinr;
             }
 
+            // PERUBAHAN: Tambahkan class column-hidden pada kolom Add Info jika tidak ada data
+            const addInfoClass = hasAddInfoData ? '' : 'column-hidden';
+
             html += `
                 <tr class="${rowClass}" data-additional='${JSON.stringify(additionalData)}' data-index="${index}">
                     <td class="text-center">${index + 1}</td>
@@ -1602,7 +1637,7 @@
                     <td class="text-center">${salesOrderBadges}</td>
                     <td class="text-center"><code>${formatMaterialCodeForUI(material.material_code)}</code></td>
                     <td class="table-description full-description">${material.material_description || 'No description'}</td>
-                    <td class="additional-info-cell">${additionalInfo}</td>
+                    <td class="additional-info-cell ${addInfoClass}">${additionalInfo}</td>
                     <td class="text-center quantity-cell">${formattedOriginalQty}</td>
                     <td class="text-center">
                         <input type="number" class="form-control quantity-input requested-qty text-center ${!isQtyEditable ? 'qty-disabled' : ''}"
@@ -1614,7 +1649,7 @@
                             ${!isQtyEditable ? 'readonly title="Quantity cannot be changed for this MRP"' : ''}>
                         ${!isQtyEditable ? '<small class="text-muted d-block">Fixed</small>' : ''}
                     </td>
-                    <td class="text-center">${material.unit || '-'}</td>
+                    <td class="text-center">${unitDisplay}</td>
                 </tr>
             `;
         });
@@ -1674,7 +1709,7 @@
                 material_code: material.material_code,
                 material_code_display: formatMaterialCodeForUI(material.material_code),
                 material_description: material.material_description,
-                unit: material.unit,
+                unit: material.unit, // PERUBAHAN: Simpan unit asli (ST) bukan format tampilan (PC)
                 sortf: material.sortf,
                 dispo: material.dispo,
                 requested_qty: requestedQty,
@@ -1700,7 +1735,8 @@
             groes: m.groes,
             ferth: m.ferth,
             zeinr: m.zeinr,
-            qty: m.requested_qty
+            qty: m.requested_qty,
+            unit: m.unit // Unit asli (ST)
         })));
 
         showLoading('Creating reservation document...', 'Used sync data will be deleted automatically');

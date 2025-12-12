@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ReservationDocument;
+use App\Models\ReservationDocumentItem;
 use Illuminate\Http\Request;
 use App\Exports\ReservationDocumentsSelectedExport;
 use Maatwebsite\Excel\Facades\Excel;
@@ -113,6 +114,98 @@ class ReservationDocumentController extends Controller
         return view('documents.show', compact('document'));
     }
 
+    public function edit($id)
+    {
+        $document = ReservationDocument::with('items')->findOrFail($id);
+
+        // Process items data for edit view
+        $document->items->transform(function ($item) {
+            // Pastikan kita memiliki data yang konsisten
+            $sources = [];
+            $proDetails = [];
+
+            // Handle jika data masih string JSON atau sudah array
+            if (is_string($item->sources)) {
+                $sources = json_decode($item->sources, true) ?? [];
+            } elseif (is_array($item->sources)) {
+                $sources = $item->sources;
+            }
+
+            if (is_string($item->pro_details)) {
+                $proDetails = json_decode($item->pro_details, true) ?? [];
+            } elseif (is_array($item->pro_details)) {
+                $proDetails = $item->pro_details;
+            }
+
+            // Process sources to remove leading zeros
+            $processedSources = [];
+            foreach ($sources as $source) {
+                $processedSources[] = \App\Helpers\NumberHelper::removeLeadingZeros($source);
+            }
+
+            // Ambil sortf dari pro_details pertama
+            $sortf = null;
+            if (!empty($proDetails) && isset($proDetails[0]['sortf'])) {
+                $sortf = $proDetails[0]['sortf'];
+            }
+
+            // Add processed data
+            $item->processed_sources = $processedSources;
+            $item->sortf = $sortf ?? $item->sortf ?? '-';
+
+            return $item;
+        });
+
+        return view('documents.edit', compact('document'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $document = ReservationDocument::findOrFail($id);
+
+        // Validasi data
+        $validated = $request->validate([
+            'remarks' => 'nullable|string|max:500',
+            'sloc_supply' => 'required|string|max:20',
+            'items' => 'required|array',
+            'items.*.id' => 'required|exists:reservation_document_items,id',
+            'items.*.requested_qty' => 'required|numeric|min:0',
+        ]);
+
+        // Update document
+        $document->remarks = $request->remarks;
+        $document->sloc_supply = $request->sloc_supply;
+        $document->save();
+
+        // Update items quantities
+        foreach ($request->items as $itemData) {
+            $item = ReservationDocumentItem::find($itemData['id']);
+            if ($item && $item->document_id == $document->id) {
+                // Cek apakah quantity editable berdasarkan MRP
+                $isQtyEditable = true;
+                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
+
+                if ($item->dispo && !in_array($item->dispo, $allowedMRP)) {
+                    $isQtyEditable = false;
+                }
+
+                // Hanya update jika quantity editable
+                if ($isQtyEditable) {
+                    $item->requested_qty = $itemData['requested_qty'];
+                    $item->save();
+                }
+            }
+        }
+
+        // Hitung ulang total quantity
+        $totalQty = $document->items()->sum('requested_qty');
+        $document->total_qty = $totalQty;
+        $document->save();
+
+        return redirect()->route('documents.show', $document->id)
+            ->with('success', 'Document updated successfully.');
+    }
+
     public function export($type = 'csv')
     {
         if ($type === 'csv') {
@@ -131,7 +224,7 @@ class ReservationDocumentController extends Controller
 
                 // Header CSV
                 fputcsv($file, [
-                    'Document No', 'Plant', 'Status', 'Total Items', 'Total Qty',
+                    'Document No', 'Plant Request', 'Sloc Supply', 'Status', 'Total Items', 'Total Qty',
                     'Created By', 'Created At', 'Material Code', 'Material Description',
                     'Unit', 'Requested Qty', 'Source PRO Numbers', 'Sortf', 'MRP', 'Sales Orders'
                 ]);
@@ -171,6 +264,7 @@ class ReservationDocumentController extends Controller
                         fputcsv($file, [
                             $document->document_no,
                             $document->plant,
+                            $document->sloc_supply ?? '',
                             $document->status,
                             $document->total_items,
                             \App\Helpers\NumberHelper::formatQuantity($document->total_qty),
