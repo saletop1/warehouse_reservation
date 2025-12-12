@@ -142,10 +142,12 @@
     <div class="header">
         <div class="document-title">RESERVATION DOCUMENT</div>
         <div class="company-info">
-            <strong>PT. Example Company</strong> |
-            Jl. Contoh No. 123, Jakarta |
-            Phone: (021) 12345678
-        </div>
+            <strong>PT. Kayu Mebel Indonesia</strong><br>
+                                Jl. Manunggaljati KM No, 23, Jatikalang,
+                                Kec. Krian, Kabupaten Sidoarjo, Jawa Timur 61262, Indonesia<br>
+                                Factory. Jl. Jend. Urip Sumoharjo No.134 50244 Ngaliyan Jawa Tengah
+                                Phone: (031) 8971048. | Phone: (024) 8665996
+                            </div>
 
         <div style="float: right; text-align: right;">
             <div class="document-title" style="color: {{ $document->plant == '3000' ? '#0d6efd' : '#198754' }}; font-size: 12pt;">

@@ -102,7 +102,7 @@
 </head>
 <body>
     <div class="header">
-        <div class="company-name">PT. Example Company</div>
+        <div class="company-name">PT. Kayu Mebel Indonesia</div>
         <div class="report-title">RESERVATION DOCUMENTS REPORT</div>
         <div class="date-info">
             Generated on: {{ now()->setTimezone('Asia/Jakarta')->format('d F Y H:i:s') }} WIB |
@@ -148,7 +148,7 @@
     </table>
 
     <div class="footer">
-        Confidential Document | PT. Example Company | Page 1 of 1
+        Confidential Document | PT. Kayu Mebel Indonesia | Page 1 of 1
     </div>
 </body>
 </html>
