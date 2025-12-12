@@ -1613,8 +1613,8 @@ class ReservationController extends Controller
                 }
             }
 
-            // Generate document number
-            $documentNo = $this->generateDocumentNumberWithLock($plant);
+            // Generate document number menggunakan metode baru
+            $documentNo = $this->generateGlobalDocumentNumberWithPlantPrefix($plant);
 
             Log::info('📄 Generated document number', [
                 'document_no' => $documentNo,
@@ -1754,22 +1754,18 @@ class ReservationController extends Controller
     }
 
     /**
-     * Generate document number with lock to prevent duplicates
+     * Generate document number dengan metode global dengan prefix plant
      */
-    private function generateDocumentNumberWithLock($plant)
+    private function generateGlobalDocumentNumberWithPlantPrefix($plant)
     {
         DB::beginTransaction();
 
         try {
+            // Tentukan prefix berdasarkan plant
             $prefix = ($plant == '3000') ? 'RSMG' : 'RSBY';
-            $year = date('Y');
-            $month = date('m');
 
-            // Lock the table to prevent race conditions
+            // Ambil dokumen terakhir secara global (tanpa filter plant)
             $latestDoc = DB::table('reservation_documents')
-                ->where('plant', $plant)
-                ->whereYear('created_at', $year)
-                ->whereMonth('created_at', $month)
                 ->lockForUpdate()
                 ->orderBy('id', 'desc')
                 ->first();
@@ -1777,32 +1773,25 @@ class ReservationController extends Controller
             $sequence = 1;
             if ($latestDoc) {
                 $latestNumber = $latestDoc->document_no;
-                $latestSeq = intval(substr($latestNumber, strlen($prefix)));
+                // Ambil angka dari nomor dokumen (buang prefix apapun)
+                $latestSeq = intval(preg_replace('/\D/', '', $latestNumber));
                 $sequence = $latestSeq + 1;
             }
 
+            // Nomor dokumen baru dengan prefix per plant
             $documentNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
 
-            // Double-check uniqueness
-            $exists = DB::table('reservation_documents')
-                ->where('document_no', $documentNo)
-                ->exists();
-
-            if ($exists) {
-                $sequence++;
-                $documentNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
-            }
+            // Simpan dokumen baru (ini opsional, sebenarnya hanya untuk testing)
+            // DB::table('reservation_documents')->insert([
+            //     'plant' => $plant,
+            //     'document_no' => $documentNo,
+            //     'created_at' => now(),
+            //     'updated_at' => now(),
+            // ]);
 
             DB::commit();
 
-            Log::info('Document number generated', [
-                'document_no' => $documentNo,
-                'plant' => $plant,
-                'sequence' => $sequence
-            ]);
-
             return $documentNo;
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Failed to generate document number: ' . $e->getMessage());
@@ -1854,24 +1843,6 @@ class ReservationController extends Controller
             Log::error('❌ Failed to delete sync data: ' . $e->getMessage());
             return 0;
         }
-    }
-
-    /**
-     * Generate document number.
-     */
-    private function generateDocumentNumber($plant)
-    {
-        $prefix = ($plant == '3000') ? 'RSMG' : 'RSBY';
-        $year = date('Y');
-        $month = date('m');
-
-        $sequence = DB::table('reservation_documents')
-            ->where('plant', $plant)
-            ->whereYear('created_at', $year)
-            ->whereMonth('created_at', $month)
-            ->count() + 1;
-
-        return $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
     }
 
     /**
