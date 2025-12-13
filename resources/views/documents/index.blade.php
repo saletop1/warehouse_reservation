@@ -54,22 +54,6 @@
                         <h5 class="mb-0">Reservation Documents</h5>
                         <small class="text-muted">Total: {{ $documents->total() }} documents</small>
                     </div>
-                    <div>
-                        <form id="exportPdfForm" action="{{ route('documents.export.selected.pdf') }}" method="POST" class="d-inline" target="_blank">
-                            @csrf
-                            <input type="hidden" name="document_ids" id="selectedDocumentsPdfInput">
-                            <button type="submit" class="btn btn-sm btn-danger" id="exportPdfBtn" disabled>
-                                <i class="fas fa-file-pdf"></i> Export Selected PDF
-                            </button>
-                        </form>
-                        <form id="exportExcelForm" action="{{ route('documents.export.selected.excel') }}" method="POST" class="d-inline">
-                            @csrf
-                            <input type="hidden" name="document_ids" id="selectedDocumentsExcelInput">
-                            <button type="submit" class="btn btn-sm btn-success" id="exportExcelBtn" disabled>
-                                <i class="fas fa-file-excel"></i> Export Selected Excel
-                            </button>
-                        </form>
-                    </div>
                 </div>
                 <div class="card-body">
                     {{-- Live Search --}}
@@ -84,11 +68,6 @@
                         <table class="table table-bordered table-striped table-hover" id="documentsTable">
                             <thead class="table-dark text-center align-middle">
                                 <tr>
-                                    <th width="40">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="selectAll">
-                                        </div>
-                                    </th>
                                     <th>Document No</th>
                                     <th>Plant</th>
                                     <th>Status</th>
@@ -100,11 +79,6 @@
                             <tbody>
                                 @forelse($documents as $document)
                                     <tr class="text-center align-middle">
-                                        <td>
-                                            <div class="form-check">
-                                                <input class="form-check-input document-checkbox" type="checkbox" value="{{ $document->id }}">
-                                            </div>
-                                        </td>
                                         <td>
                                             <a href="{{ route('documents.show', $document->id) }}"
                                                class="{{ $document->plant == '3000' ? 'text-primary' : 'text-success' }} fw-bold">
@@ -137,7 +111,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted py-5">
+                                        <td colspan="6" class="text-center text-muted py-5">
                                             <i class="fas fa-file-alt fa-3x mb-3"></i>
                                             <h5>No documents found</h5>
                                         </td>
@@ -210,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const cells = row.getElementsByTagName('td');
             let found = false;
 
-            for (let i = 1; i < cells.length; i++) {
+            for (let i = 0; i < cells.length; i++) {
                 const cell = cells[i];
                 if (cell.textContent.toLowerCase().includes(searchTerm)) {
                     found = true;
@@ -219,76 +193,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             row.style.display = found ? '' : 'none';
-        }
-    });
-
-    // Select All Checkbox
-    const selectAll = document.getElementById('selectAll');
-    const documentCheckboxes = document.querySelectorAll('.document-checkbox');
-    const exportPdfBtn = document.getElementById('exportPdfBtn');
-    const exportExcelBtn = document.getElementById('exportExcelBtn');
-    const selectedDocumentsPdfInput = document.getElementById('selectedDocumentsPdfInput');
-    const selectedDocumentsExcelInput = document.getElementById('selectedDocumentsExcelInput');
-    const exportPdfForm = document.getElementById('exportPdfForm');
-    const exportExcelForm = document.getElementById('exportExcelForm');
-
-    selectAll.addEventListener('change', function() {
-        const isChecked = this.checked;
-        documentCheckboxes.forEach(checkbox => {
-            checkbox.checked = isChecked;
-        });
-        updateExportButtons();
-    });
-
-    documentCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', updateExportButtons);
-    });
-
-    function updateExportButtons() {
-        const checkedBoxes = Array.from(documentCheckboxes).filter(cb => cb.checked);
-        const documentIds = checkedBoxes.map(cb => cb.value);
-
-        if (documentIds.length > 0) {
-            exportPdfBtn.disabled = false;
-            exportExcelBtn.disabled = false;
-            selectedDocumentsPdfInput.value = documentIds.join(',');
-            selectedDocumentsExcelInput.value = documentIds.join(',');
-        } else {
-            exportPdfBtn.disabled = true;
-            exportExcelBtn.disabled = true;
-            selectedDocumentsPdfInput.value = '';
-            selectedDocumentsExcelInput.value = '';
-        }
-    }
-
-    // Confirm before export
-    exportPdfForm.addEventListener('submit', function(e) {
-        const documentIds = selectedDocumentsPdfInput.value;
-        if (!documentIds) {
-            e.preventDefault();
-            alert('Please select at least one document to export.');
-            return false;
-        }
-
-        const count = documentIds.split(',').length;
-        if (!confirm(`Are you sure you want to export ${count} selected document(s) to PDF?`)) {
-            e.preventDefault();
-            return false;
-        }
-    });
-
-    exportExcelForm.addEventListener('submit', function(e) {
-        const documentIds = selectedDocumentsExcelInput.value;
-        if (!documentIds) {
-            e.preventDefault();
-            alert('Please select at least one document to export.');
-            return false;
-        }
-
-        const count = documentIds.split(',').length;
-        if (!confirm(`Are you sure you want to export ${count} selected document(s) to Excel?`)) {
-            e.preventDefault();
-            return false;
         }
     });
 });

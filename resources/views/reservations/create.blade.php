@@ -237,7 +237,8 @@
                                                         <th width="8%" class="text-center add-info-column" id="add-info-header">Add Info</th>
                                                         <th width="10%" class="text-center">Required Qty</th>
                                                         <th width="12%" class="text-center">Requested Qty *</th>
-                                                        <th width="5%" class="text-center">Unit</th>
+                                                        <!-- PERUBAHAN: Unit menjadi UOM -->
+                                                        <th width="5%" class="text-center">UOM</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="materials-table-body">
@@ -858,6 +859,9 @@
     // MRP yang diperbolehkan untuk edit quantity
     const allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
 
+    // PERUBAHAN: Daftar UOM yang menggunakan desimal (tanpa desimal untuk PC, ST, SET)
+    const decimalUOMs = ['KG', 'M', 'M2', 'M3', 'L', 'ML', 'G', 'MG', 'CM', 'MM', 'IN', 'FT', 'YD'];
+
     // ============================
     // NOTIFICATION SYSTEM
     // ============================
@@ -943,6 +947,46 @@
             return 'PC';
         }
         return unit;
+    }
+
+    // PERUBAHAN: Fungsi untuk cek apakah UOM menggunakan desimal
+    function isDecimalUOM(uom) {
+        if (!uom) return true; // Default gunakan desimal jika tidak diketahui
+        const uomUpper = uom.trim().toUpperCase();
+        return decimalUOMs.includes(uomUpper);
+    }
+
+    // PERUBAHAN: Fungsi untuk format angka berdasarkan UOM
+    function formatNumberByUOM(value, uom, isForInput = false) {
+        if (!value && value !== 0) return '0';
+        const num = parseFloat(value);
+        if (isNaN(num)) return '0';
+
+        // Tentukan apakah menggunakan desimal
+        const useDecimal = isDecimalUOM(uom);
+
+        if (isForInput) {
+            // Untuk input, tetap gunakan titik sebagai pemisah desimal
+            if (useDecimal) {
+                // Untuk UOM desimal: tampilkan dengan 4 desimal
+                return num.toFixed(4).replace(/\.?0+$/, '');
+            } else {
+                // Untuk UOM non-desimal: tampilkan tanpa desimal
+                return Math.round(num).toString();
+            }
+        } else {
+            // Untuk tampilan, gunakan koma sebagai pemisah desimal
+            if (useDecimal) {
+                // Untuk UOM desimal: tampilkan dengan 4 desimal, gunakan koma
+                const formatted = num.toFixed(4);
+                // Ganti titik dengan koma, hapus trailing zeros
+                return formatted.replace('.', ',').replace(/,?0+$/, '');
+            } else {
+                // Untuk UOM non-desimal: tampilkan tanpa desimal, format dengan koma sebagai pemisah ribuan
+                // Tapi karena Anda ingin 3.000 untuk 3000, kita perlu format dengan pemisah ribuan
+                return Math.round(num).toLocaleString('id-ID'); // Format Indonesia: 1.234.567
+            }
+        }
     }
 
     // ============================
@@ -1620,13 +1664,6 @@
     // STEP 5: REVIEW & CREATE
     // ============================
 
-    function formatQuantity(qty) {
-        if (!qty && qty !== 0) return '0';
-        const num = parseFloat(qty);
-        if (isNaN(num)) return '0';
-        return num.toFixed(4).replace(/\.?0+$/, '');
-    }
-
     function isMRPAllowedForEdit(dispo) {
         if (!dispo) return true;
         return allowedMRP.includes(dispo);
@@ -1705,10 +1742,18 @@
             const sourcesArray = Array.from(consolidated.sources);
             const salesOrdersArray = Array.from(consolidated.salesOrders);
             const originalQty = consolidated.totalQty;
-            const formattedOriginalQty = formatQuantity(originalQty);
+
+            // PERUBAHAN: Format Required Qty berdasarkan UOM
+            const formattedOriginalQtyForDisplay = formatNumberByUOM(originalQty, material.unit, false);
+            // PERUBAHAN: Format untuk input berdasarkan UOM
+            const formattedOriginalQtyForInput = formatNumberByUOM(originalQty, material.unit, true);
 
             // Check if quantity is editable based on MRP
             const isQtyEditable = isMRPAllowedForEdit(material.dispo);
+
+            // PERUBAHAN: Tentukan step berdasarkan UOM
+            const useDecimal = isDecimalUOM(material.unit);
+            const stepValue = useDecimal ? "0.0001" : "1";
 
             // Format source PRO badges (display format) - PERUBAHAN: tanpa badge count
             let sourceBadges = '';
@@ -1743,7 +1788,7 @@
             const materialPro = formatMaterialProForUI(material.mathd || '-');
             const descPro = material.makhd || '-';
 
-            // PERUBAHAN 2: Format satuan - jika "ST" ubah menjadi "PC"
+            // PERUBAHAN: Format satuan - jika "ST" ubah menjadi "PC"
             const unitDisplay = formatUnit(material.unit);
 
             const isConsolidated = sourcesArray.length > 1;
@@ -1777,11 +1822,12 @@
                     <td class="text-center"><code>${formatMaterialCodeForUI(material.material_code)}</code></td>
                     <td class="table-description full-description">${material.material_description || 'No description'}</td>
                     <td class="additional-info-cell ${addInfoClass}">${additionalInfo}</td>
-                    <td class="text-center quantity-cell">${formattedOriginalQty}</td>
+                    <td class="text-center quantity-cell">${formattedOriginalQtyForDisplay}</td>
                     <td class="text-center">
                         <input type="number" class="form-control quantity-input requested-qty text-center ${!isQtyEditable ? 'qty-disabled' : ''}"
-                            value="${formattedOriginalQty}"
-                            step="0.0001" min="0.0001"
+                            value="${formattedOriginalQtyForInput}"
+                            step="${stepValue}"
+                            min="${useDecimal ? '0.0001' : '1'}"
                             data-index="${consolidatedIndex}"
                             data-material="${material.material_code}"
                             data-dispo="${material.dispo || ''}"
@@ -1800,9 +1846,11 @@
         // Event listeners for editable quantities only
         $('.requested-qty:not(.qty-disabled)').on('change', function() {
             const value = parseFloat($(this).val()) || 0;
-            if (value < 0) {
-                $(this).val(0);
-                showNotification('Quantity cannot be negative', 'warning', 3000);
+            const minValue = parseFloat($(this).attr('min')) || 0;
+
+            if (value < minValue) {
+                $(this).val(minValue);
+                showNotification(`Quantity cannot be less than ${minValue}`, 'warning', 3000);
             }
         });
     }
@@ -1815,9 +1863,10 @@
 
         $('.requested-qty').each(function() {
             const value = parseFloat($(this).val()) || 0;
+            const minValue = parseFloat($(this).attr('min')) || 0;
             const isEditable = !$(this).hasClass('qty-disabled');
 
-            if (isEditable && value <= 0) {
+            if (isEditable && value < minValue) {
                 isValid = false;
                 $(this).addClass('is-invalid');
                 invalidInputs.push($(this).data('material'));
@@ -1827,7 +1876,7 @@
         });
 
         if (!isValid) {
-            let errorMsg = 'Please enter valid quantities (greater than 0) for editable materials.<br><br>';
+            let errorMsg = `Please enter valid quantities (greater than or equal to minimum value) for editable materials.<br><br>`;
             errorMsg += '<strong>Invalid materials:</strong><br>';
             invalidInputs.forEach(matnr => {
                 errorMsg += `• ${formatMaterialCodeForUI(matnr)}<br>`;
