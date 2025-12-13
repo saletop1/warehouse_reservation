@@ -31,35 +31,43 @@ class ReservationController extends Controller
             // Get statuses for filter dropdown
             $statuses = ['draft', 'approved', 'rejected', 'completed'];
 
-            $query = Reservation::query();
+            // PERUBAHAN PENTING: Query dari tabel sap_reservations, bukan reservations
+            $query = DB::table('sap_reservations');
 
             // Apply filters if provided
             if ($request->has('plant') && $request->plant != '') {
-                $query->where('plant', $request->plant);
+                $query->where('sap_plant', $request->plant);
             }
 
+            // Komen filter status karena sap_reservations tidak ada kolom status
+            /*
             if ($request->has('status') && $request->status != '') {
                 $query->where('status', $request->status);
             }
+            */
 
             if ($request->has('search') && $request->search != '') {
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
-                    $q->where('material_code', 'LIKE', "%{$search}%")
-                      ->orWhere('material_description', 'LIKE', "%{$search}%")
-                      ->orWhere('plant', 'LIKE', "%{$search}%");
+                    $q->where('rsnum', 'LIKE', "%{$search}%")
+                      ->orWhere('matnr', 'LIKE', "%{$search}%")
+                      ->orWhere('maktx', 'LIKE', "%{$search}%")
+                      ->orWhere('sap_plant', 'LIKE', "%{$search}%")
+                      ->orWhere('sap_order', 'LIKE', "%{$search}%")
+                      ->orWhere('dispo', 'LIKE', "%{$search}%");
                 });
             }
 
             if ($request->has('start_date') && $request->start_date != '') {
-                $query->whereDate('created_at', '>=', $request->start_date);
+                $query->whereDate('sync_at', '>=', $request->start_date);
             }
 
             if ($request->has('end_date') && $request->end_date != '') {
-                $query->whereDate('created_at', '<=', $request->end_date);
+                $query->whereDate('sync_at', '<=', $request->end_date);
             }
 
-            $reservations = $query->orderBy('created_at', 'desc')->paginate(20);
+            // PERUBAHAN: Hapus pagination, gunakan all() untuk mengambil semua data
+            $reservations = $query->orderBy('sync_at', 'desc')->get();
 
             return view('reservations.index', compact('reservations', 'plants', 'statuses'));
 

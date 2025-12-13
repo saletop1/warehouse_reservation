@@ -126,19 +126,19 @@
                 </div>
 
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <div class="table-responsive sticky-table-container">
                         <table class="table table-sm table-hover mb-0" id="reservationsTable">
-                            <thead class="table-light">
+                            <thead class="table-light sticky-header">
                                 <tr>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Reservation No.</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Plant</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">PRO No.</th>
-                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Finish Good</th>
-                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Material</th>
-                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Description</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">MRP</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Sales Order</th>
-                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase text-end">Quantity</th>
+                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Material PRO</th>
+                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Material Comp</th>
+                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Description Comp</th>
+                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase text-end">QTY REQ</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Unit</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Start Date</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Finish Date</th>
@@ -164,7 +164,7 @@
                                         $unit = strtoupper(trim($reservation->meins ?? ''));
                                         $displayUnit = $unit === 'ST' ? 'PC' : $unit;
 
-                                        // Finish Good - menggunakan kolom makhd dari database
+                                        // Material PRO - menggunakan kolom makhd dari database
                                         $finishGood = $reservation->makhd ?? '-';
 
                                         // Material number formatting
@@ -201,11 +201,11 @@
                                             $reservation->rsnum,
                                             $reservation->sap_plant,
                                             $reservation->sap_order,
+                                            $mrp,
+                                            $salesOrder,
                                             $finishGood,
                                             $materialNumber,
                                             $reservation->maktx,
-                                            $mrp,
-                                            $salesOrder,
                                             $displayQuantity,
                                             $displayUnit,
                                             $reservation->gstrp,
@@ -221,6 +221,12 @@
                                             <span class="text-mono">{{ $reservation->sap_order ?? '-' }}</span>
                                         </td>
                                         <td class="py-2 px-3 border-bottom">
+                                            <span class="badge bg-info">{{ $mrp }}</span>
+                                        </td>
+                                        <td class="py-2 px-3 border-bottom">
+                                            <span class="text-mono">{{ $salesOrder }}</span>
+                                        </td>
+                                        <td class="py-2 px-3 border-bottom">
                                             {{ $finishGood }}
                                         </td>
                                         <td class="py-2 px-3 border-bottom">
@@ -230,12 +236,6 @@
                                             <div class="description-full" style="white-space: normal; max-width: 300px;">
                                                 {{ $reservation->maktx }}
                                             </div>
-                                        </td>
-                                        <td class="py-2 px-3 border-bottom">
-                                            <span class="badge bg-info">{{ $mrp }}</span>
-                                        </td>
-                                        <td class="py-2 px-3 border-bottom">
-                                            <span class="text-mono">{{ $salesOrder }}</span>
                                         </td>
                                         <td class="py-2 px-3 border-bottom text-end">
                                             <span class="fw-semibold">{{ $displayQuantity }}</span>
@@ -272,18 +272,6 @@
                             </tbody>
                         </table>
                     </div>
-
-                    {{-- Pagination --}}
-                    @if($reservations->hasPages())
-                        <div class="d-flex justify-content-between align-items-center p-2 border-top bg-white">
-                            <div class="text-muted small">
-                                Showing {{ $reservations->firstItem() }} to {{ $reservations->lastItem() }} of {{ $reservations->total() }} entries
-                            </div>
-                            <div>
-                                {{ $reservations->appends(request()->except('page'))->links('pagination::bootstrap-5') }}
-                            </div>
-                        </div>
-                    @endif
                 </div>
             </div>
         </div>
@@ -311,27 +299,6 @@
                     <span class="badge bg-light text-dark border" id="progressProCount">0 PRO</span>
                     <span class="badge bg-light text-dark border" id="progressPlant">Plant: -</span>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Result Modal -->
-<div class="modal fade" id="resultModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border">
-            <div class="modal-header py-2 px-3">
-                <h6 class="modal-title mb-0" id="resultTitle">Sync Result</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-3" id="resultContent">
-                <!-- Content will be loaded here -->
-            </div>
-            <div class="modal-footer py-2 px-3">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-sm btn-primary" onclick="location.reload()">
-                    Refresh Page
-                </button>
             </div>
         </div>
     </div>
@@ -414,6 +381,27 @@
         justify-content: center;
     }
 
+    /* Sticky table styles */
+    .sticky-table-container {
+        max-height: 60vh;
+        overflow: auto;
+        position: relative;
+    }
+
+    .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: #f8f9fa;
+    }
+
+    .sticky-header th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+    }
+
     /* Responsive adjustments */
     @media (max-width: 768px) {
         .container-fluid {
@@ -453,6 +441,22 @@
         .description-full {
             max-width: 150px !important;
         }
+
+        /* Adjust sticky table height for mobile */
+        .sticky-table-container {
+            max-height: 50vh;
+        }
+    }
+
+    /* Ensure table is responsive on small screens */
+    @media (max-width: 576px) {
+        .sticky-table-container {
+            max-height: 45vh;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
     }
 </style>
 @endpush
@@ -466,9 +470,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Fokuskan ke input plant saat halaman dimuat
     const plantInput = document.getElementById('plant');
     if (plantInput) {
-        setTimeout(() => {
-            plantInput.focus();
-        }, 300);
+        plantInput.focus();
     }
 
     // Elements
@@ -482,7 +484,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Modal elements
     const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
     const progressModalElement = document.getElementById('progressModal');
-    const resultModal = new bootstrap.Modal(document.getElementById('resultModal'));
 
     // Variable untuk menyimpan instance Lottie
     let lottieAnimation = null;
@@ -518,18 +519,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Event listener untuk error animasi
             lottieAnimation.addEventListener('error', function(error) {
-                console.error('Lottie animation error:', error);
                 showFallbackAnimation();
             });
 
             // Event listener ketika data gagal dimuat
             lottieAnimation.addEventListener('data_failed', function() {
-                console.error('Lottie animation data failed to load');
                 showFallbackAnimation();
             });
 
         } catch (error) {
-            console.error('Error loading Lottie animation:', error);
             showFallbackAnimation();
         }
     }
@@ -563,28 +561,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Support for multiple formats: comma, newline, semicolon, space
         let normalized = inputText
-            .replace(/[,;|\n\r]/g, ',')  // Replace all separators with commas
-            .replace(/\s+/g, ',')        // Replace spaces with commas
-            .replace(/,\s*,/g, ',')      // Remove empty entries
-            .replace(/^\s+|\s+$/g, '');  // Trim whitespace
+            .replace(/[,;|\n\r]/g, ',')
+            .replace(/\s+/g, ',')
+            .replace(/,\s*,/g, ',')
+            .replace(/^\s+|\s+$/g, '');
 
         let proNumbers = normalized.split(',')
             .map(pro => {
-                // Clean each PRO number
                 let cleaned = pro.trim();
-
-                // Remove any non-numeric characters (except for PRO prefixes if needed)
                 cleaned = cleaned.replace(/[^0-9]/g, '');
-
-                // Keep leading zeros for SAP format (12 digits)
                 return cleaned;
             })
             .filter(pro => pro.length > 0 && /^\d+$/.test(pro));
 
-        // Remove duplicates and sort numerically
         proNumbers = [...new Set(proNumbers)];
         proNumbers.sort((a, b) => {
-            // Convert to numbers for proper numerical sorting
             const numA = parseInt(a, 10);
             const numB = parseInt(b, 10);
             return numA - numB;
@@ -599,7 +590,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const proNumbers = parseProNumbers(inputText);
         const count = proNumbers.length;
 
-        // Update badge
         if (count > 0) {
             proCountBadge.textContent = `${count} PRO`;
             proCountBadge.style.display = 'inline-block';
@@ -618,7 +608,6 @@ document.addEventListener('DOMContentLoaded', function() {
     orderNumberInput.addEventListener('blur', function() {
         const proNumbers = parseProNumbers(this.value);
         if (proNumbers.length > 0) {
-            // Format with each PRO on new line for better readability
             this.value = proNumbers.join('\n');
             updateProBadge();
         }
@@ -629,13 +618,11 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const text = await navigator.clipboard.readText();
             if (text.trim()) {
-                // Parse the pasted text
                 const proNumbers = parseProNumbers(text);
                 if (proNumbers.length > 0) {
                     orderNumberInput.value = proNumbers.join('\n');
                     updateProBadge();
 
-                    // Show feedback
                     const originalTitle = this.getAttribute('title');
                     this.innerHTML = '<i class="fas fa-check"></i>';
                     this.setAttribute('title', `Pasted ${proNumbers.length} PRO numbers`);
@@ -647,71 +634,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         } catch (err) {
-            console.error('Clipboard error:', err);
-            alert('Unable to access clipboard. Please paste manually.');
+            // Tidak menampilkan pesan apa-apa
         }
     });
 
     // Clear Sync Button handler
     if (clearSyncBtn) {
         clearSyncBtn.addEventListener('click', function() {
-            if (confirm('Are you sure you want to clear all synced data from the sap_reservations table? This action will delete all data and cannot be undone.')) {
-                // Disable button and show loading
-                const originalText = clearSyncBtn.innerHTML;
-                clearSyncBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Clearing...';
-                clearSyncBtn.disabled = true;
+            const originalText = clearSyncBtn.innerHTML;
+            clearSyncBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Clearing...';
+            clearSyncBtn.disabled = true;
 
-                // AJAX request to clear sync data
-                fetch('{{ route("reservations.clearAllSyncData") }}', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
-                    }
-                })
-                .then(response => response.json())
-                .then(response => {
-                    if (response.success) {
-                        showResultModal(
-                            'Clear Sync Successful',
-                            `
-                            <div class="alert alert-success mb-3">
-                                All sync data has been cleared successfully
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-12">
-                                    <div class="border p-2 text-center">
-                                        <h6 class="text-primary mb-1">${response.deleted_count || 0}</h6>
-                                        <small class="text-muted">Records Deleted</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="border-top pt-2">
-                                <small class="text-muted">Time: ${response.timestamp || ''}</small><br>
-                                <small class="text-muted">The sap_reservations table has been cleared</small>
-                            </div>
-                            `
-                        );
-
-                        // Reload page after 2 seconds if successful
-                        setTimeout(function() {
-                            location.reload();
-                        }, 2000);
-                    } else {
-                        alert('Failed to clear sync data: ' + response.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Network error occurred while clearing sync data.');
-                })
-                .finally(() => {
-                    // Restore button
-                    clearSyncBtn.innerHTML = originalText;
-                    clearSyncBtn.disabled = false;
-                });
-            }
+            fetch('{{ route("reservations.clearAllSyncData") }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(response => {
+                if (response.success) {
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                // Tidak menampilkan pesan error
+            })
+            .finally(() => {
+                clearSyncBtn.innerHTML = originalText;
+                clearSyncBtn.disabled = false;
+            });
         });
     }
 
@@ -720,22 +674,20 @@ document.addEventListener('DOMContentLoaded', function() {
         syncForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
-            const plant = document.getElementById('plant').value;
+            const plant = document.getElementById('plant').value.trim();
             const orderInput = document.getElementById('order_number').value;
             const proNumbers = parseProNumbers(orderInput);
 
-            // Validation
+            // Validation for empty plant
             if (!plant) {
-                alert('Plant is required');
+                document.getElementById('plant').focus();
                 return false;
             }
 
             if (proNumbers.length === 0) {
-                alert('Enter at least one PRO number');
+                document.getElementById('order_number').focus();
                 return false;
             }
-
-            console.log('Submitting PRO numbers:', proNumbers);
 
             // Show progress modal
             document.getElementById('progressDetails').textContent = `Processing ${proNumbers.length} PRO numbers`;
@@ -767,75 +719,14 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(response => {
                 document.getElementById('syncProgress').style.width = '100%';
-
-                setTimeout(function() {
-                    progressModal.hide();
-
-                    if (response.success) {
-                        // Show success result
-                        showResultModal(
-                            'Sync Successful',
-                            `
-                            <div class="alert alert-success mb-3">
-                                Data synced successfully
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-6">
-                                    <div class="border p-2 text-center">
-                                        <h6 class="text-primary mb-1">${response.synced_count || 0}</h6>
-                                        <small class="text-muted">Records Saved</small>
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="border p-2 text-center">
-                                        <h6 class="text-success mb-1">${proNumbers.length}</h6>
-                                        <small class="text-muted">PRO Numbers</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="border-top pt-2">
-                                <small class="text-muted">Plant: ${plant}</small><br>
-                                <small class="text-muted">PROs processed: ${proNumbers.length}</small>
-                            </div>
-                            `
-                        );
-
-                        // Reload page after 2 seconds if successful
-                        setTimeout(function() {
-                            location.reload();
-                        }, 2000);
-                    } else {
-                        // Show error result
-                        showResultModal(
-                            'Sync Failed',
-                            `
-                            <div class="alert alert-danger mb-3">
-                                ${response.message || 'Sync failed'}
-                            </div>
-                            <div class="border p-2">
-                                <small class="text-muted">Error details:</small>
-                                <p class="mb-0 mt-1">${response.error || 'Unknown error'}</p>
-                            </div>
-                            `
-                        );
-                    }
-                }, 500);
+                progressModal.hide();
+                location.reload();
             })
             .catch(error => {
                 progressModal.hide();
-                console.error('Sync error:', error);
-
-                showResultModal(
-                    'Sync Error',
-                    `
-                    <div class="alert alert-danger">
-                        Network error occurred: ${error.message}
-                    </div>
-                    `
-                );
+                // Tidak menampilkan pesan error
             })
             .finally(() => {
-                // Reset button
                 syncButton.disabled = false;
             });
 
@@ -864,7 +755,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (isVisible) visibleCount++;
             });
 
-            // Show/hide no data row
             const noDataRow = document.getElementById('noDataRow');
             if (noDataRow) {
                 if (term === '' || visibleCount > 0) {
@@ -881,7 +771,6 @@ document.addEventListener('DOMContentLoaded', function() {
             liveSearchInput.focus();
         });
 
-        // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             if (e.ctrlKey && e.key === '/') {
                 e.preventDefault();
@@ -896,13 +785,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
-
-// Helper functions
-function showResultModal(title, content) {
-    document.getElementById('resultTitle').textContent = title;
-    document.getElementById('resultContent').innerHTML = content;
-    new bootstrap.Modal(document.getElementById('resultModal')).show();
-}
 </script>
 @endpush
 @endsection
