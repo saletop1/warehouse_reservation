@@ -5,7 +5,9 @@ namespace App\Helpers;
 class NumberHelper
 {
     /**
-     * Format quantity with proper decimal handling
+     * Format quantity with proper decimal handling - Indonesian format
+     * Format Indonesia: titik untuk ribuan, koma untuk desimal
+     * Contoh: 3.000 (tiga ribu), 3,467 (tiga koma empat ratus enam puluh tujuh), 3 (tiga)
      */
     public static function formatQuantity($number, $decimals = 3)
     {
@@ -18,15 +20,29 @@ class NumberHelper
 
         // Cek apakah angka bulat (tanpa desimal)
         if (intval($number) == $number) {
-            return number_format($number, 0);
+            // Angka bulat: gunakan titik sebagai pemisah ribuan
+            return number_format($number, 0, ',', '.');
         }
 
         // Jika desimal, format dengan 3 digit, lalu hapus trailing zeros
-        $formatted = number_format($number, $decimals, '.', '');
-        $formatted = rtrim($formatted, '0');
-        $formatted = rtrim($formatted, '.');
+        $formatted = number_format($number, $decimals, ',', '.');
+
+        // Hapus nol trailing setelah koma
+        $formatted = preg_replace('/(,\d*?)0+$/', '$1', $formatted);
+
+        // Hapus koma jika tidak ada angka desimal
+        $formatted = rtrim($formatted, ',');
 
         return $formatted;
+    }
+
+    /**
+     * Format stock number specifically - Indonesian format
+     * Contoh: 3.000, 3,467, 3
+     */
+    public static function formatStockNumber($number)
+    {
+        return self::formatQuantity($number, 3);
     }
 
     /**
@@ -84,5 +100,14 @@ class NumberHelper
     public static function cleanProNumber($string)
     {
         return self::removeLeadingZeros($string);
+    }
+
+    /**
+     * Format number for display with Indonesian thousands separator
+     * Example: 1000 -> 1.000, 1234.567 -> 1.234,567
+     */
+    public static function formatNumberIndonesian($number, $decimalPlaces = 3)
+    {
+        return self::formatQuantity($number, $decimalPlaces);
     }
 }

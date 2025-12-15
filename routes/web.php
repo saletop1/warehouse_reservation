@@ -1,10 +1,12 @@
 <?php
+// routes/web.php
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\ReservationDocumentController;
+use App\Http\Controllers\StockController;
 
 // Redirect root to login page
 Route::get('/', function () {
@@ -23,11 +25,7 @@ Route::middleware(['guest'])->group(function () {
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Protected Routes (Require Authentication)
-    Route::middleware(['auth'])->group(function () {
-    Route::middleware(['auth', 'web'])->group(function () {
-    Route::post('/reservations/get-material-types', [ReservationController::class, 'getMaterialTypes'])
-        ->name('reservations.get-material-types');
-    });
+Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/profile', function () {
         return view('profile.index');
@@ -70,7 +68,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
         Route::post('/create-document', [ReservationController::class, 'createDocument'])->name('createDocument');
     });
 
-    // Document Routes
+    // Document Routes - TANPA DELETE ROUTE
     Route::prefix('documents')->name('documents.')->group(function () {
         Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
@@ -83,5 +81,27 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
         Route::post('/export/selected/pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('export.selected.pdf');
         Route::get('/check-flask-endpoint', [ReservationController::class, 'checkFlaskEndpoint'])->name('checkFlaskEndpoint');
     });
-});
 
+    // Stock Routes (API only - no separate view pages)
+    Route::prefix('stock')->name('stock.')->group(function () {
+        // API endpoints (StockController)
+        Route::get('/document/{documentNo}', [StockController::class, 'getStockByDocument'])
+            ->name('by-document');
+
+        Route::get('/document/{documentNo}/summary', [StockController::class, 'getStockSummary'])
+            ->name('summary');
+
+        Route::delete('/document/{documentNo}/clear', [StockController::class, 'clearStockCache'])
+            ->name('clear-cache');
+
+        Route::get('/document/{documentNo}/export', [StockController::class, 'exportStock'])
+            ->name('export');
+
+        Route::post('/document/{documentNo}/fetch', [StockController::class, 'fetchStock'])
+            ->name('fetch');
+    });
+
+    // AJAX endpoints (global)
+    Route::post('/reservations/get-material-types', [ReservationController::class, 'getMaterialTypes'])
+        ->name('reservations.get-material-types');
+});

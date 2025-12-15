@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ReservationDocument;
 use App\Models\ReservationDocumentItem;
+use App\Models\ReservationStock;
 use Illuminate\Http\Request;
 use App\Exports\ReservationDocumentsSelectedExport;
 use Maatwebsite\Excel\Facades\Excel;
@@ -52,66 +53,153 @@ class ReservationDocumentController extends Controller
         return view('documents.index', compact('documents', 'totalCount'));
     }
 
-    public function show($id)
+            public function show($id)
     {
-        $document = ReservationDocument::with('items')->findOrFail($id);
+        try {
+            $document = ReservationDocument::with(['items'])->findOrFail($id);
 
-        // Process items data - Ambil sortf dari pro_details dan process data lainnya
-        $document->items->transform(function ($item) {
-            // Pastikan kita memiliki data yang konsisten
-            $sources = [];
-            $proDetails = [];
+            // Ambil data stock untuk semua material di document
+            $this->loadStockDataForDocument($document);
 
-            // Handle jika data masih string JSON atau sudah array
-            if (is_string($item->sources)) {
-                $sources = json_decode($item->sources, true) ?? [];
-            } elseif (is_array($item->sources)) {
-                $sources = $item->sources;
+            // Hitung summary stock
+            $stockSummary = $this->calculateStockSummary($document);
+
+            return view('documents.show', compact('document', 'stockSummary'));
+
+        } catch (\Exception $e) {
+            Log::error('Error in show document: ' . $e->getMessage());
+            return redirect()->route('documents.index')
+                ->with('error', 'Document not found: ' . $e->getMessage());
+        }
+    }
+
+            /**
+     * Load stock data untuk document
+     */
+    private function loadStockDataForDocument($document)
+    {
+        foreach ($document->items as $item) {
+            // Ambil stock data dari database untuk material ini
+            $stockData = ReservationStock::where('document_no', $document->document_no)
+                ->where('matnr', $item->material_code)
+                ->get();
+
+            if ($stockData->isNotEmpty()) {
+                $totalStock = $stockData->sum(function($stock) {
+                    return is_numeric($stock->clabs) ? floatval($stock->clabs) : 0;
+                });
+
+                $storageLocations = $stockData->pluck('lgort')->unique()->toArray();
+
+                $item->stock_info = [
+                    'total_stock' => $totalStock,
+                    'storage_locations' => $storageLocations,
+                    'details' => $stockData->map(function($stock) {
+                        return [
+                            'lgort' => $stock->lgort,
+                            'charg' => $stock->charg,
+                            'clabs' => is_numeric($stock->clabs) ? floatval($stock->clabs) : 0,
+                            'meins' => $stock->meins,
+                            'vbeln' => $stock->vbeln,
+                            'posnr' => $stock->posnr
+                        ];
+                    })->toArray()
+                ];
+            } else {
+                $item->stock_info = [
+                    'total_stock' => 0,
+                    'storage_locations' => [],
+                    'details' => []
+                ];
+            }
+        }
+    }
+
+     /**
+     * Calculate stock summary untuk document
+     */
+    private function calculateStockSummary($document)
+    {
+        $totalMaterials = $document->items->count();
+        $totalRequested = 0;
+        $totalStock = 0;
+        $materialsWithStock = 0;
+
+        foreach ($document->items as $item) {
+            // Hitung total requested
+            $requestedQty = $item->requested_qty;
+            if (is_numeric($requestedQty)) {
+                $totalRequested += floatval($requestedQty);
             }
 
-            if (is_string($item->pro_details)) {
-                $proDetails = json_decode($item->pro_details, true) ?? [];
-            } elseif (is_array($item->pro_details)) {
-                $proDetails = $item->pro_details;
-            }
-
-            // Process sources to remove leading zeros
-            $processedSources = [];
-            foreach ($sources as $source) {
-                $processedSources[] = \App\Helpers\NumberHelper::removeLeadingZeros($source);
-            }
-
-            // Process PRO details to remove leading zeros dan ambil sortf
-            $processedProDetails = [];
-            $sortf = null;
-
-            foreach ($proDetails as $detail) {
-                $processedDetail = $detail;
-                if (isset($detail['pro_number'])) {
-                    $processedDetail['pro_number'] = \App\Helpers\NumberHelper::removeLeadingZeros($detail['pro_number']);
+            // Hitung total stock
+            $stockInfo = $item->stock_info ?? null;
+            if ($stockInfo && isset($stockInfo['total_stock'])) {
+                $itemStock = $stockInfo['total_stock'];
+                if (is_numeric($itemStock)) {
+                    $totalStock += floatval($itemStock);
+                    if ($itemStock > 0) {
+                        $materialsWithStock++;
+                    }
                 }
-                if (isset($detail['reservation_no'])) {
-                    $processedDetail['reservation_no'] = \App\Helpers\NumberHelper::removeLeadingZeros($detail['reservation_no']);
-                }
-                $processedProDetails[] = $processedDetail;
-
-                // Ambil sortf dari pro_details pertama yang ada
-                if (!$sortf && isset($detail['sortf']) && !empty($detail['sortf'])) {
-                    $sortf = $detail['sortf'];
-                }
             }
+        }
 
-            // Add processed data as new properties
-            $item->processed_sources = $processedSources;
-            $item->processed_pro_details = $processedProDetails;
+        return [
+            'total_materials' => $totalMaterials,
+            'materials_with_stock' => $materialsWithStock,
+            'total_requested' => $totalRequested,
+            'total_stock' => $totalStock,
+            'balance' => $totalStock - $totalRequested
+        ];
+    }
+    /**
+     * Get stock data for a specific material and plant
+     */
+    private function getStockDataForMaterial($materialCode, $plant, $documentNo)
+    {
+        // Try to get stock data from database
+        $stocks = ReservationStock::where('document_no', $documentNo)
+            ->where('werk', $plant)
+            ->where('matnr', $materialCode)
+            ->get();
 
-            // Set sortf dari pro_details atau dari kolom sortf langsung
-            $item->sortf = $sortf ?? $item->sortf ?? '-';
+        if ($stocks->isEmpty()) {
+            return [
+                'total_stock' => 0,
+                'storage_locations' => [],
+                'details' => [],
+                'has_stock' => false
+            ];
+        }
 
-            return $item;
-        });
+        // Calculate total stock and group by storage location
+        $totalStock = $stocks->sum('clabs');
+        $storageLocations = $stocks->pluck('lgort')->unique()->toArray();
 
-        return view('documents.show', compact('document'));
+        return [
+            'total_stock' => $totalStock,
+            'storage_locations' => $storageLocations,
+            'details' => $stocks->map(function($stock) {
+                return [
+                    'lgort' => $stock->lgort,
+                    'charg' => $stock->charg,
+                    'clabs' => $stock->clabs,
+                    'meins' => $stock->meins,
+                    'vbeln' => $stock->vbeln,
+                    'posnr' => $stock->posnr
+                ];
+            })->toArray(),
+            'has_stock' => $totalStock > 0
+        ];
+    }
+
+    /**
+     * Format number with Indonesian format (dot for thousands, comma for decimal)
+     */
+    private function formatNumberIndonesian($number, $decimalPlaces = 3)
+    {
+        return number_format($number, $decimalPlaces, ',', '.');
     }
 
     public function edit($id)

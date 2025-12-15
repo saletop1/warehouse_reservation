@@ -1,4 +1,3 @@
-# sap_rfc.py - FIXED VERSION dengan semua field dari SAP
 import os
 import sys
 from flask import Flask, request, jsonify
@@ -110,6 +109,46 @@ class SAPConnector:
             logger.error(f"❌ Error in get_reservation_data: {e}")
             return None
 
+    def get_stock_data(self, plant: str, matnr: str):
+        """Get stock data from SAP using RFC Z_FM_YMMR006NX"""
+        try:
+            if not self.conn and not self.connect():
+                return None
+
+            logger.info(f"📡 Calling RFC Z_FM_YMMR006NX for Plant: {plant}, Material: {matnr}")
+
+            result = self.conn.call(
+                'Z_FM_YMMR006NX',
+                P_WERKS=plant,
+                P_MATNR=matnr
+            )
+
+            # Check for data in T_DATA
+            if 'T_DATA' in result:
+                data = result['T_DATA']
+                if isinstance(data, list) and data:
+                    logger.info(f"✅ Got {len(data)} stock records for material {matnr}")
+
+                    # Debug: log field yang tersedia
+                    if data:
+                        first_record = data[0]
+                        logger.info(f"📊 Struktur data stock untuk debugging:")
+                        for key, value in first_record.items():
+                            logger.info(f"  {key}: {value} (type: {type(value)})")
+
+                    return data
+                else:
+                    logger.warning(f"⚠️  T_DATA is empty or not a list for material {matnr}")
+                    return []
+            else:
+                logger.warning(f"⚠️  No data in response for material {matnr}")
+                return []
+
+        except Exception as e:
+            logger.error(f"❌ Error getting stock data: {e}")
+            logger.error(traceback.format_exc())
+            return None
+
 class MySQLHandler:
     def __init__(self):
         self.config = {
@@ -171,12 +210,11 @@ class MySQLHandler:
                         quantity = 0
 
                     # Prepare base data dengan SEMUA field dari SAP
-                    # Field utama yang sudah ada
                     base_data = {
                         'rsnum': item.get('RSNUM', ''),
                         'rspos': item.get('RSPOS', ''),
                         'sap_plant': plant,
-                        'sap_order': item.get('PRO_NUMBER', ''),  # Gunakan PRO number dari loop
+                        'sap_order': item.get('PRO_NUMBER', ''),
                         'aufnr': item.get('AUFNR', ''),
                         'matnr': item.get('MATNR', ''),
                         'maktx': item.get('MAKTX', ''),
@@ -184,7 +222,7 @@ class MySQLHandler:
                         'meins': item.get('MEINS', 'ST'),
                         'gstrp': self._parse_sap_date(item.get('GSTRP')),
                         'gltrp': self._parse_sap_date(item.get('GLTRP')),
-                        'makhd': item.get('MAKHD', ''),  # Kolom Finish Good
+                        'makhd': item.get('MAKHD', ''),
                         'mtart': item.get('MTART', ''),
                         'sortf': item.get('SORTF', ''),
                         'dwerk': item.get('DWERK', plant),
@@ -195,87 +233,83 @@ class MySQLHandler:
                     }
 
                     # **TAMBAHAN: Field-field yang sebelumnya NULL di database**
-                    # Field dari T_DATA1 yang perlu ditambahkan
                     additional_fields = {
-                        # Field dari gambar yang NULL
-                        'nampl': item.get('NAMPL', ''),      # Nama Plant
-                        'lgort': item.get('LGORT', ''),      # Storage Location
-                        'namsl': item.get('NAMSL', ''),      # Nama Storage Location
-                        'dispo': item.get('DISPO', ''),      # MRP Controller
-                        'kdauf': item.get('KDAUF', ''),      # Order Number (Reference)
-                        'kdpos': item.get('KDPOS', ''),      # Item Number (Reference)
-                        'mathd': item.get('MATHD', ''),      # Material Handling
-                        'dispc': item.get('DISPC', ''),      # Production Supervisor
-                        'groes': item.get('GROES', ''),      # Size/Dimensions
-                        'ferth': item.get('FERTH', ''),      # Production Finish Time
-                        'zeinr': item.get('ZEINR', ''),      # Requirement Tracking Number
-                        'matkl': item.get('MATKL', ''),      # Material Group
-                        'naslr': item.get('NASLR', ''),      # Name of Requirement Segment
-                        'ulgo': item.get('ULGO', ''),       # Storage Type
-
-                        # Field lain yang mungkin ada di T_DATA1
-                        'bdter': self._parse_sap_date(item.get('BDTER', '')),  # Requirement Date
-                        'plnum': item.get('PLNUM', ''),      # Planned Order Number
-                        'plnbez': item.get('PLNBEZ', ''),    # Planned Order Description
-                        'pltxt': item.get('PLTXT', ''),      # Planned Order Long Text
-                        'bsmng': float(item.get('BSMNG', 0)) if item.get('BSMNG') else 0,  # Base Quantity
-                        'bmein': item.get('BMEIN', ''),      # Base Unit of Measure
-                        'enmng': float(item.get('ENMNG', 0)) if item.get('ENMNG') else 0,  # Withdrawal Quantity
-                        'einhe': item.get('EINHE', ''),      # Withdrawal Unit
-                        'umren': float(item.get('UMREN', 0)) if item.get('UMREN') else 0,  # Numerator for Conversion
-                        'umrez': float(item.get('UMREZ', 0)) if item.get('UMREZ') else 0,  # Denominator for Conversion
-                        'aufpl': item.get('AUFPL', ''),      # Routing Number of Operations
-                        'aplzl': item.get('APLZL', ''),      # Counter for Operations
-                        'rwdat': self._parse_sap_date(item.get('RWDAT', '')),  # Goods Receipt Date
-                        'verid': item.get('VERID', ''),      # Production Version
-                        'cuobj': item.get('CUOBJ', ''),      # Configuration Object
-                        'cucfg': item.get('CUCFG', ''),      # Configuration
-                        'charg': item.get('CHARG', ''),      # Batch Number
-                        'sobkz': item.get('SOBKZ', ''),      # Special Stock Indicator
-                        'kzbws': item.get('KZBWS', ''),      # Individual/Colllective Requirements
-                        'kzear': item.get('KZEAR', ''),      # Final Issue
-                        'umlgo': item.get('UMLGO', ''),      # Storage Type for Withdrawal
-                        'wempf': item.get('WEMPF', ''),      # Goods Recipient
-                        'ablad': item.get('ABLAD', ''),      # Unloading Point
-                        'hsdat': self._parse_sap_date(item.get('HSDAT', '')),  # Shelf Life Expiration Date
-                        'vsdat': self._parse_sap_date(item.get('VSDAT', '')),  # Production Start Date
-                        'ssdat': self._parse_sap_date(item.get('SSDAT', '')),  # System Status Date
-                        'weanz': float(item.get('WEANZ', 0)) if item.get('WEANZ') else 0,  # Number of GR Slips
-                        'webez': item.get('WEBEZ', ''),      # Goods Recipient's Name
-                        'kzvbr': item.get('KZVBR', ''),      # Consumption Posting
-                        'kzstr': item.get('KZSTR', ''),      # Structure Scope
-                        'kzrvb': item.get('KZRVB', ''),      # Reserv./Dependent Requirements
-                        'xloek': item.get('XLOEK', ''),      # Deletion Indicator
-                        'prvbe': item.get('PRVBE', ''),      # Supply Area
-                        'bedae': item.get('BEDAE', ''),      # Requirements Type
-                        'sanka': item.get('SANKA', ''),      # Indicator: Relevant for MRP
-                        'kzdis': item.get('KZDIS', ''),      # MRP Element: Indicator
-                        'profl': item.get('PROFL', ''),      # LP Relevant
-                        'kzsti': item.get('KZSTI', ''),      # BOM Explosion Number
-                        'kzkri': item.get('KZKRI', ''),      # Critical Part
-                        'verss': item.get('VERSS', ''),      # Production Supersession
-                        'kalst': float(item.get('KALST', 0)) if item.get('KALST') else 0,  # BOM Level
-                        'rvrel': item.get('RVREL', ''),      # Rel. Requirement (Backflush)
-                        'bdmng': float(item.get('BDMNG', 0)) if item.get('BDMNG') else 0,  # Requirement Quantity
-                        'schgt': item.get('SCHGT', ''),      # Bulk Material
-                        'kzpps': item.get('KZPPS', ''),      # Phantoms
-                        'pspnr': item.get('PSPNR', ''),      # WBS Element
-                        'aufps': item.get('AUFPS', ''),      # Order Item Number
-                        'pamng': float(item.get('PAMNG', 0)) if item.get('PAMNG') else 0,  # Planned Order Quantity
-                        'prreg': item.get('PRREG', ''),      # Priority Regulation
-                        'fevor': item.get('FEVOR', ''),      # Production Supervisor
-                        'kaufk': item.get('KAUFK', ''),      # Customer
-                        'kunnr': item.get('KUNNR', ''),      # Customer Number
-                        'ktext': item.get('KTEXT', ''),      # Description
-                        'vptnr': item.get('VPTNR', ''),      # Partner Account Number
-                        'vorna': item.get('VORNA', ''),      # First Name
-                        'name1': item.get('NAME1', ''),      # Name 1
-                        'name2': item.get('NAME2', ''),      # Name 2
-                        'ort01': item.get('ORT01', ''),      # City
-                        'pstlz': item.get('PSTLZ', ''),      # Postal Code
-                        'land1': item.get('LAND1', ''),      # Country
-                        'stras': item.get('STRAS', ''),      # Street
-                        'tel_number': item.get('TEL_NUMBER', ''),  # Telephone Number
+                        'nampl': item.get('NAMPL', ''),
+                        'lgort': item.get('LGORT', ''),
+                        'namsl': item.get('NAMSL', ''),
+                        'dispo': item.get('DISPO', ''),
+                        'kdauf': item.get('KDAUF', ''),
+                        'kdpos': item.get('KDPOS', ''),
+                        'mathd': item.get('MATHD', ''),
+                        'dispc': item.get('DISPC', ''),
+                        'groes': item.get('GROES', ''),
+                        'ferth': item.get('FERTH', ''),
+                        'zeinr': item.get('ZEINR', ''),
+                        'matkl': item.get('MATKL', ''),
+                        'naslr': item.get('NASLR', ''),
+                        'ulgo': item.get('ULGO', ''),
+                        'bdter': self._parse_sap_date(item.get('BDTER', '')),
+                        'plnum': item.get('PLNUM', ''),
+                        'plnbez': item.get('PLNBEZ', ''),
+                        'pltxt': item.get('PLTXT', ''),
+                        'bsmng': float(item.get('BSMNG', 0)) if item.get('BSMNG') else 0,
+                        'bmein': item.get('BMEIN', ''),
+                        'enmng': float(item.get('ENMNG', 0)) if item.get('ENMNG') else 0,
+                        'einhe': item.get('EINHE', ''),
+                        'umren': float(item.get('UMREN', 0)) if item.get('UMREN') else 0,
+                        'umrez': float(item.get('UMREZ', 0)) if item.get('UMREZ') else 0,
+                        'aufpl': item.get('AUFPL', ''),
+                        'aplzl': item.get('APLZL', ''),
+                        'rwdat': self._parse_sap_date(item.get('RWDAT', '')),
+                        'verid': item.get('VERID', ''),
+                        'cuobj': item.get('CUOBJ', ''),
+                        'cucfg': item.get('CUCFG', ''),
+                        'charg': item.get('CHARG', ''),
+                        'sobkz': item.get('SOBKZ', ''),
+                        'kzbws': item.get('KZBWS', ''),
+                        'kzear': item.get('KZEAR', ''),
+                        'umlgo': item.get('UMLGO', ''),
+                        'wempf': item.get('WEMPF', ''),
+                        'ablad': item.get('ABLAD', ''),
+                        'hsdat': self._parse_sap_date(item.get('HSDAT', '')),
+                        'vsdat': self._parse_sap_date(item.get('VSDAT', '')),
+                        'ssdat': self._parse_sap_date(item.get('SSDAT', '')),
+                        'weanz': float(item.get('WEANZ', 0)) if item.get('WEANZ') else 0,
+                        'webez': item.get('WEBEZ', ''),
+                        'kzvbr': item.get('KZVBR', ''),
+                        'kzstr': item.get('KZSTR', ''),
+                        'kzrvb': item.get('KZRVB', ''),
+                        'xloek': item.get('XLOEK', ''),
+                        'prvbe': item.get('PRVBE', ''),
+                        'bedae': item.get('BEDAE', ''),
+                        'sanka': item.get('SANKA', ''),
+                        'kzdis': item.get('KZDIS', ''),
+                        'profl': item.get('PROFL', ''),
+                        'kzsti': item.get('KZSTI', ''),
+                        'kzkri': item.get('KZKRI', ''),
+                        'verss': item.get('VERSS', ''),
+                        'kalst': float(item.get('KALST', 0)) if item.get('KALST') else 0,
+                        'rvrel': item.get('RVREL', ''),
+                        'bdmng': float(item.get('BDMNG', 0)) if item.get('BDMNG') else 0,
+                        'schgt': item.get('SCHGT', ''),
+                        'kzpps': item.get('KZPPS', ''),
+                        'pspnr': item.get('PSPNR', ''),
+                        'aufps': item.get('AUFPS', ''),
+                        'pamng': float(item.get('PAMNG', 0)) if item.get('PAMNG') else 0,
+                        'prreg': item.get('PRREG', ''),
+                        'fevor': item.get('FEVOR', ''),
+                        'kaufk': item.get('KAUFK', ''),
+                        'kunnr': item.get('KUNNR', ''),
+                        'ktext': item.get('KTEXT', ''),
+                        'vptnr': item.get('VPTNR', ''),
+                        'vorna': item.get('VORNA', ''),
+                        'name1': item.get('NAME1', ''),
+                        'name2': item.get('NAME2', ''),
+                        'ort01': item.get('ORT01', ''),
+                        'pstlz': item.get('PSTLZ', ''),
+                        'land1': item.get('LAND1', ''),
+                        'stras': item.get('STRAS', ''),
+                        'tel_number': item.get('TEL_NUMBER', ''),
                     }
 
                     # Gabungkan base_data dengan additional_fields
@@ -293,22 +327,20 @@ class MySQLHandler:
                         continue
 
                     # Debug: Tampilkan data yang akan diinsert
-                    if saved_count == 0:  # Hanya untuk record pertama
+                    if saved_count == 0:
                         logger.info(f"🔍 Data pertama yang akan diinsert:")
                         for key, value in data_to_insert.items():
                             logger.info(f"  {key}: {value}")
 
-                    # Build SQL - hanya kolom yang ada di data_to_insert
+                    # Build SQL
                     cols = list(data_to_insert.keys())
                     values = list(data_to_insert.values())
 
-                    if not cols:  # Jika tidak ada kolom, skip
+                    if not cols:
                         continue
 
                     placeholders = ['%s'] * len(cols)
 
-                    # **PERBAIKAN: Simple INSERT dengan ON DUPLICATE KEY UPDATE**
-                    # Gunakan kombinasi unik: rsnum + rspos + matnr + sap_plant
                     sql = f"""
                         INSERT INTO sap_reservations ({', '.join(cols)})
                         VALUES ({', '.join(placeholders)})
@@ -322,7 +354,6 @@ class MySQLHandler:
                     cursor.execute(sql, values)
                     saved_count += 1
 
-                    # Log setiap 100 records
                     if saved_count % 100 == 0:
                         logger.info(f"📝 Processed {saved_count} records...")
 
@@ -353,9 +384,7 @@ class MySQLHandler:
             date_str = str(date_value)
             if len(date_str) == 8 and date_str.isdigit():
                 return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-            # Coba format lain jika tidak 8 digit
             elif len(date_str) == 10 and date_str[4] == '-' and date_str[7] == '-':
-                # Sudah dalam format YYYY-MM-DD
                 return date_str
         except Exception as e:
             logger.warning(f"⚠️  Failed to parse date {date_value}: {e}")
@@ -371,8 +400,8 @@ def health_check():
         'status': 'healthy',
         'service': 'SAP Sync',
         'timestamp': datetime.now().isoformat(),
-        'version': '1.3.0',
-        'features': ['all_sap_fields', 'enhanced_logging', 'complete_data_mapping']
+        'version': '1.4.0',
+        'features': ['all_sap_fields', 'enhanced_logging', 'complete_data_mapping', 'stock_inquiry']
     })
 
 @app.route('/api/sap/sync', methods=['POST'])
@@ -439,7 +468,7 @@ def sync_reservations():
             'total_pros': len(pro_numbers),
             'records_from_sap': len(sap_data),
             'processing_time': processing_time,
-            'data': sap_data  # Kirim data ke Laravel
+            'data': sap_data
         })
 
     except Exception as e:
@@ -452,6 +481,160 @@ def sync_reservations():
             'error_details': str(e)
         }), 500
 
+@app.route('/api/sap/stock', methods=['POST'])
+def get_stock():
+    """Get stock data from SAP using RFC Z_FM_YMMR006NX"""
+    start_time = time.time()
+
+    try:
+        data = request.get_json()
+        plant = data.get('plant')
+        matnr = data.get('matnr')
+
+        if not plant or not matnr:
+            return jsonify({
+                'success': False,
+                'message': 'Plant and Material are required'
+            }), 400
+
+        logger.info(f"📦 Getting stock data for Plant: {plant}, Material: {matnr}")
+
+        # Get stock data from SAP
+        stock_data = sap.get_stock_data(plant, matnr)
+
+        if stock_data is None:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to get stock data from SAP'
+            }), 500
+
+        processing_time = round(time.time() - start_time, 2)
+
+        # Format data untuk konsistensi
+        formatted_data = []
+        for item in stock_data:
+            formatted_item = {
+                'MATNR': item.get('MATNR', ''),
+                'MTBEZ': item.get('MTBEZ', ''),
+                'MAKTX': item.get('MAKTX', ''),
+                'WERK': item.get('WERK', ''),
+                'LGORT': item.get('LGORT', ''),
+                'CHARG': item.get('CHARG', ''),
+                'CLABS': float(item.get('CLABS', 0)) if item.get('CLABS') else 0,
+                'MEINS': item.get('MEINS', ''),
+                'VBELN': item.get('VBELN', ''),
+                'POSNR': item.get('POSNR', ''),
+                'LABST': float(item.get('LABST', 0)) if item.get('LABST') else 0,
+                'UMLMC': float(item.get('UMLMC', 0)) if item.get('UMLMC') else 0,
+                'INSME': float(item.get('INSME', 0)) if item.get('INSME') else 0,
+                'SPEME': float(item.get('SPEME', 0)) if item.get('SPEME') else 0,
+                'EINME': float(item.get('EINME', 0)) if item.get('EINME') else 0,
+                'RETME': float(item.get('RETME', 0)) if item.get('RETME') else 0,
+                'HERBL': item.get('HERBL', ''),
+                'HERKL': item.get('HERKL', ''),
+                'SOBKZ': item.get('SOBKZ', ''),
+                'KUNNR': item.get('KUNNR', ''),
+                'PSPNR': item.get('PSPNR', ''),
+                'KDAUF': item.get('KDAUF', ''),
+                'KDPOS': item.get('KDPOS', ''),
+                'SHKZG': item.get('SHKZG', ''),
+                'WAERS': item.get('WAERS', ''),
+                'DMBTR': float(item.get('DMBTR', 0)) if item.get('DMBTR') else 0,
+            }
+            formatted_data.append(formatted_item)
+
+        logger.info(f"✅ Stock data retrieved: {len(formatted_data)} records")
+
+        return jsonify({
+            'success': True,
+            'message': f'Stock data retrieved successfully',
+            'plant': plant,
+            'material': matnr,
+            'record_count': len(formatted_data),
+            'processing_time': processing_time,
+            'data': formatted_data
+        })
+
+    except Exception as e:
+        logger.error(f"🔥 Stock data error: {e}")
+        logger.error(traceback.format_exc())
+
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get stock data: {str(e)}'
+        }), 500
+
+@app.route('/api/sap/stock/batch', methods=['POST'])
+def get_stock_batch():
+    """Get stock data for multiple materials"""
+    start_time = time.time()
+
+    try:
+        data = request.get_json()
+        plant = data.get('plant')
+        materials = data.get('materials', [])
+        user_id = data.get('user_id')
+
+        if not plant or not materials:
+            return jsonify({
+                'success': False,
+                'message': 'Plant and Materials are required'
+            }), 400
+
+        logger.info(f"📦 Getting stock data for {len(materials)} materials in Plant: {plant}")
+
+        all_stock_data = []
+        errors = []
+
+        for i, matnr in enumerate(materials):
+            try:
+                logger.info(f"Processing material {i+1}/{len(materials)}: {matnr}")
+
+                stock_data = sap.get_stock_data(plant, matnr)
+
+                if stock_data:
+                    # Tambahkan material info ke setiap record
+                    for item in stock_data:
+                        item['REQUESTED_MATNR'] = matnr
+                    all_stock_data.extend(stock_data)
+
+                    logger.info(f"Got {len(stock_data)} stock records for material {matnr}")
+                else:
+                    logger.warning(f"No stock data for material {matnr}")
+                    errors.append(f"No stock data for material {matnr}")
+
+                # Delay kecil untuk menghindari overload SAP
+                if i < len(materials) - 1:
+                    time.sleep(0.1)
+
+            except Exception as e:
+                error_msg = f"Error processing material {matnr}: {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+                continue
+
+        processing_time = round(time.time() - start_time, 2)
+
+        return jsonify({
+            'success': True,
+            'message': f'Stock data retrieved for {len(materials)} materials',
+            'plant': plant,
+            'total_materials': len(materials),
+            'total_records': len(all_stock_data),
+            'processing_time': processing_time,
+            'errors': errors,
+            'data': all_stock_data
+        })
+
+    except Exception as e:
+        logger.error(f"🔥 Batch stock data error: {e}")
+        logger.error(traceback.format_exc())
+
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get batch stock data: {str(e)}'
+        }), 500
+
 # Endpoint untuk debugging struktur data SAP
 @app.route('/api/sap/debug/structure', methods=['POST'])
 def debug_sap_structure():
@@ -461,7 +644,7 @@ def debug_sap_structure():
         pro_numbers = data.get('pro_numbers', [''])
 
         # Ambil satu record untuk debugging
-        sap_data = sap.get_reservation_data(plant, pro_numbers[:1])  # Ambil hanya PRO pertama
+        sap_data = sap.get_reservation_data(plant, pro_numbers[:1])
 
         if sap_data and len(sap_data) > 0:
             first_record = sap_data[0]
@@ -484,6 +667,6 @@ def debug_sap_structure():
         }), 500
 
 if __name__ == '__main__':
-    logger.info("🚀 Starting SAP Sync Service v1.3.0")
-    logger.info("✨ Features: Complete SAP field mapping, enhanced logging")
+    logger.info("🚀 Starting SAP Sync Service v1.4.0")
+    logger.info("✨ Features: Complete SAP field mapping, enhanced logging, stock inquiry")
     app.run(host='0.0.0.0', port=5000, debug=True)
