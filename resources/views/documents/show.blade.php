@@ -62,18 +62,10 @@
                                     <td><span class="badge bg-info">{{ $document->plant }}</span></td>
                                 </tr>
                                 <tr>
-                                    <th>Status:</th>
-                                    <td>
-                                        @if($document->status == 'created')
-                                            <span class="badge bg-warning">Created</span>
-                                        @elseif($document->status == 'posted')
-                                            <span class="badge bg-success">Posted</span>
-                                        @else
-                                            <span class="badge bg-danger">Cancelled</span>
-                                        @endif
-                                    </td>
+                                    <th>SLOC Supply:</th>
+                                    <td><span class="badge bg-secondary">{{ $document->sloc_supply }}</span></td>
                                 </tr>
-                            </table>
+                                </table>
                         </div>
                         <div class="col-md-4">
                             <table class="table table-borderless">
@@ -84,6 +76,18 @@
                                 <tr>
                                     <th>Created By:</th>
                                     <td>{{ $document->created_by_name }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td>
+                                        @if($document->status == 'created')
+                                            <span class="badge bg-warning">Created</span>
+                                        @elseif($document->status == 'posted')
+                                            <span class="badge bg-success">Posted</span>
+                                        @else
+                                            <span class="badge bg-danger">Cancelled</span>
+                                        @endif
+                                    </td>
                                 </tr>
                             </table>
                         </div>
