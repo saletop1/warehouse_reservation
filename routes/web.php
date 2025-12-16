@@ -80,6 +80,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/export/selected/excel', [ReservationDocumentController::class, 'exportSelectedExcel'])->name('export.selected.excel');
         Route::post('/export/selected/pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('export.selected.pdf');
         Route::get('/check-flask-endpoint', [ReservationController::class, 'checkFlaskEndpoint'])->name('checkFlaskEndpoint');
+        Route::post('/create-transfer', [ReservationDocumentController::class, 'createTransfer'])
+        ->name('create-transfer');
+        Route::post('/documents/create-transfer', [ReservationDocumentController::class, 'createTransfer'])
+        ->name('documents.create-transfer');
     });
 
     // Stock Routes (API only - no separate view pages)

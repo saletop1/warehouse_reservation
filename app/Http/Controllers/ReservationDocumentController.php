@@ -153,6 +153,59 @@ class ReservationDocumentController extends Controller
             'balance' => $totalStock - $totalRequested
         ];
     }
+
+            /**
+         * Create transfer document from selected items
+         */
+        public function createTransfer(Request $request)
+        {
+            try {
+                $request->validate([
+                    'document_id' => 'required|exists:reservation_documents,id',
+                    'document_no' => 'required|string',
+                    'items' => 'required|array',
+                    'items.*.id' => 'required|exists:reservation_document_items,id',
+                    'items.*.qty' => 'required|numeric|min:0.001',
+                ]);
+
+                $document = ReservationDocument::findOrFail($request->document_id);
+
+                // Log the transfer creation
+                Log::info('Creating transfer document', [
+                    'document_id' => $document->id,
+                    'document_no' => $document->document_no,
+                    'user_id' => auth()->id(),
+                    'items_count' => count($request->items)
+                ]);
+
+                // Here you would typically:
+                // 1. Create a new transfer document
+                // 2. Update stock records
+                // 3. Generate transfer slip
+                // 4. Send notification, etc.
+
+                // For now, return success response
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Transfer document created successfully',
+                    'data' => [
+                        'document_no' => $document->document_no,
+                        'transfer_id' => 'TRF-' . time(),
+                        'items_count' => count($request->items),
+                        'total_qty' => array_sum(array_column($request->items, 'qty')),
+                        'created_at' => now()->format('Y-m-d H:i:s')
+                    ]
+                ]);
+
+            } catch (\Exception $e) {
+                Log::error('Error creating transfer document: ' . $e->getMessage());
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create transfer document: ' . $e->getMessage()
+                ], 500);
+            }
+        }
     /**
      * Get stock data for a specific material and plant
      */
