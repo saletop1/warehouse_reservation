@@ -365,7 +365,7 @@ class ReservationDocumentController extends Controller
 
                 // Header CSV
                 fputcsv($file, [
-                    'Document No', 'Plant Request', 'Sloc Supply', 'Status', 'Total Items', 'Total Qty',
+                    'Document No', 'Plant Request', 'Plant Supply', 'Status', 'Total Items', 'Total Qty',
                     'Created By', 'Created At', 'Material Code', 'Material Description',
                     'Unit', 'Requested Qty', 'Source PRO Numbers', 'Sortf', 'MRP', 'Sales Orders'
                 ]);

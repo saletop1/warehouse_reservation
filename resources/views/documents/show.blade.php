@@ -84,7 +84,7 @@
                                     <td class="py-1"><span class="badge bg-info">{{ $document->plant }}</span></td>
                                 </tr>
                                 <tr class="py-1">
-                                    <th class="w-50 py-1">Sloc Supply:</th>
+                                    <th class="w-50 py-1">Plant Supply:</th>
                                     <td class="py-1">
                                         @if($document->sloc_supply)
                                             <span class="badge bg-info">{{ $document->sloc_supply }}</span>
@@ -200,7 +200,8 @@
                                             <th class="text-center" style="background-color: #E6FFFA;">Requested Qty</th>
                                             <th class="text-center" style="background-color: #FFF5E6;">Available Stock</th>
                                             <th class="text-center" style="background-color: #F5F0FF;">Uom</th>
-                                            <th class="text-center" style="background-color: #E6F7FF;">SLOC</th>
+                                            <th class="text-center" style="background-color: #E6F7FF;">Plant</th>
+                                            <th class="text-center" style="background-color: #FFF0E6;">Batch Info</th>
                                         </tr>
                                     </thead>
                                     <tbody id="sortableItems">
@@ -244,6 +245,19 @@
                                                 $stockInfo = $item->stock_info ?? null;
                                                 $totalStock = $stockInfo['total_stock'] ?? 0;
                                                 $storageLocations = $stockInfo['storage_locations'] ?? [];
+                                                $stockDetails = $stockInfo['details'] ?? [];
+
+                                                // Prepare batch info for JavaScript
+                                                $batchInfo = [];
+                                                if (!empty($stockDetails)) {
+                                                    foreach ($stockDetails as $detail) {
+                                                        $batchInfo[] = [
+                                                            'batch' => $detail['charg'] ?? '',
+                                                            'sloc' => $detail['lgort'] ?? '',
+                                                            'qty' => is_numeric($detail['clabs'] ?? 0) ? floatval($detail['clabs']) : 0
+                                                        ];
+                                                    }
+                                                }
 
                                                 // Check if stock is available
                                                 $hasStock = $totalStock > 0;
@@ -326,6 +340,38 @@
                                                         <span class="text-muted">-</span>
                                                     @endif
                                                 </td>
+                                                <td class="text-center">
+                                                    @if(!empty($stockDetails))
+                                                        <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                                            @foreach($stockDetails as $detail)
+                                                                @php
+                                                                    $batchNumber = $detail['charg'] ?? '';
+                                                                    $batchQty = is_numeric($detail['clabs'] ?? 0) ? floatval($detail['clabs']) : 0;
+                                                                    $batchSloc = $detail['lgort'] ?? '';
+                                                                @endphp
+                                                                @if($batchNumber)
+                                                                    <span class="badge bg-info batch-badge"
+                                                                          data-batch="{{ $batchNumber }}"
+                                                                          data-sloc="{{ $batchSloc }}"
+                                                                          data-qty="{{ $batchQty }}"
+                                                                          title="SLOC: {{ $batchSloc }} | Batch: {{ $batchNumber }} | Qty: {{ \App\Helpers\NumberHelper::formatStockNumber($batchQty) }}">
+                                                                        SLOC:{{ $batchSloc }} | {{ $batchNumber }}:{{ \App\Helpers\NumberHelper::formatStockNumber($batchQty) }}
+                                                                    </span>
+                                                                @else
+                                                                    <span class="badge bg-secondary batch-badge"
+                                                                          data-batch="{{ $batchSloc }}"
+                                                                          data-sloc="{{ $batchSloc }}"
+                                                                          data-qty="{{ $batchQty }}"
+                                                                          title="SLOC: {{ $batchSloc }} | Qty: {{ \App\Helpers\NumberHelper::formatStockNumber($batchQty) }}">
+                                                                        SLOC:{{ $batchSloc }}:{{ \App\Helpers\NumberHelper::formatStockNumber($batchQty) }}
+                                                                    </span>
+                                                                @endif
+                                                            @endforeach
+                                                        </div>
+                                                    @else
+                                                        <span class="text-muted">-</span>
+                                                    @endif
+                                                </td>
                                             </tr>
                                         @endforeach
                                     </tbody>
@@ -387,26 +433,7 @@
                                 </button>
                             </div>
 
-                            <!-- Transfer Summary -->
-                            <div class="mt-2 p-2 border rounded bg-light fs-7">
-                                <h6 class="fs-7 mb-2">Transfer Summary</h6>
-                                <table class="table table-sm mb-0">
-                                    <tr>
-                                        <td class="p-1">Total Items:</td>
-                                        <td class="text-end p-1"><span id="summaryTotalItems">0</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="p-1">Total Quantity:</td>
-                                        <td class="text-end p-1"><span id="summaryTotalQty" class="stock-number">0</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="p-1">SLOC Source:</td>
-                                        <td class="text-end p-1">
-                                            <span class="badge bg-info">{{ $document->sloc_supply ?? 'N/A' }}</span>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </div>
+                            <!-- PERUBAHAN: Hapus Transfer Summary -->
                         </div>
                     </div>
                 </div>
@@ -417,65 +444,103 @@
 
 <!-- Transfer Preview Modal -->
 <div class="modal fade" id="transferPreviewModal" tabindex="-1" aria-labelledby="transferPreviewModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="transferPreviewModalLabel">
-                    <i class="fas fa-file-export"></i> Transfer Document Preview
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content frosted-glass">
+            <div class="modal-header glass-header">
+                <h5 class="modal-title text-white" id="transferPreviewModalLabel">
+                    <i class="fas fa-file-export me-2"></i> Transfer Document Preview
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> This will create a transfer document for the selected items.
+            <div class="modal-body glass-body p-2">
+                <div class="alert alert-info glass-alert mb-2 p-2">
+                    <i class="fas fa-info-circle me-2"></i> Review and edit transfer details before confirming.
                 </div>
 
-                <div class="table-responsive">
-                    <table class="table table-bordered" id="transferPreviewTable">
-                        <thead class="table-light">
+                <div class="table-responsive modal-table-container" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-hover table-borderless glass-table mb-1" id="transferPreviewTable">
+                        <thead class="glass-thead sticky-top">
                             <tr>
-                                <th>Material</th>
-                                <th>Description</th>
-                                <th class="text-center">Qty to Transfer</th>
-                                <th class="text-center">Unit</th>
-                                <th class="text-center">SLOC Source</th>
+                                <th class="text-center" style="width: 40px; font-size: 0.8rem; padding: 6px 4px;">No</th>
+                                <th style="width: 90px; font-size: 0.8rem; padding: 6px 4px;">Material</th>
+                                <th style="width: 120px; font-size: 0.8rem; padding: 6px 4px;">Description</th>
+                                <th class="text-center" style="width: 80px; font-size: 0.8rem; padding: 6px 4px;">Req Qty</th>
+                                <th class="text-center" style="width: 80px; font-size: 0.8rem; padding: 6px 4px;">Stock</th>
+                                <th class="text-center" style="width: 90px; font-size: 0.8rem; padding: 6px 4px;">Transfer Qty</th>
+                                <th class="text-center" style="width: 50px; font-size: 0.8rem; padding: 6px 4px;">Unit</th>
+                                <th class="text-center" style="width: 80px; font-size: 0.8rem; padding: 6px 4px;">Plant Dest</th>
+                                <th class="text-center" style="width: 80px; font-size: 0.8rem; padding: 6px 4px;">Sloc Dest</th>
+                                <th class="text-center" style="width: 220px; font-size: 0.8rem; padding: 6px 4px;">Batch Source</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody class="glass-tbody" style="font-size: 0.85rem;">
                             <!-- Preview rows will be inserted here -->
                         </tbody>
                     </table>
                 </div>
 
-                <div class="mb-3">
-                    <label for="transferRemarks" class="form-label">Remarks:</label>
-                    <textarea class="form-control" id="transferRemarks" rows="2" placeholder="Add remarks for this transfer..."></textarea>
+                <div class="row mt-2">
+                    <div class="col-md-6">
+                        <div class="glass-form-group">
+                            <label for="transferRemarks" class="form-label text-white" style="font-size: 0.9rem;">
+                                <i class="fas fa-sticky-note me-1"></i> Remarks:
+                            </label>
+                            <textarea class="form-control glass-input" id="transferRemarks" rows="2"
+                                      placeholder="Add remarks for this transfer..." style="font-size: 0.85rem;"></textarea>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="glass-summary p-2" style="font-size: 0.85rem;">
+                            <h6 class="text-white mb-2" style="font-size: 0.9rem;">
+                                <i class="fas fa-clipboard-list me-2"></i>Transfer Summary
+                            </h6>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-light">Total Items:</span>
+                                <span class="text-white fw-bold" id="modalTotalItems">0</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-light">Total Transfer Qty:</span>
+                                <span class="text-white fw-bold stock-number" id="modalTotalQty">0</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-light">SLOC Sumber:</span>
+                                <span class="badge bg-info" style="font-size: 0.8rem;">{{ $document->sloc_supply ?? 'N/A' }}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="confirmTransfer">
-                    <i class="fas fa-paper-plane"></i> Confirm Transfer
+            <div class="modal-footer glass-footer py-2">
+                <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal" style="font-size: 0.85rem;">
+                    <i class="fas fa-times me-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-primary glass-btn btn-sm" id="confirmTransfer" style="font-size: 0.85rem;">
+                    <i class="fas fa-paper-plane me-1"></i> Confirm Transfer
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Loading Animation Modal -->
+<!-- Loading Animation Modal (Simplified) -->
 <div class="modal fade" id="loadingModal" tabindex="-1" aria-labelledby="loadingModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content" style="background: transparent; border: none;">
             <div class="modal-body text-center">
-                <div id="lottie-container" style="width: 150px; height: 150px; margin: 0 auto;"></div>
-                <div class="text-white mt-2" id="loadingText">Checking Stock...</div>
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="text-white mt-2" id="loadingText">Loading...</div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Add some custom CSS -->
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 9999;"></div>
+
 <style>
+/* Styles remain the same as before */
 .badge {
     font-size: 0.85em;
     padding: 0.35em 0.65em;
@@ -489,16 +554,11 @@
 .table td, .table th {
     vertical-align: middle;
 }
-.modal-content {
-    background: transparent !important;
-    border: none !important;
-}
 .table thead th {
     font-weight: 600;
     border-bottom: 2px solid #dee2e6;
 }
 
-/* Sticky Table Header */
 .sticky-table-container {
     max-height: 600px;
     overflow-y: auto;
@@ -520,7 +580,6 @@
     box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
 }
 
-/* Transfer Container Styles */
 .transfer-container {
     background-color: #f8f9fa;
     border-radius: 4px;
@@ -579,21 +638,14 @@
     margin-top: 6px;
 }
 
-.transfer-item-qty input {
-    width: 70px;
-    text-align: center;
-    font-size: 0.8rem;
-    padding: 0.15rem 0.3rem;
-}
-
-/* Hide spinner buttons in number input */
-.transfer-item-qty input::-webkit-inner-spin-button,
-.transfer-item-qty input::-webkit-outer-spin-button {
+/* HIDE SPINNER BUTTONS */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
 
-.transfer-item-qty input[type=number] {
+input[type="number"] {
     -moz-appearance: textfield;
     appearance: textfield;
 }
@@ -631,7 +683,6 @@
     font-size: 0.8rem !important;
 }
 
-/* Dragging styles */
 .dragging {
     opacity: 0.5;
 }
@@ -641,7 +692,6 @@
     background-color: rgba(13, 110, 253, 0.1) !important;
 }
 
-/* Make table rows draggable */
 .draggable-row {
     cursor: move;
 }
@@ -650,13 +700,11 @@
     background-color: #e3f2fd !important;
 }
 
-/* Style untuk item yang sudah di drag */
 .transfer-item-selected {
     border-left: 4px solid #0d6efd;
     background-color: #e3f2fd !important;
 }
 
-/* Style untuk item tanpa stock */
 .zero-stock {
     opacity: 0.6;
     background-color: #f8f9fa !important;
@@ -677,7 +725,6 @@
     color: white !important;
 }
 
-/* Style untuk checkbox */
 .table-checkbox {
     width: 16px;
     height: 16px;
@@ -689,7 +736,6 @@
     background-color: #3b82f6;
 }
 
-/* Style untuk baris yang dipilih */
 .row-selected {
     background-color: #f0f7ff !important;
 }
@@ -699,7 +745,6 @@
     font-weight: 500;
 }
 
-/* Style untuk tombol clear selection */
 #clearSelection {
     opacity: 0.5;
     cursor: not-allowed;
@@ -717,7 +762,6 @@
     color: white;
 }
 
-/* Drag helper untuk multiple items */
 .drag-helper {
     background-color: #0d6efd;
     color: white;
@@ -733,7 +777,6 @@
     color: #0d6efd;
 }
 
-/* Adjust transfer card */
 .transfer-card .card-header {
     padding: 8px 12px;
 }
@@ -742,13 +785,11 @@
     padding: 8px 12px;
 }
 
-/* Format stock number style */
 .stock-number {
     font-family: monospace;
     font-weight: 600;
 }
 
-/* Remark text style */
 .remark-text {
     font-size: 0.9rem;
     color: #495057;
@@ -757,55 +798,429 @@
     padding-right: 5px;
 }
 
-/* Time badge style */
 .time-badge {
     font-size: 0.75rem;
     padding: 2px 6px;
 }
+
+.frosted-glass {
+    background: rgba(20, 25, 35, 0.9) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+}
+
+.glass-header {
+    background: rgba(0, 0, 0, 0.5) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 10px 10px 0 0 !important;
+    padding: 12px 16px !important;
+}
+
+.glass-body {
+    background: rgba(30, 35, 45, 0.7) !important;
+    padding: 12px !important;
+}
+
+.glass-footer {
+    background: rgba(0, 0, 0, 0.5) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 0 0 10px 10px !important;
+    padding: 12px 16px !important;
+}
+
+.glass-alert {
+    background: rgba(23, 162, 184, 0.25) !important;
+    border: 1px solid rgba(23, 162, 184, 0.4) !important;
+    color: #d1ecf1 !important;
+    backdrop-filter: blur(10px);
+    font-size: 0.85rem;
+}
+
+.glass-table {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-radius: 6px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.glass-thead {
+    background: rgba(0, 0, 0, 0.4) !important;
+    color: #ffffff !important;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.15) !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.glass-tbody {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.glass-tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    transition: all 0.2s ease !important;
+}
+
+.glass-tbody tr:hover {
+    background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.glass-tbody td {
+    color: #ffffff !important;
+    vertical-align: middle !important;
+    padding: 8px 4px !important;
+    font-weight: 400 !important;
+    font-size: 0.85rem !important;
+}
+
+.glass-tbody td code {
+    background: rgba(0, 0, 0, 0.3);
+    color: #4fc3f7 !important;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.glass-input {
+    background: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+    border-radius: 6px !important;
+    backdrop-filter: blur(10px);
+    font-size: 0.85rem !important;
+}
+
+.glass-input:focus {
+    background: rgba(255, 255, 255, 0.18) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+}
+
+.glass-input::placeholder {
+    color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.glass-btn {
+    background: linear-gradient(135deg, #4dabf7 0%, #339af0 100%) !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 3px 10px rgba(51, 154, 240, 0.3) !important;
+    color: white !important;
+}
+
+.glass-btn:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 5px 15px rgba(51, 154, 240, 0.4) !important;
+    background: linear-gradient(135deg, #339af0 0%, #228be6 100%) !important;
+}
+
+.glass-form-group label {
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+    display: block;
+    color: #e9ecef !important;
+}
+
+.glass-summary {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-input-sm {
+    background: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+    border-radius: 4px !important;
+    padding: 4px 6px !important;
+    font-size: 0.8rem !important;
+    text-align: center !important;
+    width: 80px !important;
+    backdrop-filter: blur(10px);
+    font-weight: 500;
+}
+
+.modal-input-sm:focus {
+    background: rgba(255, 255, 255, 0.18) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.1) !important;
+    color: white !important;
+}
+
+.modal-table-container {
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.batch-select {
+    min-width: 200px;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+    border-radius: 4px !important;
+    padding: 4px 8px !important;
+    font-size: 0.8rem !important;
+    max-width: 100%;
+}
+
+.batch-select option {
+    background: rgba(30, 35, 45, 0.95) !important;
+    color: white !important;
+    padding: 8px !important;
+    font-size: 0.85rem !important;
+}
+
+.qty-input, .modal-input-sm {
+    font-family: monospace;
+    font-weight: 500;
+}
+
+.qty-input:focus, .modal-input-sm:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(77, 171, 247, 0.4);
+}
+
+.transfer-item-qty input {
+    width: 100px;
+    text-align: center;
+    font-size: 0.8rem;
+    padding: 0.15rem 0.3rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+}
+
+.batch-badge-main {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+    margin: 1px;
+    white-space: nowrap;
+}
+
+.text-center {
+    text-align: center !important;
+}
+
+.glass-tbody .stock-number {
+    font-family: 'Segoe UI', monospace;
+    font-weight: 600;
+    color: #a5d8ff !important;
+}
+
+.btn-outline-light {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-size: 0.85rem !important;
+}
+
+.btn-outline-light:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    color: white !important;
+    border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.modal-table-container .sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+}
+
+.modal-table-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.modal-table-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.modal-table-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.modal-table-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.form-control-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+.glass-summary .badge {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
+@media (max-width: 1200px) {
+    .frosted-glass {
+        margin: 10px;
+    }
+    .modal-table-container {
+        max-height: 350px;
+    }
+}
+
+.glass-tbody td:nth-child(3) {
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.glass-tbody td:nth-child(3):hover {
+    white-space: normal;
+    overflow: visible;
+    background: rgba(0, 0, 0, 0.3);
+    position: relative;
+    z-index: 10;
+}
+
+.readonly-input {
+    background-color: #f8f9fa !important;
+    border: 1px solid #ced4da !important;
+    color: #495057 !important;
+    cursor: not-allowed !important;
+    user-select: none !important;
+}
+
+.readonly-input:focus {
+    box-shadow: none !important;
+    border-color: #ced4da !important;
+}
+
+.requested-qty-badge {
+    background-color: #28a745 !important;
+    color: white !important;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+    margin-right: 3px;
+}
+
+/* Custom input untuk format angka Indonesia */
+.angka-input {
+    text-align: center;
+    font-family: monospace;
+    font-weight: 500;
+}
+
+/* Style untuk input modal yang menerima angka dengan koma */
+.input-with-comma::-webkit-inner-spin-button,
+.input-with-comma::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.input-with-comma {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
 </style>
 
-<!-- JavaScript untuk drag-drop functionality (HTML5 Native) -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Variables
     let transferItems = [];
     let isDragging = false;
-    let selectedItems = new Set(); // Untuk menyimpan ID item yang terpilih
+    let selectedItems = new Set();
 
-    // Helper function untuk format stock number (sama seperti available stock)
-    function formatStockNumber(num) {
-        // Jika sudah ada fungsi NumberHelper.formatStockNumber di frontend, gunakan itu
-        // Jika tidak, buat format sederhana
-        if (window.NumberHelper && window.NumberHelper.formatStockNumber) {
-            return window.NumberHelper.formatStockNumber(num);
+    // Helper function untuk format angka sesuai dengan permintaan
+    function formatAngka(num, decimalDigits = 2) {
+        if (typeof num === 'string') {
+            num = parseFloat(num);
         }
 
-        // Format sederhana: jika angka desimal, tampilkan 3 digit desimal
-        // Jika integer, tampilkan tanpa desimal
-        const fixedNum = parseFloat(num);
+        if (isNaN(num)) return '0';
 
-        if (isNaN(fixedNum)) {
-            return '0';
-        }
-
-        if (fixedNum % 1 === 0) {
-            return fixedNum.toLocaleString('id-ID');
+        // Cek apakah bilangan bulat
+        if (num % 1 === 0) {
+            // Bilangan bulat: gunakan titik sebagai pemisah ribuan
+            return num.toLocaleString('id-ID');
         } else {
-            return fixedNum.toLocaleString('id-ID', {
-                minimumFractionDigits: 3,
-                maximumFractionDigits: 3
+            // Bilangan desimal: maksimal 2 digit di belakang koma
+            return num.toLocaleString('id-ID', {
+                minimumFractionDigits: decimalDigits,
+                maximumFractionDigits: decimalDigits
             });
         }
     }
 
-    // Setup drag and drop events untuk semua baris
+    // Helper function untuk parse angka dari input
+    function parseAngka(str) {
+        if (!str || str.trim() === '') return 0;
+
+        // Ganti titik sebagai pemisah ribuan dengan kosong
+        // Ganti koma sebagai pemisah desimal dengan titik
+        let cleaned = str.replace(/\./g, '').replace(',', '.');
+        return parseFloat(cleaned) || 0;
+    }
+
+    // Function untuk mendapatkan batch info dari badge di tabel
+    function getBatchInfoFromBadges(row) {
+        const badges = row.querySelectorAll('.batch-badge');
+        const batchInfo = [];
+
+        badges.forEach(function(badge) {
+            const batch = badge.dataset.batch || '';
+            const sloc = badge.dataset.sloc || '';
+            const qty = parseFloat(badge.dataset.qty || 0);
+
+            if (sloc && qty > 0) {
+                batchInfo.push({
+                    batch: batch,
+                    sloc: sloc,
+                    qty: qty
+                });
+            }
+        });
+
+        return batchInfo;
+    }
+
+    // Function untuk membuat opsi batch dropdown dari batch info
+    function createBatchOptions(batchInfo, selectedBatch) {
+        if (!selectedBatch) selectedBatch = '';
+        if (!batchInfo || batchInfo.length === 0) {
+            return '<option value="">No batch/sloc</option>';
+        }
+
+        let options = '';
+        batchInfo.forEach(function(batch, index) {
+            const batchValue = batch.batch || batch.sloc || 'BATCH' + (index + 1);
+            const batchQty = batch.qty || 0;
+            const batchSloc = batch.sloc || batchValue;
+            const displayQty = formatAngka(batchQty);
+            const batchLabel = 'SLOC:' + batchSloc + ' | Batch:' + batchValue + ' | Qty:' + displayQty;
+            const selected = batchValue === selectedBatch ? 'selected' : '';
+
+            options += '<option value="' + batchValue + '" ' +
+                       'data-qty="' + batchQty + '" ' +
+                       'data-sloc="' + batchSloc + '" ' +
+                       selected + '>' +
+                       batchLabel +
+                       '</option>';
+        });
+
+        return options;
+    }
+
+    // Setup drag and drop events
     function setupDragAndDrop() {
         const rows = document.querySelectorAll('.draggable-row');
 
-        rows.forEach(row => {
+        rows.forEach(function(row) {
             const availableStock = parseFloat(row.dataset.availableStock || 0);
 
-            // Hanya set draggable jika stock > 0
             if (availableStock > 0) {
                 row.draggable = true;
 
@@ -813,16 +1228,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     isDragging = true;
                     this.classList.add('dragging');
 
-                    // Cek apakah row ini terpilih
                     const isSelected = selectedItems.has(this.dataset.itemId);
 
-                    // Jika ada item yang terpilih dan row ini termasuk yang terpilih,
-                    // drag semua yang terpilih. Jika tidak, drag hanya row ini.
                     if (selectedItems.size > 0 && isSelected) {
-                        // Drag multiple selected items
                         e.dataTransfer.setData('text/plain', 'multiple');
                     } else {
-                        // Drag single item
                         e.dataTransfer.setData('text/plain', this.dataset.itemId);
                     }
 
@@ -834,7 +1244,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.classList.remove('dragging');
                 });
             } else {
-                // Row tanpa stock
                 row.draggable = false;
                 row.classList.add('zero-stock');
                 row.style.cursor = 'not-allowed';
@@ -861,10 +1270,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = e.dataTransfer.getData('text/plain');
 
             if (data === 'multiple') {
-                // Add all selected items
                 addSelectedItemsToTransfer();
             } else if (data) {
-                // Add single item
                 addItemById(data);
             }
         });
@@ -878,14 +1285,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         let addedCount = 0;
-        selectedItems.forEach(itemId => {
-            const itemRow = document.querySelector(`.draggable-row[data-item-id="${itemId}"]`);
+        selectedItems.forEach(function(itemId) {
+            const itemRow = document.querySelector('.draggable-row[data-item-id="' + itemId + '"]');
             if (itemRow) {
                 const itemData = getItemDataFromRow(itemRow);
 
-                // Cek jika item sudah ada di transfer list
-                if (!transferItems.some(transferItem => transferItem.id === itemData.id)) {
-                    // Cek jika item memiliki stock
+                if (!transferItems.some(function(transferItem) { return transferItem.id === itemData.id; })) {
                     if (itemData.availableStock > 0) {
                         addItemToTransferByData(itemData);
                         addedCount++;
@@ -895,7 +1300,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if (addedCount > 0) {
-            showToast(`${addedCount} item ditambahkan ke transfer list`, 'success');
+            showToast(addedCount + ' item ditambahkan ke transfer list', 'success');
             clearSelection();
         } else {
             showToast('Tidak ada item baru yang ditambahkan', 'warning');
@@ -904,7 +1309,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function untuk menambahkan item ke transfer list
     function addItemById(itemId) {
-        const itemRow = document.querySelector(`.draggable-row[data-item-id="${itemId}"]`);
+        const itemRow = document.querySelector('.draggable-row[data-item-id="' + itemId + '"]');
         if (!itemRow) {
             showToast('Item tidak ditemukan', 'error');
             return;
@@ -912,13 +1317,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const itemData = getItemDataFromRow(itemRow);
 
-        // Cek jika item sudah ada di transfer list
-        if (transferItems.some(transferItem => transferItem.id === itemData.id)) {
+        if (transferItems.some(function(transferItem) { return transferItem.id === itemData.id; })) {
             showToast('Item sudah ada di transfer list', 'warning');
             return;
         }
 
-        // Cek jika item memiliki stock
         if (itemData.availableStock <= 0) {
             showToast('Item tidak memiliki stock yang tersedia', 'error');
             return;
@@ -930,179 +1333,173 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function untuk mendapatkan data dari row
     function getItemDataFromRow(rowElement) {
         const row = rowElement;
+
+        // Ambil batch info dari badge
+        const batchInfo = getBatchInfoFromBadges(row);
+
         return {
             id: row.dataset.itemId,
             materialCode: row.dataset.materialCode,
             materialDesc: row.dataset.materialDescription,
+            requestedQty: parseFloat(row.dataset.requestedQty || 0),
             availableStock: parseFloat(row.dataset.availableStock || 0),
-            transferableQty: parseFloat(row.dataset.transferableQty || 0),
             unit: row.dataset.unit || 'PC',
             sloc: row.dataset.sloc || '',
+            batchInfo: batchInfo,
             canTransfer: row.dataset.canTransfer === 'true'
         };
     }
 
     // Function untuk menambahkan item ke transfer list
     function addItemToTransferByData(item) {
+        const defaultPlant = "{{ $document->plant }}";
+        const defaultSloc = "{{ $document->sloc_supply }}";
+
+        // Get first batch if available
+        let selectedBatch = '';
+        let batchQty = 0;
+        let batchSloc = '';
+
+        if (item.batchInfo && item.batchInfo.length > 0) {
+            const firstBatch = item.batchInfo[0];
+            selectedBatch = firstBatch.batch || firstBatch.sloc || '';
+            batchQty = firstBatch.qty || 0;
+            batchSloc = firstBatch.sloc || selectedBatch;
+        } else if (item.sloc) {
+            const slocs = item.sloc.split(',');
+            if (slocs.length > 0) {
+                selectedBatch = slocs[0].trim();
+                batchQty = item.availableStock;
+                batchSloc = selectedBatch;
+            }
+        }
+
         // Add to transfer items array
-        transferItems.push({
+        const transferItem = {
             id: item.id,
             materialCode: item.materialCode,
             materialDesc: item.materialDesc,
             maxQty: item.availableStock,
-            transferableQty: item.transferableQty,
-            qty: Math.min(item.transferableQty, item.availableStock),
+            requestedQty: item.requestedQty,
+            availableStock: item.availableStock,
+            qty: 0, // Akan diisi di modal
             unit: item.unit,
             sloc: item.sloc,
-            formattedMaxQty: formatStockNumber(item.availableStock)
-        });
+            batchInfo: item.batchInfo,
+            selectedBatch: selectedBatch,
+            batchQty: batchQty,
+            batchSloc: batchSloc,
+            plantTujuan: defaultPlant,
+            slocTujuan: defaultSloc,
+            formattedMaxQty: formatAngka(item.availableStock),
+            formattedRequestedQty: formatAngka(item.requestedQty)
+        };
+
+        transferItems.push(transferItem);
 
         // Render transfer item
-        renderTransferItem(transferItems[transferItems.length - 1]);
+        renderTransferItem(transferItem);
 
-        // Update summary
-        updateTransferSummary();
+        // Update transfer count
+        updateTransferCount();
 
         // Tandai row yang sudah dipilih
-        const row = document.querySelector(`.draggable-row[data-item-id="${item.id}"]`);
+        const row = document.querySelector('.draggable-row[data-item-id="' + item.id + '"]');
         if (row) {
             row.classList.add('transfer-item-selected');
         }
     }
 
-    // Function untuk render transfer item
+    // Function untuk render transfer item - DIPERBAIKI untuk menampilkan badge
     function renderTransferItem(item) {
-        // Remove empty state if exists
         const emptyState = document.querySelector('.empty-state');
         if (emptyState) {
             emptyState.remove();
         }
 
-        // Extract first SLOC for badge display
         const slocArray = item.sloc ? item.sloc.split(',') : [];
         const firstSloc = slocArray.length > 0 ? slocArray[0] : '';
 
-        // Create transfer item element
         const itemDiv = document.createElement('div');
         itemDiv.className = 'transfer-item';
         itemDiv.dataset.itemId = item.id;
-        itemDiv.innerHTML = `
-            <div class="transfer-item-header">
-                <div>
-                    <span class="transfer-item-code">${item.materialCode}</span>
-                    ${firstSloc ? `<span class="badge sloc-badge">${firstSloc}</span>` : ''}
-                </div>
-                <span class="transfer-item-remove" onclick="removeTransferItem('${item.id}')">
-                    <i class="fas fa-times"></i>
-                </span>
-            </div>
-            <div class="transfer-item-desc">${item.materialDesc}</div>
-            <div class="transfer-item-qty">
-                <small class="text-muted">Qty:</small>
-                <input type="number"
-                       class="form-control form-control-sm qty-input"
-                       value="${item.qty.toFixed(3)}"
-                       min="0.001"
-                       max="${item.maxQty}"
-                       step="0.001"
-                       data-item-id="${item.id}">
-                <span class="text-muted">${item.unit}</span>
-                <span class="badge max-stock-badge">Max: ${item.formattedMaxQty}</span>
-            </div>
-        `;
 
-        // Add event listener untuk perubahan quantity
-        const qtyInput = itemDiv.querySelector('.qty-input');
-        qtyInput.addEventListener('change', function() {
-            const newQty = parseFloat(this.value);
-            const maxQty = parseFloat(this.max);
+        // Tampilkan badge requested qty (hijau) dan max stock (kuning)
+        itemDiv.innerHTML = '<div class="transfer-item-header">' +
+            '<div>' +
+            '<span class="transfer-item-code">' + item.materialCode + '</span>' +
+            (firstSloc ? '<span class="badge sloc-badge">' + firstSloc + '</span>' : '') +
+            '</div>' +
+            '<span class="transfer-item-remove">' +
+            '<i class="fas fa-times"></i>' +
+            '</span>' +
+            '</div>' +
+            '<div class="transfer-item-desc">' + item.materialDesc + '</div>' +
+            '<div class="transfer-item-qty">' +
+            '<span class="badge requested-qty-badge">Requested: ' + item.formattedRequestedQty + '</span>' +
+            '<span class="badge max-stock-badge">Max: ' + item.formattedMaxQty + '</span>' +
+            '<span class="text-muted ms-1">' + item.unit + '</span>' +
+            '</div>';
 
-            if (isNaN(newQty) || newQty <= 0) {
-                this.value = 0.001;
-                showToast('Quantity harus lebih dari 0', 'warning');
-            } else if (newQty > maxQty) {
-                this.value = maxQty.toFixed(3);
-                showToast(`Quantity tidak boleh melebihi ${formatStockNumber(maxQty)}`, 'warning');
-            }
-
-            updateItemQty(item.id, parseFloat(this.value));
+        // Tambahkan event listener untuk tombol remove
+        const removeBtn = itemDiv.querySelector('.transfer-item-remove');
+        removeBtn.addEventListener('click', function() {
+            removeTransferItem(item.id);
         });
 
-        // Add to transfer slots
         document.getElementById('transferSlots').appendChild(itemDiv);
     }
 
-    // Function untuk menghapus transfer item (global function)
-    window.removeTransferItem = function(itemId) {
-        // Remove from array
-        transferItems = transferItems.filter(item => item.id !== itemId);
+    // Function untuk menghapus transfer item
+    function removeTransferItem(itemId) {
+        transferItems = transferItems.filter(function(item) { return item.id !== itemId; });
 
-        // Remove from DOM
-        const itemElement = document.querySelector(`.transfer-item[data-item-id="${itemId}"]`);
+        const itemElement = document.querySelector('.transfer-item[data-item-id="' + itemId + '"]');
         if (itemElement) {
             itemElement.remove();
         }
 
-        // Hapus tanda seleksi dari row
-        const row = document.querySelector(`.draggable-row[data-item-id="${itemId}"]`);
+        const row = document.querySelector('.draggable-row[data-item-id="' + itemId + '"]');
         if (row) {
             row.classList.remove('transfer-item-selected');
         }
 
-        // Update summary
-        updateTransferSummary();
+        updateTransferCount();
 
-        // Show empty state jika tidak ada item
         if (transferItems.length === 0) {
             showEmptyState();
         }
 
         showToast('Item dihapus dari transfer list', 'info');
-    };
-
-    // Function untuk update quantity
-    function updateItemQty(itemId, newQty) {
-        const item = transferItems.find(item => item.id === itemId);
-        if (item) {
-            item.qty = newQty;
-            updateTransferSummary();
-        }
     }
 
-    // Function untuk update transfer summary
-    function updateTransferSummary() {
+    // Function untuk update transfer count
+    function updateTransferCount() {
         const totalItems = transferItems.length;
-        const totalQty = transferItems.reduce((sum, item) => sum + (item.qty || 0), 0);
-
-        // Update counters
         document.getElementById('transferCount').textContent = totalItems;
-        document.getElementById('summaryTotalItems').textContent = totalItems;
-        document.getElementById('summaryTotalQty').textContent = formatStockNumber(totalQty);
     }
 
     // Function untuk show empty state
     function showEmptyState() {
         const transferSlots = document.getElementById('transferSlots');
-        transferSlots.innerHTML = `
-            <div class="empty-state text-center text-muted py-5">
-                <i class="fas fa-arrow-left fa-2x mb-3"></i>
-                <p>Drag items here</p>
-                <small class="fs-7">Only items with available stock</small>
-            </div>
-        `;
+        transferSlots.innerHTML =
+            '<div class="empty-state text-center text-muted py-5">' +
+            '<i class="fas fa-arrow-left fa-2x mb-3"></i>' +
+            '<p>Drag items here</p>' +
+            '<small class="fs-7">Only items with available stock</small>' +
+            '</div>';
     }
 
     // Function untuk update seleksi count
     function updateSelectionCount() {
         const count = selectedItems.size;
-        document.getElementById('selectedCount').textContent = `${count} item terpilih`;
+        document.getElementById('selectedCount').textContent = count + ' item terpilih';
 
         const clearBtn = document.getElementById('clearSelection');
         if (count > 0) {
             clearBtn.classList.add('active');
-            clearBtn.title = `Clear ${count} selected items`;
-            // Tambahkan class row-selected pada baris yang terpilih
-            document.querySelectorAll('.draggable-row').forEach(row => {
+            clearBtn.title = 'Clear ' + count + ' selected items';
+            document.querySelectorAll('.draggable-row').forEach(function(row) {
                 const itemId = row.dataset.itemId;
                 if (selectedItems.has(itemId)) {
                     row.classList.add('row-selected');
@@ -1113,13 +1510,11 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             clearBtn.classList.remove('active');
             clearBtn.title = 'Clear Selection';
-            // Hapus class row-selected dari semua baris
-            document.querySelectorAll('.draggable-row').forEach(row => {
+            document.querySelectorAll('.draggable-row').forEach(function(row) {
                 row.classList.remove('row-selected');
             });
         }
 
-        // Update select all checkbox
         const totalCheckboxes = document.querySelectorAll('.row-select:not(:disabled)').length;
         const selectAllCheckbox = document.getElementById('selectAllCheckbox');
         const selectAllHeader = document.getElementById('selectAllHeader');
@@ -1136,7 +1531,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function untuk clear selection
     function clearSelection() {
         selectedItems.clear();
-        document.querySelectorAll('.row-select').forEach(cb => {
+        document.querySelectorAll('.row-select').forEach(function(cb) {
             cb.checked = false;
         });
         updateSelectionCount();
@@ -1144,8 +1539,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Function untuk show toast
-    function showToast(message, type = 'info') {
-        // Create toast container jika belum ada
+    function showToast(message, type) {
+        if (!type) type = 'info';
         let toastContainer = document.getElementById('toastContainer');
         if (!toastContainer) {
             toastContainer = document.createElement('div');
@@ -1155,9 +1550,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.appendChild(toastContainer);
         }
 
-        // Create toast element
         const toast = document.createElement('div');
-        toast.className = `toast align-items-center text-bg-${type === 'error' ? 'danger' : type} border-0`;
+        const bgClass = type === 'error' ? 'danger' : type;
+        toast.className = 'toast align-items-center text-bg-' + bgClass + ' border-0';
         toast.setAttribute('role', 'alert');
         toast.setAttribute('aria-live', 'assertive');
         toast.setAttribute('aria-atomic', 'true');
@@ -1166,23 +1561,20 @@ document.addEventListener('DOMContentLoaded', function() {
                          type === 'warning' ? 'fa-exclamation-triangle' :
                          type === 'error' ? 'fa-times-circle' : 'fa-info-circle';
 
-        toast.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="fas ${iconClass} me-2"></i>
-                    ${message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-            </div>
-        `;
+        toast.innerHTML =
+            '<div class="d-flex">' +
+                '<div class="toast-body">' +
+                    '<i class="fas ' + iconClass + ' me-2"></i>' +
+                    message +
+                '</div>' +
+                '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' +
+            '</div>';
 
         toastContainer.appendChild(toast);
 
-        // Initialize and show toast
         const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
         bsToast.show();
 
-        // Remove setelah hide
         toast.addEventListener('hidden.bs.toast', function() {
             toast.remove();
         });
@@ -1190,12 +1582,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Setup checkbox selection
     function setupCheckboxSelection() {
-        // Select all checkbox (header)
         document.getElementById('selectAllCheckbox').addEventListener('click', function(e) {
             const isChecked = e.target.checked;
             const checkboxes = document.querySelectorAll('.row-select:not(:disabled)');
 
-            checkboxes.forEach(cb => {
+            checkboxes.forEach(function(cb) {
                 cb.checked = isChecked;
                 const itemId = cb.dataset.itemId;
                 if (isChecked) {
@@ -1208,12 +1599,11 @@ document.addEventListener('DOMContentLoaded', function() {
             updateSelectionCount();
         });
 
-        // Select all checkbox (header label)
         document.getElementById('selectAllHeader').addEventListener('click', function(e) {
             const isChecked = e.target.checked;
             const checkboxes = document.querySelectorAll('.row-select:not(:disabled)');
 
-            checkboxes.forEach(cb => {
+            checkboxes.forEach(function(cb) {
                 cb.checked = isChecked;
                 const itemId = cb.dataset.itemId;
                 if (isChecked) {
@@ -1226,7 +1616,6 @@ document.addEventListener('DOMContentLoaded', function() {
             updateSelectionCount();
         });
 
-        // Individual checkbox handling
         document.addEventListener('change', function(e) {
             if (e.target.classList.contains('row-select')) {
                 const itemId = e.target.dataset.itemId;
@@ -1234,7 +1623,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     selectedItems.add(itemId);
                 } else {
                     selectedItems.delete(itemId);
-                    // Uncheck select all jika ada checkbox yang diuncheck
                     document.getElementById('selectAllCheckbox').checked = false;
                     document.getElementById('selectAllHeader').checked = false;
                 }
@@ -1242,14 +1630,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Clear selection button
         document.getElementById('clearSelection').addEventListener('click', function() {
             if (selectedItems.size > 0) {
                 clearSelection();
             }
         });
 
-        // Add selected to transfer button
         document.getElementById('addSelectedToTransfer').addEventListener('click', function() {
             addSelectedItemsToTransfer();
         });
@@ -1263,28 +1649,187 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (confirm('Apakah Anda yakin ingin menghapus semua item dari transfer list?')) {
-            // Clear all transfer items
-            transferItems.forEach(item => {
-                // Hapus tanda seleksi dari row
-                const row = document.querySelector(`.draggable-row[data-item-id="${item.id}"]`);
+            transferItems.forEach(function(item) {
+                const row = document.querySelector('.draggable-row[data-item-id="' + item.id + '"]');
                 if (row) {
                     row.classList.remove('transfer-item-selected');
                 }
             });
 
-            // Clear array
             transferItems = [];
             document.getElementById('transferSlots').innerHTML = '';
-
-            // Reset counters
-            updateTransferSummary();
-
-            // Show empty state
+            updateTransferCount();
             showEmptyState();
-
             showToast('Transfer list berhasil dibersihkan', 'info');
         }
     });
+
+    // Function untuk populate modal preview
+    function populateTransferPreviewModal() {
+        const tbody = document.querySelector('#transferPreviewTable tbody');
+        tbody.innerHTML = '';
+
+        let totalItems = transferItems.length;
+
+        transferItems.forEach(function(item, index) {
+            // Buat opsi dropdown batch
+            const batchOptions = createBatchOptions(item.batchInfo, item.selectedBatch);
+
+            // Buat row untuk tabel modal
+            const row = document.createElement('tr');
+            row.innerHTML =
+                '<td class="text-center" style="padding: 6px 4px;">' + (index + 1) + '</td>' +
+                '<td style="padding: 6px 4px;"><code>' + item.materialCode + '</code></td>' +
+                '<td style="padding: 6px 4px;" title="' + item.materialDesc + '">' + (item.materialDesc.length > 30 ? item.materialDesc.substring(0, 30) + '...' : item.materialDesc) + '</td>' +
+                '<td class="text-center stock-number" style="padding: 6px 4px;">' + formatAngka(item.requestedQty) + '</td>' +
+                '<td class="text-center stock-number" style="padding: 6px 4px;">' + formatAngka(item.availableStock) + '</td>' +
+                '<td class="text-center" style="padding: 6px 4px;">' +
+                    '<input type="text" class="form-control modal-input-sm qty-transfer-input angka-input input-with-comma" value="" placeholder="0" data-index="' + index + '" style="width: 80px; font-size: 0.8rem;">' +
+                '</td>' +
+                '<td class="text-center" style="padding: 6px 4px;">' + item.unit + '</td>' +
+                '<td class="text-center" style="padding: 6px 4px;">' +
+                    '<input type="text" class="form-control modal-input-sm plant-tujuan-input" value="' + (item.plantTujuan || '{{ $document->plant }}') + '" data-index="' + index + '" style="width: 70px; font-size: 0.8rem;">' +
+                '</td>' +
+                '<td class="text-center" style="padding: 6px 4px;">' +
+                    '<input type="text" class="form-control modal-input-sm sloc-tujuan-input" value="' + (item.slocTujuan || '{{ $document->sloc_supply }}') + '" data-index="' + index + '" style="width: 70px; font-size: 0.8rem;">' +
+                '</td>' +
+                '<td class="text-center" style="padding: 6px 4px;">' +
+                    '<select class="form-control batch-select batch-source-select" data-index="' + index + '" style="width: 200px; font-size: 0.8rem; padding: 4px 6px;">' +
+                        batchOptions +
+                    '</select>' +
+                '</td>';
+
+            tbody.appendChild(row);
+        });
+
+        // Update totals
+        document.getElementById('modalTotalItems').textContent = totalItems;
+        document.getElementById('modalTotalQty').textContent = formatAngka(0);
+
+        // Setup event listeners untuk input di modal
+        setupModalEventListeners();
+    }
+
+    // Helper function untuk mendapatkan max quantity berdasarkan batch yang dipilih
+    function getMaxQtyForModalItem(index) {
+        const item = transferItems[index];
+        let maxQty = item.availableStock;
+
+        if (item.selectedBatch && item.batchInfo && item.batchInfo.length > 0) {
+            const selectedBatchInfo = item.batchInfo.find(function(batch) {
+                return batch.batch === item.selectedBatch || batch.sloc === item.selectedBatch;
+            });
+            if (selectedBatchInfo) {
+                maxQty = selectedBatchInfo.qty || 0;
+            }
+        }
+
+        return maxQty;
+    }
+
+    // Setup event listeners untuk input di modal
+    function setupModalEventListeners() {
+        // Quantity input change - menggunakan event blur
+        document.querySelectorAll('.qty-transfer-input').forEach(function(input) {
+            // Format saat kehilangan fokus
+            input.addEventListener('blur', function() {
+                const index = parseInt(this.dataset.index);
+                let value = this.value.trim();
+
+                // Parse angka
+                let parsedValue = parseAngka(value);
+
+                // Validasi
+                const maxQty = getMaxQtyForModalItem(index);
+
+                if (isNaN(parsedValue) || parsedValue < 0) {
+                    this.value = '';
+                    transferItems[index].qty = 0;
+                } else if (parsedValue > maxQty) {
+                    this.value = formatAngka(maxQty);
+                    transferItems[index].qty = maxQty;
+                    showToast('Quantity tidak boleh melebihi ' + formatAngka(maxQty), 'warning');
+                } else {
+                    // Format ulang dengan format Indonesia
+                    this.value = formatAngka(parsedValue);
+                    transferItems[index].qty = parsedValue;
+                }
+
+                updateModalTotals();
+            });
+
+            // Validasi input real-time (hanya angka, titik, dan koma)
+            input.addEventListener('input', function() {
+                // Hapus karakter selain angka, titik, dan koma
+                this.value = this.value.replace(/[^\d.,]/g, '');
+            });
+
+            // Format saat fokus (tampilkan angka tanpa format)
+            input.addEventListener('focus', function() {
+                const index = parseInt(this.dataset.index);
+                if (transferItems[index].qty > 0) {
+                    // Tampilkan angka tanpa format (dengan titik sebagai desimal untuk parsing)
+                    this.value = transferItems[index].qty.toString().replace('.', ',');
+                }
+            });
+        });
+
+        // Plant tujuan change
+        document.querySelectorAll('.plant-tujuan-input').forEach(function(input) {
+            input.addEventListener('change', function() {
+                const index = parseInt(this.dataset.index);
+                transferItems[index].plantTujuan = this.value;
+            });
+        });
+
+        // SLOC tujuan change
+        document.querySelectorAll('.sloc-tujuan-input').forEach(function(input) {
+            input.addEventListener('change', function() {
+                const index = parseInt(this.dataset.index);
+                transferItems[index].slocTujuan = this.value;
+            });
+        });
+
+        // Batch select change
+        document.querySelectorAll('.batch-source-select').forEach(function(select) {
+            select.addEventListener('change', function() {
+                const index = parseInt(this.dataset.index);
+                const selectedValue = this.value;
+                const selectedOption = this.options[this.selectedIndex];
+                const batchQty = parseFloat(selectedOption.dataset.qty) || 0;
+                const batchSloc = selectedOption.dataset.sloc || selectedValue;
+
+                transferItems[index].selectedBatch = selectedValue;
+                transferItems[index].batchQty = batchQty;
+                transferItems[index].batchSloc = batchSloc;
+
+                // Dapatkan input quantity terkait
+                const qtyInput = document.querySelector('.qty-transfer-input[data-index="' + index + '"]');
+                const maxQty = getMaxQtyForModalItem(index);
+
+                if (qtyInput) {
+                    // Jika quantity melebihi batch qty, adjust it
+                    const currentQty = parseAngka(qtyInput.value);
+                    if (currentQty > maxQty && maxQty > 0) {
+                        qtyInput.value = formatAngka(maxQty);
+                        transferItems[index].qty = maxQty;
+                        showToast('Quantity disesuaikan dengan batch yang tersedia: ' + formatAngka(maxQty), 'info');
+                        updateModalTotals();
+                    }
+                }
+            });
+        });
+    }
+
+    // Update modal totals
+    function updateModalTotals() {
+        let totalQty = 0;
+        transferItems.forEach(function(item) {
+            totalQty += item.qty || 0;
+        });
+
+        document.getElementById('modalTotalQty').textContent = formatAngka(totalQty);
+    }
 
     // Generate transfer list button
     document.getElementById('generateTransferList').addEventListener('click', function() {
@@ -1293,21 +1838,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Populate preview table
-        const tbody = document.querySelector('#transferPreviewTable tbody');
-        tbody.innerHTML = '';
-
-        transferItems.forEach(item => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><code>${item.materialCode}</code></td>
-                <td>${item.materialDesc}</td>
-                <td class="text-center">${item.qty.toFixed(3)}</td>
-                <td class="text-center">${item.unit}</td>
-                <td class="text-center">${item.sloc || 'N/A'}</td>
-            `;
-            tbody.appendChild(row);
-        });
+        // Populate modal
+        populateTransferPreviewModal();
 
         // Show modal
         const modal = new bootstrap.Modal(document.getElementById('transferPreviewModal'));
@@ -1316,8 +1848,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Confirm transfer button
     document.getElementById('confirmTransfer').addEventListener('click', function() {
-        // Get remarks
         const remarks = document.getElementById('transferRemarks').value;
+
+        // Validasi: Pastikan semua quantity valid
+        let isValid = true;
+        let errorMessage = '';
+
+        transferItems.forEach(function(item, index) {
+            if (!item.qty || item.qty <= 0) {
+                isValid = false;
+                errorMessage = 'Quantity untuk ' + item.materialCode + ' harus diisi';
+                return;
+            }
+
+            const maxQty = getMaxQtyForModalItem(index);
+            if (item.qty > maxQty) {
+                isValid = false;
+                errorMessage = 'Quantity untuk ' + item.materialCode + ' (' + formatAngka(item.qty) + ') melebihi available stock untuk batch yang dipilih (' + formatAngka(maxQty) + ')';
+                return;
+            }
+        });
+
+        if (!isValid) {
+            showToast(errorMessage, 'error');
+            return;
+        }
 
         // Prepare data untuk API call
         const transferData = {
@@ -1325,7 +1880,23 @@ document.addEventListener('DOMContentLoaded', function() {
             document_no: "{{ $document->document_no }}",
             plant: "{{ $document->plant }}",
             sloc_supply: "{{ $document->sloc_supply }}",
-            items: transferItems,
+            items: transferItems.map(function(item) {
+                return {
+                    id: item.id,
+                    material_code: item.materialCode,
+                    material_desc: item.materialDesc,
+                    requested_qty: item.requestedQty,
+                    available_stock: item.availableStock,
+                    quantity: item.qty,
+                    unit: item.unit,
+                    plant_tujuan: item.plantTujuan,
+                    sloc_tujuan: item.slocTujuan,
+                    batch: item.selectedBatch,
+                    batch_qty: item.batchQty,
+                    batch_sloc: item.batchSloc,
+                    batch_info: item.batchInfo
+                };
+            }),
             remarks: remarks,
             created_by: {{ auth()->id() }}
         };
@@ -1345,8 +1916,8 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify(transferData)
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
             loadingModal.hide();
 
             if (data.success) {
@@ -1360,50 +1931,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('clearTransferList').click();
 
                 // Optionally redirect atau refresh
-                setTimeout(() => {
+                setTimeout(function() {
                     window.location.reload();
                 }, 1500);
             } else {
                 showToast('Error: ' + data.message, 'error');
             }
         })
-        .catch(error => {
+        .catch(function(error) {
             loadingModal.hide();
             console.error('Error:', error);
             showToast('Error creating transfer document', 'error');
         });
     });
 
-    // Initialize Lottie animation
-    let animation;
-
-    function loadLottieAnimation() {
-        if (animation) {
-            animation.destroy();
-        }
-
-        animation = lottie.loadAnimation({
-            container: document.getElementById('lottie-container'),
-            renderer: 'svg',
-            loop: true,
-            autoplay: false,
-            path: '{{ asset("json/Floating_Duck.json") }}'
-        });
-    }
-
     // Show loading animation pada form submit
     document.getElementById('checkStockForm').addEventListener('submit', function(e) {
         const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
         loadingModal.show();
         document.getElementById('loadingText').textContent = 'Checking Stock...';
-
-        setTimeout(function() {
-            loadLottieAnimation();
-            animation.play();
-        }, 100);
     });
 
-    // Handle reset stock form submission
+    // Handle reset stock form submission - SEDERHANA
     const resetStockForm = document.getElementById('resetStockForm');
     if (resetStockForm) {
         resetStockForm.addEventListener('submit', function(e) {
@@ -1417,13 +1966,6 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingModal.show();
             document.getElementById('loadingText').textContent = 'Resetting Stock...';
 
-            setTimeout(function() {
-                if (!animation) {
-                    loadLottieAnimation();
-                }
-                animation.play();
-            }, 100);
-
             const token = resetStockForm.querySelector('input[name="_token"]').value;
 
             fetch(resetStockForm.action, {
@@ -1433,23 +1975,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     'Accept': 'application/json'
                 }
             })
-            .then(response => response.json())
-            .then(data => {
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
                 loadingModal.hide();
 
                 if (data.success) {
-                    alert(data.message);
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 500);
+                    showToast(data.message, 'success');
+                    // Auto refresh halaman
+                    window.location.reload();
                 } else {
-                    alert('Error: ' + data.message);
+                    showToast('Error: ' + data.message, 'error');
                 }
             })
-            .catch(error => {
+            .catch(function(error) {
                 loadingModal.hide();
                 console.error('Error:', error);
-                alert('Error resetting stock data.');
+                showToast('Error resetting stock data.', 'error');
             });
         });
     }

@@ -258,7 +258,7 @@
                                         <td style="padding: 1px;">{{ $document->plant }}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 1px; text-align: right;"><strong>Sloc Supply:</strong></td>
+                                        <td style="padding: 1px; text-align: right;"><strong>Plant Supply:</strong></td>
                                         <td style="padding: 1px;">
                                             @if(!empty($document->sloc_supply) && $document->sloc_supply !== '-' && $document->sloc_supply !== 'null' && $document->sloc_supply !== 'NULL')
                                                 {{ strtoupper($document->sloc_supply) }}
