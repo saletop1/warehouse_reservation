@@ -1,5 +1,4 @@
 <?php
-// routes/web.php
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
@@ -7,6 +6,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\ReservationDocumentController;
 use App\Http\Controllers\StockController;
+use App\Http\Controllers\TransferController;
 
 // Redirect root to login page
 Route::get('/', function () {
@@ -27,6 +27,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // Protected Routes (Require Authentication)
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
     Route::get('/profile', function () {
         return view('profile.index');
     })->name('profile');
@@ -47,7 +48,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/sync', [ReservationController::class, 'sync'])->name('sync');
         Route::post('/sync-from-sap', [ReservationController::class, 'syncFromSAP'])->name('sync.from-sap');
         Route::post('/clear-and-create', [ReservationController::class, 'clearAndCreate'])->name('clear-and-create');
-        Route::post('/clear-all-sync-data', [ReservationController::class, 'clearAllSyncData'])->name('clearAllSyncData');
+        Route::post('/clear-all-sync-data', [ReservationController::class, 'clearAllSyncData'])->name('clearAllSyncData'); // DITAMBAHKAN
 
         // Sync status checking
         Route::get('/check-sync-data', [ReservationController::class, 'checkSyncData'])->name('check-sync-data');
@@ -68,7 +69,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/create-document', [ReservationController::class, 'createDocument'])->name('createDocument');
     });
 
-    // Document Routes - TANPA DELETE ROUTE
+    // Document Routes - Hanya routes yang benar-benar ada
     Route::prefix('documents')->name('documents.')->group(function () {
         Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
@@ -76,36 +77,29 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{id}', [ReservationDocumentController::class, 'update'])->name('update');
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
-        Route::get('/export/{type}', [ReservationDocumentController::class, 'export'])->name('export');
-        Route::post('/export/selected/excel', [ReservationDocumentController::class, 'exportSelectedExcel'])->name('export.selected.excel');
-        Route::post('/export/selected/pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('export.selected.pdf');
-        Route::get('/check-flask-endpoint', [ReservationController::class, 'checkFlaskEndpoint'])->name('checkFlaskEndpoint');
-        Route::post('/create-transfer', [ReservationDocumentController::class, 'createTransfer'])
-        ->name('create-transfer');
-        Route::post('/documents/create-transfer', [ReservationDocumentController::class, 'createTransfer'])
-        ->name('documents.create-transfer');
+
+        // Transfer from document - HANYA SATU ROUTE
+        Route::post('/{id}/create-transfer', [TransferController::class, 'createTransfer'])->name('create-transfer');
     });
 
-    // Stock Routes (API only - no separate view pages)
+    // Stock Routes
     Route::prefix('stock')->name('stock.')->group(function () {
-        // API endpoints (StockController)
         Route::get('/document/{documentNo}', [StockController::class, 'getStockByDocument'])
             ->name('by-document');
-
-        Route::get('/document/{documentNo}/summary', [StockController::class, 'getStockSummary'])
-            ->name('summary');
-
         Route::delete('/document/{documentNo}/clear', [StockController::class, 'clearStockCache'])
             ->name('clear-cache');
-
-        Route::get('/document/{documentNo}/export', [StockController::class, 'exportStock'])
-            ->name('export');
-
         Route::post('/document/{documentNo}/fetch', [StockController::class, 'fetchStock'])
             ->name('fetch');
     });
 
-    // AJAX endpoints (global)
-    Route::post('/reservations/get-material-types', [ReservationController::class, 'getMaterialTypes'])
-        ->name('reservations.get-material-types');
+    // Transfer Routes (standalone) - HANYA SATU SET ROUTES
+    Route::prefix('transfers')->name('transfers.')->group(function () {
+        Route::get('/', [TransferController::class, 'index'])->name('index');
+        Route::get('/{id}', [TransferController::class, 'show'])->name('show');
+        Route::put('/{id}/status', [TransferController::class, 'updateStatus'])->name('update-status');
+        Route::delete('/{id}', [TransferController::class, 'destroy'])->name('destroy');
+    });
+
+    // Single route untuk create transfer (bisa dari mana saja)
+    Route::post('/transfer/create', [TransferController::class, 'createTransfer'])->name('transfer.create');
 });

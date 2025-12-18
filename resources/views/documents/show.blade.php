@@ -44,10 +44,26 @@
                 </div>
             @endif
 
-            <!-- Document Header -->
+            <!-- Document Header dengan Transfer Status -->
             <div class="card mb-3">
                 <div class="card-header {{ $document->plant == '3000' ? 'bg-primary' : 'bg-success' }} text-white py-2">
-                    <h5 class="mb-0">Document Information</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Document Information</h5>
+                        @if($document->transfers->count() > 0)
+                            <div class="transfer-badges">
+                                @foreach($document->transfers as $transfer)
+                                    @if($transfer->transfer_no)
+                                        <span class="badge bg-success text-white me-1">
+                                            <i class="fas fa-truck"></i> Transfer: {{ $transfer->transfer_no }}
+                                            <span class="badge bg-light text-success ms-1">
+                                                {{ ucfirst($transfer->status) }}
+                                            </span>
+                                        </span>
+                                    @endif
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
                 </div>
                 <div class="card-body py-2">
                     <div class="row">
@@ -191,7 +207,7 @@
                                             <th class="border-0 text-center" style="width: 40px; background-color: #f8f9fa;">
                                                 <input type="checkbox" id="selectAllCheckbox" class="table-checkbox">
                                             </th>
-                                            <th style="background-color: #f8f9fa;">#</th>
+                                            <th style="background-color: #f8f9fa;">No</th>
                                             <th style="background-color: #FFF0F5;">Material</th>
                                             <th style="background-color: #F0FFF0;">Description</th>
                                             <th style="background-color: #F0F8FF;">Sales Order</th>
@@ -200,7 +216,7 @@
                                             <th class="text-center" style="background-color: #E6FFFA;">Requested Qty</th>
                                             <th class="text-center" style="background-color: #FFF5E6;">Available Stock</th>
                                             <th class="text-center" style="background-color: #F5F0FF;">Uom</th>
-                                            <th class="text-center" style="background-color: #E6F7FF;">Plant</th>
+                                            <th class="text-center" style="background-color: #E6F7FF;">Sloc Suply</th>
                                             <th class="text-center" style="background-color: #FFF0E6;">Batch Info</th>
                                         </tr>
                                     </thead>
@@ -275,6 +291,7 @@
                                                 data-unit="{{ $unit }}"
                                                 data-sloc="{{ !empty($storageLocations) ? implode(',', $storageLocations) : '' }}"
                                                 data-can-transfer="{{ $canTransfer ? 'true' : 'false' }}"
+                                                data-batch-info="{{ htmlspecialchars(json_encode($batchInfo), ENT_QUOTES, 'UTF-8') }}"
                                                 style="cursor: move;">
                                                 <td class="border-0 text-center">
                                                     <input type="checkbox"
@@ -432,8 +449,6 @@
                                     <i class="fas fa-trash"></i> Clear All
                                 </button>
                             </div>
-
-                            <!-- PERUBAHAN: Hapus Transfer Summary -->
                         </div>
                     </div>
                 </div>
@@ -442,8 +457,62 @@
     </div>
 </div>
 
+<!-- SAP Credentials Modal -->
+<div class="modal fade" id="sapCredentialsModal" tabindex="-1" aria-labelledby="sapCredentialsModalLabel" aria-hidden="true" style="z-index: 10001;">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);">
+            <div class="modal-header bg-primary text-white py-2" style="border-radius: 10px 10px 0 0;">
+                <h5 class="modal-title fs-6 mb-0" id="sapCredentialsModalLabel">
+                    <i class="fas fa-key me-2"></i> SAP Login Required
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="alert alert-info py-2 mb-3 fs-7" style="background: rgba(23, 162, 184, 0.15); border-color: rgba(23, 162, 184, 0.3);">
+                    <i class="fas fa-info-circle me-2"></i> Enter your SAP credentials to process transfer
+                </div>
+
+                <form id="sapCredsForm">
+                    <div class="mb-3">
+                        <label for="sap_user" class="form-label fs-7 mb-1 fw-semibold">SAP Username *</label>
+                        <input type="text"
+                               class="form-control form-control-sm border-primary"
+                               id="sap_user"
+                               placeholder="Enter SAP username"
+                               required
+                               autocomplete="off">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="sap_password" class="form-label fs-7 mb-1 fw-semibold">SAP Password *</label>
+                        <div class="input-group input-group-sm">
+                            <input type="password"
+                                   class="form-control form-control-sm border-primary"
+                                   id="sap_password"
+                                   placeholder="Enter SAP password"
+                                   required
+                                   autocomplete="off">
+                            <button class="btn btn-outline-primary" type="button" id="togglePassword">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm fs-7" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-primary btn-sm fs-7 fw-semibold" id="saveSapCredentials">
+                    <i class="fas fa-paper-plane me-1"></i> Process Transfer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Transfer Preview Modal -->
-<div class="modal fade" id="transferPreviewModal" tabindex="-1" aria-labelledby="transferPreviewModalLabel" aria-hidden="true">
+<div class="modal fade" id="transferPreviewModal" tabindex="-1" aria-labelledby="transferPreviewModalLabel" aria-hidden="true" style="z-index: 9990;">
     <div class="modal-dialog modal-xl">
         <div class="modal-content frosted-glass">
             <div class="modal-header glass-header">
@@ -540,7 +609,6 @@
 <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 9999;"></div>
 
 <style>
-/* Styles remain the same as before */
 .badge {
     font-size: 0.85em;
     padding: 0.35em 0.65em;
@@ -1125,6 +1193,95 @@ input[type="number"] {
     -moz-appearance: textfield;
     appearance: textfield;
 }
+
+/* NEW: Z-index management for modals */
+.modal-backdrop {
+    z-index: 9995 !important;
+}
+
+.modal-backdrop + .modal-backdrop {
+    z-index: 9996 !important;
+}
+
+#sapCredentialsModal {
+    z-index: 10001 !important;
+}
+
+#transferPreviewModal {
+    z-index: 9990 !important;
+}
+
+/* NEW: SAP Credentials modal specific styles */
+#sapCredentialsModal .modal-content {
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+#sapCredentialsModal .modal-header {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+}
+
+#sapCredentialsModal .input-group .btn-outline-primary {
+    border-color: #0d6efd;
+    color: #0d6efd;
+}
+
+#sapCredentialsModal .input-group .btn-outline-primary:hover {
+    background-color: #0d6efd;
+    color: white;
+}
+
+/* Ensure proper backdrop for multiple modals */
+.modal-backdrop.show {
+    opacity: 0.5;
+}
+
+/* Fix for Bootstrap modal z-index issue */
+.modal {
+    z-index: 1050 !important;
+}
+
+.modal-backdrop {
+    z-index: 1040 !important;
+}
+
+#transferPreviewModal {
+    z-index: 1060 !important;
+}
+
+#sapCredentialsModal {
+    z-index: 1070 !important;
+}
+
+#loadingModal {
+    z-index: 1080 !important;
+}
+
+/* Transfer badges styling */
+.transfer-badges {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: auto;
+}
+
+.transfer-badges .badge {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+}
+
+/* Document status indicator */
+.document-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 10px;
+}
+
+.document-status .badge {
+    font-size: 0.7rem;
+}
 </style>
 
 <script>
@@ -1134,7 +1291,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let isDragging = false;
     let selectedItems = new Set();
 
-    // Helper function untuk format angka sesuai dengan permintaan
+    // Helper function untuk format angka
     function formatAngka(num, decimalDigits = 2) {
         if (typeof num === 'string') {
             num = parseFloat(num);
@@ -1142,12 +1299,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (isNaN(num)) return '0';
 
-        // Cek apakah bilangan bulat
         if (num % 1 === 0) {
-            // Bilangan bulat: gunakan titik sebagai pemisah ribuan
             return num.toLocaleString('id-ID');
         } else {
-            // Bilangan desimal: maksimal 2 digit di belakang koma
             return num.toLocaleString('id-ID', {
                 minimumFractionDigits: decimalDigits,
                 maximumFractionDigits: decimalDigits
@@ -1158,15 +1312,29 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper function untuk parse angka dari input
     function parseAngka(str) {
         if (!str || str.trim() === '') return 0;
-
-        // Ganti titik sebagai pemisah ribuan dengan kosong
-        // Ganti koma sebagai pemisah desimal dengan titik
         let cleaned = str.replace(/\./g, '').replace(',', '.');
         return parseFloat(cleaned) || 0;
     }
 
-    // Function untuk mendapatkan batch info dari badge di tabel
+    // Function untuk mendapatkan batch info dari badge di tabel - FIXED
     function getBatchInfoFromBadges(row) {
+        // Coba ambil dari data-batch-info attribute
+        const batchInfoData = row.dataset.batchInfo;
+
+        if (batchInfoData) {
+            try {
+                // Replace escaped quotes and parse JSON
+                const cleanedData = batchInfoData.replace(/&quot;/g, '"');
+                const parsed = JSON.parse(cleanedData);
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            } catch (e) {
+                console.warn('Error parsing batch info JSON, using fallback method:', e.message);
+            }
+        }
+
+        // Fallback: ambil dari badge elements
         const badges = row.querySelectorAll('.batch-badge');
         const batchInfo = [];
 
@@ -1187,7 +1355,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return batchInfo;
     }
 
-    // Function untuk membuat opsi batch dropdown dari batch info
+    // Function untuk membuat opsi batch dropdown
     function createBatchOptions(batchInfo, selectedBatch) {
         if (!selectedBatch) selectedBatch = '';
         if (!batchInfo || batchInfo.length === 0) {
@@ -1217,6 +1385,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup drag and drop events
     function setupDragAndDrop() {
         const rows = document.querySelectorAll('.draggable-row');
+        const dropZone = document.getElementById('transferContainer');
 
         rows.forEach(function(row) {
             const availableStock = parseFloat(row.dataset.availableStock || 0);
@@ -1237,6 +1406,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
 
                     e.dataTransfer.effectAllowed = 'copy';
+
+                    // Create drag image
+                    const dragImage = this.cloneNode(true);
+                    dragImage.style.width = '200px';
+                    dragImage.style.opacity = '0.5';
+                    dragImage.style.position = 'absolute';
+                    dragImage.style.top = '-1000px';
+                    document.body.appendChild(dragImage);
+                    e.dataTransfer.setDragImage(dragImage, 20, 20);
+
+                    setTimeout(() => {
+                        document.body.removeChild(dragImage);
+                    }, 0);
                 });
 
                 row.addEventListener('dragend', function() {
@@ -1252,15 +1434,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Setup drop zone
-        const dropZone = document.getElementById('transferContainer');
-
-        dropZone.addEventListener('dragover', function(e) {
+        dropZone.addEventListener('dragenter', function(e) {
             e.preventDefault();
             this.classList.add('drag-over');
         });
 
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('drag-over');
+            e.dataTransfer.dropEffect = 'copy';
+        });
+
         dropZone.addEventListener('dragleave', function(e) {
-            this.classList.remove('drag-over');
+            if (!this.contains(e.relatedTarget)) {
+                this.classList.remove('drag-over');
+            }
         });
 
         dropZone.addEventListener('drop', function(e) {
@@ -1334,7 +1522,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function getItemDataFromRow(rowElement) {
         const row = rowElement;
 
-        // Ambil batch info dari badge
+        // Ambil batch info
         const batchInfo = getBatchInfoFromBadges(row);
 
         return {
@@ -1382,7 +1570,7 @@ document.addEventListener('DOMContentLoaded', function() {
             maxQty: item.availableStock,
             requestedQty: item.requestedQty,
             availableStock: item.availableStock,
-            qty: 0, // Akan diisi di modal
+            qty: 0,
             unit: item.unit,
             sloc: item.sloc,
             batchInfo: item.batchInfo,
@@ -1408,9 +1596,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (row) {
             row.classList.add('transfer-item-selected');
         }
+
+        showToast('Item ditambahkan ke transfer list', 'success');
     }
 
-    // Function untuk render transfer item - DIPERBAIKI untuk menampilkan badge
+    // Function untuk render transfer item
     function renderTransferItem(item) {
         const emptyState = document.querySelector('.empty-state');
         if (emptyState) {
@@ -1424,7 +1614,6 @@ document.addEventListener('DOMContentLoaded', function() {
         itemDiv.className = 'transfer-item';
         itemDiv.dataset.itemId = item.id;
 
-        // Tampilkan badge requested qty (hijau) dan max stock (kuning)
         itemDiv.innerHTML = '<div class="transfer-item-header">' +
             '<div>' +
             '<span class="transfer-item-code">' + item.materialCode + '</span>' +
@@ -1580,75 +1769,100 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Setup checkbox selection
+    // Setup checkbox selection dengan event delegation
     function setupCheckboxSelection() {
-        document.getElementById('selectAllCheckbox').addEventListener('click', function(e) {
-            const isChecked = e.target.checked;
-            const checkboxes = document.querySelectorAll('.row-select:not(:disabled)');
+        // Select All Checkbox (header)
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('click', function(e) {
+                const isChecked = e.target.checked;
+                const checkboxes = document.querySelectorAll('.row-select:not(:disabled)');
 
-            checkboxes.forEach(function(cb) {
-                cb.checked = isChecked;
-                const itemId = cb.dataset.itemId;
-                if (isChecked) {
-                    selectedItems.add(itemId);
-                } else {
-                    selectedItems.delete(itemId);
-                }
-            });
+                checkboxes.forEach(function(cb) {
+                    cb.checked = isChecked;
+                    const itemId = cb.dataset.itemId;
+                    if (isChecked) {
+                        selectedItems.add(itemId);
+                    } else {
+                        selectedItems.delete(itemId);
+                    }
+                });
 
-            updateSelectionCount();
-        });
-
-        document.getElementById('selectAllHeader').addEventListener('click', function(e) {
-            const isChecked = e.target.checked;
-            const checkboxes = document.querySelectorAll('.row-select:not(:disabled)');
-
-            checkboxes.forEach(function(cb) {
-                cb.checked = isChecked;
-                const itemId = cb.dataset.itemId;
-                if (isChecked) {
-                    selectedItems.add(itemId);
-                } else {
-                    selectedItems.delete(itemId);
-                }
-            });
-
-            updateSelectionCount();
-        });
-
-        document.addEventListener('change', function(e) {
-            if (e.target.classList.contains('row-select')) {
-                const itemId = e.target.dataset.itemId;
-                if (e.target.checked) {
-                    selectedItems.add(itemId);
-                } else {
-                    selectedItems.delete(itemId);
-                    document.getElementById('selectAllCheckbox').checked = false;
-                    document.getElementById('selectAllHeader').checked = false;
-                }
                 updateSelectionCount();
-            }
-        });
-
-        document.getElementById('clearSelection').addEventListener('click', function() {
-            if (selectedItems.size > 0) {
-                clearSelection();
-            }
-        });
-
-        document.getElementById('addSelectedToTransfer').addEventListener('click', function() {
-            addSelectedItemsToTransfer();
-        });
-    }
-
-    // Clear transfer list button
-    document.getElementById('clearTransferList').addEventListener('click', function() {
-        if (transferItems.length === 0) {
-            showToast('Transfer list sudah kosong', 'info');
-            return;
+            });
         }
 
-        if (confirm('Apakah Anda yakin ingin menghapus semua item dari transfer list?')) {
+        // Select All Header
+        const selectAllHeader = document.getElementById('selectAllHeader');
+        if (selectAllHeader) {
+            selectAllHeader.addEventListener('click', function(e) {
+                const isChecked = e.target.checked;
+                const checkboxes = document.querySelectorAll('.row-select:not(:disabled)');
+
+                checkboxes.forEach(function(cb) {
+                    cb.checked = isChecked;
+                    const itemId = cb.dataset.itemId;
+                    if (isChecked) {
+                        selectedItems.add(itemId);
+                    } else {
+                        selectedItems.delete(itemId);
+                    }
+                });
+
+                updateSelectionCount();
+            });
+        }
+
+        // Event delegation untuk checkbox individual
+        const itemsTable = document.getElementById('itemsTable');
+        if (itemsTable) {
+            itemsTable.addEventListener('click', function(e) {
+                if (e.target.classList.contains('row-select')) {
+                    const itemId = e.target.dataset.itemId;
+                    if (e.target.checked) {
+                        selectedItems.add(itemId);
+                    } else {
+                        selectedItems.delete(itemId);
+                        // Uncheck select all checkboxes
+                        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+                        const selectAllHeader = document.getElementById('selectAllHeader');
+                        if (selectAllCheckbox) selectAllCheckbox.checked = false;
+                        if (selectAllHeader) selectAllHeader.checked = false;
+                    }
+                    updateSelectionCount();
+                }
+            });
+        }
+
+        // Clear selection button
+        const clearSelectionBtn = document.getElementById('clearSelection');
+        if (clearSelectionBtn) {
+            clearSelectionBtn.addEventListener('click', function() {
+                if (selectedItems.size > 0) {
+                    clearSelection();
+                }
+            });
+        }
+
+        // Add selected to transfer button
+        const addSelectedToTransferBtn = document.getElementById('addSelectedToTransfer');
+        if (addSelectedToTransferBtn) {
+            addSelectedToTransferBtn.addEventListener('click', function() {
+                addSelectedItemsToTransfer();
+            });
+        }
+    }
+
+    // Clear transfer list button - PERUBAHAN: Hilangkan konfirmasi
+    const clearTransferListBtn = document.getElementById('clearTransferList');
+    if (clearTransferListBtn) {
+        clearTransferListBtn.addEventListener('click', function() {
+            if (transferItems.length === 0) {
+                showToast('Transfer list sudah kosong', 'info');
+                return;
+            }
+
+            // Hapus konfirmasi, langsung hapus transfer list
             transferItems.forEach(function(item) {
                 const row = document.querySelector('.draggable-row[data-item-id="' + item.id + '"]');
                 if (row) {
@@ -1657,16 +1871,24 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             transferItems = [];
-            document.getElementById('transferSlots').innerHTML = '';
+            const transferSlots = document.getElementById('transferSlots');
+            if (transferSlots) {
+                transferSlots.innerHTML = '';
+            }
             updateTransferCount();
             showEmptyState();
             showToast('Transfer list berhasil dibersihkan', 'info');
-        }
-    });
+        });
+    }
 
     // Function untuk populate modal preview
     function populateTransferPreviewModal() {
         const tbody = document.querySelector('#transferPreviewTable tbody');
+        if (!tbody) {
+            console.error('Transfer preview table tbody not found');
+            return;
+        }
+
         tbody.innerHTML = '';
 
         let totalItems = transferItems.length;
@@ -1684,7 +1906,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 '<td class="text-center stock-number" style="padding: 6px 4px;">' + formatAngka(item.requestedQty) + '</td>' +
                 '<td class="text-center stock-number" style="padding: 6px 4px;">' + formatAngka(item.availableStock) + '</td>' +
                 '<td class="text-center" style="padding: 6px 4px;">' +
-                    '<input type="text" class="form-control modal-input-sm qty-transfer-input angka-input input-with-comma" value="" placeholder="0" data-index="' + index + '" style="width: 80px; font-size: 0.8rem;">' +
+                    '<input type="text" class="form-control modal-input-sm qty-transfer-input angka-input input-with-comma" value="' + formatAngka(item.qty || 0) + '" placeholder="0" data-index="' + index + '" style="width: 80px; font-size: 0.8rem;">' +
                 '</td>' +
                 '<td class="text-center" style="padding: 6px 4px;">' + item.unit + '</td>' +
                 '<td class="text-center" style="padding: 6px 4px;">' +
@@ -1703,8 +1925,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Update totals
-        document.getElementById('modalTotalItems').textContent = totalItems;
-        document.getElementById('modalTotalQty').textContent = formatAngka(0);
+        const modalTotalItems = document.getElementById('modalTotalItems');
+        if (modalTotalItems) {
+            modalTotalItems.textContent = totalItems;
+        }
+
+        updateModalTotals();
 
         // Setup event listeners untuk input di modal
         setupModalEventListeners();
@@ -1768,7 +1994,6 @@ document.addEventListener('DOMContentLoaded', function() {
             input.addEventListener('focus', function() {
                 const index = parseInt(this.dataset.index);
                 if (transferItems[index].qty > 0) {
-                    // Tampilkan angka tanpa format (dengan titik sebagai desimal untuk parsing)
                     this.value = transferItems[index].qty.toString().replace('.', ',');
                 }
             });
@@ -1828,169 +2053,407 @@ document.addEventListener('DOMContentLoaded', function() {
             totalQty += item.qty || 0;
         });
 
-        document.getElementById('modalTotalQty').textContent = formatAngka(totalQty);
+        const modalTotalQty = document.getElementById('modalTotalQty');
+        if (modalTotalQty) {
+            modalTotalQty.textContent = formatAngka(totalQty);
+        }
     }
 
     // Generate transfer list button
-    document.getElementById('generateTransferList').addEventListener('click', function() {
-        if (transferItems.length === 0) {
-            showToast('Silakan tambahkan item ke transfer list terlebih dahulu', 'warning');
-            return;
-        }
+    const generateTransferListBtn = document.getElementById('generateTransferList');
+    if (generateTransferListBtn) {
+        generateTransferListBtn.addEventListener('click', function() {
+            if (transferItems.length === 0) {
+                showToast('Silakan tambahkan item ke transfer list terlebih dahulu', 'warning');
+                return;
+            }
 
-        // Populate modal
-        populateTransferPreviewModal();
+            try {
+                // Populate modal
+                populateTransferPreviewModal();
 
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('transferPreviewModal'));
-        modal.show();
-    });
+                // Show modal
+                const modalElement = document.getElementById('transferPreviewModal');
+                if (modalElement) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                } else {
+                    console.error('Transfer preview modal element not found');
+                    showToast('Modal element not found', 'error');
+                }
+            } catch (error) {
+                console.error('Error in generateTransferList:', error);
+                showToast('Error: ' + error.message, 'error');
+            }
+        });
+    }
+
+    // Toggle password visibility
+    const togglePasswordBtn = document.getElementById('togglePassword');
+    if (togglePasswordBtn) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const passwordInput = document.getElementById('sap_password');
+            if (passwordInput) {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                this.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+            }
+        });
+    }
+
+    // Handle Enter key in SAP credentials form
+    const sapCredsForm = document.getElementById('sapCredsForm');
+    if (sapCredsForm) {
+        sapCredsForm.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const saveSapCredentialsBtn = document.getElementById('saveSapCredentials');
+                if (saveSapCredentialsBtn) {
+                    saveSapCredentialsBtn.click();
+                }
+            }
+        });
+    }
+
+    // Auto-focus on username when SAP modal opens
+    const sapCredentialsModal = document.getElementById('sapCredentialsModal');
+    if (sapCredentialsModal) {
+        sapCredentialsModal.addEventListener('shown.bs.modal', function () {
+            const sapUserInput = document.getElementById('sap_user');
+            if (sapUserInput) {
+                sapUserInput.focus();
+            }
+        });
+    }
 
     // Confirm transfer button
-    document.getElementById('confirmTransfer').addEventListener('click', function() {
-        const remarks = document.getElementById('transferRemarks').value;
+    const confirmTransferBtn = document.getElementById('confirmTransfer');
+    if (confirmTransferBtn) {
+        confirmTransferBtn.addEventListener('click', function() {
+            const transferRemarks = document.getElementById('transferRemarks');
+            const remarks = transferRemarks ? transferRemarks.value : '';
 
-        // Validasi: Pastikan semua quantity valid
-        let isValid = true;
-        let errorMessage = '';
+            // Validasi: Pastikan semua quantity valid
+            let isValid = true;
+            let errorMessage = '';
 
-        transferItems.forEach(function(item, index) {
-            if (!item.qty || item.qty <= 0) {
-                isValid = false;
-                errorMessage = 'Quantity untuk ' + item.materialCode + ' harus diisi';
+            transferItems.forEach(function(item, index) {
+                if (!item.qty || item.qty <= 0) {
+                    isValid = false;
+                    errorMessage = 'Quantity untuk ' + item.materialCode + ' harus diisi';
+                    return;
+                }
+
+                const maxQty = getMaxQtyForModalItem(index);
+                if (item.qty > maxQty) {
+                    isValid = false;
+                    errorMessage = 'Quantity untuk ' + item.materialCode + ' (' + formatAngka(item.qty) + ') melebihi available stock (' + formatAngka(maxQty) + ')';
+                    return;
+                }
+            });
+
+            if (!isValid) {
+                showToast(errorMessage, 'error');
                 return;
             }
 
-            const maxQty = getMaxQtyForModalItem(index);
-            if (item.qty > maxQty) {
-                isValid = false;
-                errorMessage = 'Quantity untuk ' + item.materialCode + ' (' + formatAngka(item.qty) + ') melebihi available stock untuk batch yang dipilih (' + formatAngka(maxQty) + ')';
-                return;
+            // Update transferItems dengan data dari modal
+            document.querySelectorAll('.qty-transfer-input').forEach(function(input) {
+                const index = parseInt(input.dataset.index);
+                let value = input.value.trim();
+
+                if (value) {
+                    let parsedValue = parseAngka(value);
+                    transferItems[index].qty = parsedValue;
+                }
+            });
+
+            // Update plant tujuan dan sloc tujuan
+            document.querySelectorAll('.plant-tujuan-input').forEach(function(input) {
+                const index = parseInt(input.dataset.index);
+                transferItems[index].plantTujuan = input.value;
+            });
+
+            document.querySelectorAll('.sloc-tujuan-input').forEach(function(input) {
+                const index = parseInt(input.dataset.index);
+                transferItems[index].slocTujuan = input.value;
+            });
+
+            // Update batch yang dipilih
+            document.querySelectorAll('.batch-source-select').forEach(function(select) {
+                const index = parseInt(select.dataset.index);
+                const selectedOption = select.options[select.selectedIndex];
+
+                if (selectedOption) {
+                    transferItems[index].selectedBatch = select.value;
+                    transferItems[index].batchSloc = selectedOption.dataset.sloc || '';
+                }
+            });
+
+            // Save remarks to transfer items
+            transferItems.forEach(function(item) {
+                item.remarks = remarks;
+            });
+
+            // Close preview modal first
+            const transferModalElement = document.getElementById('transferPreviewModal');
+            if (transferModalElement) {
+                const transferModal = bootstrap.Modal.getInstance(transferModalElement);
+                if (transferModal) {
+                    transferModal.hide();
+                }
             }
+
+            // Wait for modal to close, then show SAP credentials modal
+            setTimeout(function() {
+                const sapModalElement = document.getElementById('sapCredentialsModal');
+                if (sapModalElement) {
+                    const sapModal = new bootstrap.Modal(sapModalElement, {
+                        backdrop: 'static',
+                        keyboard: false
+                    });
+                    sapModal.show();
+
+                    // Reset form SAP credentials
+                    const sapUserInput = document.getElementById('sap_user');
+                    const sapPasswordInput = document.getElementById('sap_password');
+                    if (sapUserInput) sapUserInput.value = '';
+                    if (sapPasswordInput) sapPasswordInput.value = '';
+                    if (sapUserInput) sapUserInput.focus();
+                }
+            }, 300);
         });
+    }
 
-        if (!isValid) {
-            showToast(errorMessage, 'error');
-            return;
-        }
+    // Handle SAP credentials save - FIXED VERSION
+    const saveSapCredentialsBtn = document.getElementById('saveSapCredentials');
+    if (saveSapCredentialsBtn) {
+        saveSapCredentialsBtn.addEventListener('click', function() {
+            const sapUser = document.getElementById('sap_user').value;
+            const sapPassword = document.getElementById('sap_password').value;
 
-        // Prepare data untuk API call
-        const transferData = {
-            document_id: {{ $document->id }},
-            document_no: "{{ $document->document_no }}",
-            plant: "{{ $document->plant }}",
-            sloc_supply: "{{ $document->sloc_supply }}",
-            items: transferItems.map(function(item) {
+            if (!sapUser || !sapPassword) {
+                showToast('Please fill all required SAP credentials', 'error');
+                return;
+            }
+
+            // Sembunyikan modal SAP credentials
+            const sapModalElement = document.getElementById('sapCredentialsModal');
+            const sapModal = bootstrap.Modal.getInstance(sapModalElement);
+            if (sapModal) {
+                sapModal.hide();
+            }
+
+            // Show loading
+            const loadingModalElement = document.getElementById('loadingModal');
+            const loadingModal = new bootstrap.Modal(loadingModalElement);
+            loadingModal.show();
+            document.getElementById('loadingText').textContent = 'Processing Transfer to SAP...';
+
+            // Prepare items for SAP transfer
+            const sapTransferItems = transferItems.map(function(item) {
+                // Parse batch_sloc
+                let batchSloc = item.batchSloc || '';
+                if (batchSloc && !batchSloc.startsWith('SLOC:')) {
+                    batchSloc = 'SLOC:' + batchSloc;
+                }
+
                 return {
-                    id: item.id,
                     material_code: item.materialCode,
                     material_desc: item.materialDesc,
-                    requested_qty: item.requestedQty,
-                    available_stock: item.availableStock,
-                    quantity: item.qty,
+                    quantity: item.qty || 0,
                     unit: item.unit,
-                    plant_tujuan: item.plantTujuan,
-                    sloc_tujuan: item.slocTujuan,
-                    batch: item.selectedBatch,
-                    batch_qty: item.batchQty,
-                    batch_sloc: item.batchSloc,
-                    batch_info: item.batchInfo
+                    plant_tujuan: item.plantTujuan || '{{ $document->plant }}',
+                    sloc_tujuan: item.slocTujuan || '{{ $document->sloc_supply }}',
+                    batch: item.selectedBatch || '',
+                    batch_sloc: batchSloc,
+                    requested_qty: item.requestedQty,
+                    available_stock: item.availableStock
                 };
-            }),
-            remarks: remarks,
-            created_by: {{ auth()->id() }}
-        };
+            });
 
-        // Show loading
-        const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-        loadingModal.show();
-        document.getElementById('loadingText').textContent = 'Membuat Transfer Document...';
-
-        // Send to server
-        fetch('{{ route("documents.create-transfer") }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(transferData)
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            loadingModal.hide();
-
-            if (data.success) {
-                showToast('Transfer document berhasil dibuat!', 'success');
-
-                // Close modal
-                const transferModal = bootstrap.Modal.getInstance(document.getElementById('transferPreviewModal'));
-                transferModal.hide();
-
-                // Clear transfer list
-                document.getElementById('clearTransferList').click();
-
-                // Optionally redirect atau refresh
-                setTimeout(function() {
-                    window.location.reload();
-                }, 1500);
-            } else {
-                showToast('Error: ' + data.message, 'error');
-            }
-        })
-        .catch(function(error) {
-            loadingModal.hide();
-            console.error('Error:', error);
-            showToast('Error creating transfer document', 'error');
-        });
-    });
-
-    // Show loading animation pada form submit
-    document.getElementById('checkStockForm').addEventListener('submit', function(e) {
-        const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-        loadingModal.show();
-        document.getElementById('loadingText').textContent = 'Checking Stock...';
-    });
-
-    // Handle reset stock form submission - SEDERHANA
-    const resetStockForm = document.getElementById('resetStockForm');
-    if (resetStockForm) {
-        resetStockForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            if (!confirm('Apakah Anda yakin ingin mereset data stock?')) {
-                return;
-            }
-
-            const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-            loadingModal.show();
-            document.getElementById('loadingText').textContent = 'Resetting Stock...';
-
-            const token = resetStockForm.querySelector('input[name="_token"]').value;
-
-            fetch(resetStockForm.action, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': token,
-                    'Accept': 'application/json'
+            // Prepare transfer data
+            const transferData = {
+                plant: "{{ $document->plant }}",
+                sloc_supply: "{{ $document->sloc_supply }}",
+                items: sapTransferItems,
+                header_text: document.getElementById('transferRemarks') ?
+                            "Transfer from Document {{ $document->document_no }} - " +
+                            document.getElementById('transferRemarks').value :
+                            "Transfer from Document {{ $document->document_no }}",
+                remarks: document.getElementById('transferRemarks') ?
+                         document.getElementById('transferRemarks').value : '',
+                sap_credentials: {
+                    user: sapUser,
+                    passwd: sapPassword,
+                    client: "{{ env('SAP_CLIENT', '100') }}",
+                    lang: "{{ env('SAP_LANG', 'EN') }}",
+                    ashost: "{{ env('SAP_ASHOST', 'localhost') }}",
+                    sysnr: "{{ env('SAP_SYSNR', '00') }}"
                 }
+            };
+
+            console.log('Sending transfer data to server:', {
+                document_id: {{ $document->id }},
+                item_count: sapTransferItems.length,
+                first_item: sapTransferItems[0] || 'No items'
+            });
+
+            // Send to Laravel controller
+            fetch('{{ route("documents.create-transfer", $document->id) }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(transferData)
             })
-            .then(function(response) { return response.json(); })
+            .then(function(response) {
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    return response.text().then(function(text) {
+                        console.error('Non-JSON response:', text);
+                        throw new Error('Expected JSON response but got: ' + text.substring(0, 100));
+                    });
+                }
+
+                if (!response.ok) {
+                    return response.json().then(function(errData) {
+                        console.error('Server error response:', errData);
+                        throw new Error(errData.message || 'Server Error: ' + response.statusText);
+                    });
+                }
+                return response.json();
+            })
             .then(function(data) {
                 loadingModal.hide();
 
                 if (data.success) {
-                    showToast(data.message, 'success');
-                    // Auto refresh halaman
-                    window.location.reload();
+                    // Menampilkan transfer_no yang berhasil dibuat
+                    const transferNo = data.transfer_no || 'PENDING';
+                    showToast('Transfer successful! Material Document: ' + transferNo + ' created', 'success');
+
+                    // Clear transfer list
+                    document.getElementById('clearTransferList').click();
+
+                    // Refresh halaman setelah 1.5 detik untuk menampilkan data terbaru
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1500);
                 } else {
-                    showToast('Error: ' + data.message, 'error');
+                    let errorMsg = data.message || 'Unknown error occurred';
+                    if (data.errors && Array.isArray(data.errors)) {
+                        errorMsg = data.errors.join(', ');
+                    } else if (data.errors && typeof data.errors === 'object') {
+                        errorMsg = Object.values(data.errors).flat().join(', ');
+                    }
+                    showToast('Transfer Error: ' + errorMsg, 'error');
                 }
             })
             .catch(function(error) {
                 loadingModal.hide();
                 console.error('Error:', error);
-                showToast('Error resetting stock data.', 'error');
+
+                let errorMsg = error.message || 'Error creating transfer document';
+                if (errorMsg.includes('RFC_RC') || errorMsg.includes('RFC')) {
+                    errorMsg = 'SAP RFC Error: Please check SAP connection and credentials.';
+                } else if (errorMsg.includes('Network') || errorMsg.includes('Failed to fetch')) {
+                    errorMsg = 'Network Error: Cannot connect to server. Please check your connection.';
+                } else if (errorMsg.includes('Validation error')) {
+                    errorMsg = 'Validation Error: Please check all required fields are filled correctly.';
+                }
+
+                showToast(errorMsg, 'error');
+            });
+        });
+    }
+
+    // Show loading animation pada form submit
+    const checkStockForm = document.getElementById('checkStockForm');
+    if (checkStockForm) {
+        checkStockForm.addEventListener('submit', function(e) {
+            const loadingModalElement = document.getElementById('loadingModal');
+            if (loadingModalElement) {
+                const loadingModal = new bootstrap.Modal(loadingModalElement);
+                loadingModal.show();
+
+                const loadingText = document.getElementById('loadingText');
+                if (loadingText) {
+                    loadingText.textContent = 'Checking Stock...';
+                }
+            }
+        });
+    }
+
+    // Handle reset stock form submission - PERUBAHAN: Hilangkan konfirmasi
+    const resetStockForm = document.getElementById('resetStockForm');
+    if (resetStockForm) {
+        resetStockForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Hapus konfirmasi, langsung tampilkan loading
+            const loadingModalElement = document.getElementById('loadingModal');
+            if (loadingModalElement) {
+                const loadingModal = new bootstrap.Modal(loadingModalElement);
+                loadingModal.show();
+
+                const loadingText = document.getElementById('loadingText');
+                if (loadingText) {
+                    loadingText.textContent = 'Resetting Stock...';
+                }
+            }
+
+            // Get form data
+            const formData = new FormData(this);
+
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: formData
+            })
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                // Hide loading modal
+                const loadingModalElement = document.getElementById('loadingModal');
+                if (loadingModalElement) {
+                    const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
+                    if (loadingModal) {
+                        loadingModal.hide();
+                    }
+                }
+
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    // Auto refresh halaman setelah 1 detik
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showToast('Error: ' + data.message, 'error');
+                }
+            })
+            .catch(function(error) {
+                // Hide loading modal
+                const loadingModalElement = document.getElementById('loadingModal');
+                if (loadingModalElement) {
+                    const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
+                    if (loadingModal) {
+                        loadingModal.hide();
+                    }
+                }
+
+                console.error('Error:', error);
+                showToast('Error resetting stock data: ' + error.message, 'error');
             });
         });
     }

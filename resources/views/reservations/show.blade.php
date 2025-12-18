@@ -204,5 +204,58 @@
             @endif
         </div>
     </div>
+    <div class="modal fade" id="sapCredentialsModal" tabindex="-1" aria-labelledby="sapCredentialsModalLabel" aria-hidden="true" style="z-index: 9999;">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);">
+            <div class="modal-header bg-primary text-white py-2" style="border-radius: 10px 10px 0 0;">
+                <h5 class="modal-title fs-6 mb-0" id="sapCredentialsModalLabel">
+                    <i class="fas fa-key me-2"></i> SAP Login Required
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="alert alert-info py-2 mb-3 fs-7" style="background: rgba(23, 162, 184, 0.15); border-color: rgba(23, 162, 184, 0.3);">
+                    <i class="fas fa-info-circle me-2"></i> Enter your SAP credentials to process transfer
+                </div>
+
+                <form id="sapCredsForm">
+                    <div class="mb-3">
+                        <label for="sap_user" class="form-label fs-7 mb-1 fw-semibold">SAP Username *</label>
+                        <input type="text"
+                               class="form-control form-control-sm border-primary"
+                               id="sap_user"
+                               placeholder="Enter SAP username"
+                               required
+                               autocomplete="off">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="sap_password" class="form-label fs-7 mb-1 fw-semibold">SAP Password *</label>
+                        <div class="input-group input-group-sm">
+                            <input type="password"
+                                   class="form-control form-control-sm border-primary"
+                                   id="sap_password"
+                                   placeholder="Enter SAP password"
+                                   required
+                                   autocomplete="off">
+                            <button class="btn btn-outline-primary" type="button" id="togglePassword">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm fs-7" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-primary btn-sm fs-7 fw-semibold" id="saveSapCredentials">
+                    <i class="fas fa-paper-plane me-1"></i> Process Transfer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
 </div>
 @endsection

@@ -25,130 +25,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class SAPConnector:
-    def __init__(self):
-        self.conn = None
-        self.params = {
-            'ashost': os.getenv('SAP_ASHOST'),
-            'sysnr': os.getenv('SAP_SYSNR'),
-            'client': os.getenv('SAP_CLIENT'),
-            'user': os.getenv('SAP_USERNAME'),
-            'passwd': os.getenv('SAP_PASSWORD'),
-            'lang': os.getenv('SAP_LANG', 'EN')
-        }
-
-    def connect(self):
-        """Connect to SAP"""
-        try:
-            logger.info(f"🔌 Connecting to SAP...")
-            self.conn = pyrfc.Connection(**self.params)
-            logger.info("✅ SAP Connected")
-            return True
-        except Exception as e:
-            logger.error(f"❌ SAP Connection failed: {e}")
-            return False
-
-    def disconnect(self):
-        """Disconnect from SAP"""
-        if self.conn:
-            try:
-                self.conn.close()
-                logger.info("🔌 SAP Disconnected")
-            except:
-                pass
-
-    def get_reservation_data(self, plant: str, pro_numbers: list):
-        """Get reservation data from SAP - Loop per PRO number"""
-        all_data = []
-
-        try:
-            if not self.conn and not self.connect():
-                return None
-
-            # Loop untuk setiap PRO number
-            for pro_number in pro_numbers:
-                try:
-                    logger.info(f"📡 Calling RFC Z_FM_YMMF005 for PRO: {pro_number}")
-
-                    result = self.conn.call(
-                        'Z_FM_YMMF005',
-                        P_WERKS=plant,
-                        P_AUFNR=pro_number
-                    )
-
-                    # Check for data
-                    if 'T_DATA1' in result:
-                        data = result['T_DATA1']
-                        if isinstance(data, list) and data:
-                            logger.info(f"✅ Got {len(data)} records for PRO {pro_number}")
-
-                            # **DEBUG: Log struktur data pertama untuk melihat field yang tersedia**
-                            if data:
-                                first_record = data[0]
-                                logger.info(f"📊 Struktur data SAP untuk debugging:")
-                                for key, value in first_record.items():
-                                    logger.info(f"  {key}: {value} (type: {type(value)})")
-
-                            # Tambahkan PRO number ke setiap record
-                            for item in data:
-                                item['PRO_NUMBER'] = pro_number
-                                all_data.append(item)
-                        else:
-                            logger.warning(f"⚠️  T_DATA1 is empty or not a list for PRO {pro_number}")
-                    else:
-                        logger.warning(f"⚠️  No data in response for PRO {pro_number}")
-
-                except Exception as e:
-                    logger.error(f"❌ Error getting data for PRO {pro_number}: {e}")
-                    continue
-
-            logger.info(f"📊 Total records from all PROs: {len(all_data)}")
-            return all_data
-
-        except Exception as e:
-            logger.error(f"❌ Error in get_reservation_data: {e}")
-            return None
-
-    def get_stock_data(self, plant: str, matnr: str):
-        """Get stock data from SAP using RFC Z_FM_YMMR006NX"""
-        try:
-            if not self.conn and not self.connect():
-                return None
-
-            logger.info(f"📡 Calling RFC Z_FM_YMMR006NX for Plant: {plant}, Material: {matnr}")
-
-            result = self.conn.call(
-                'Z_FM_YMMR006NX',
-                P_WERKS=plant,
-                P_MATNR=matnr
-            )
-
-            # Check for data in T_DATA
-            if 'T_DATA' in result:
-                data = result['T_DATA']
-                if isinstance(data, list) and data:
-                    logger.info(f"✅ Got {len(data)} stock records for material {matnr}")
-
-                    # Debug: log field yang tersedia
-                    if data:
-                        first_record = data[0]
-                        logger.info(f"📊 Struktur data stock untuk debugging:")
-                        for key, value in first_record.items():
-                            logger.info(f"  {key}: {value} (type: {type(value)})")
-
-                    return data
-                else:
-                    logger.warning(f"⚠️  T_DATA is empty or not a list for material {matnr}")
-                    return []
-            else:
-                logger.warning(f"⚠️  No data in response for material {matnr}")
-                return []
-
-        except Exception as e:
-            logger.error(f"❌ Error getting stock data: {e}")
-            logger.error(traceback.format_exc())
-            return None
-
 class MySQLHandler:
     def __init__(self):
         self.config = {
@@ -166,50 +42,33 @@ class MySQLHandler:
             conn = mysql.connector.connect(**self.config)
             return conn
         except Error as e:
-            logger.error(f"❌ MySQL Connection error: {e}")
+            logger.error(f"MySQL Connection error: {e}")
             return None
 
     def save_reservation_data(self, plant: str, pro_numbers: list, sap_data: list, user_id: int = None):
         """Save SAP data to MySQL dengan SEMUA field dari T_DATA1"""
         if not sap_data:
-            logger.warning("⚠️  No data to save")
             return 0
 
         conn = self.get_connection()
         if not conn:
-            logger.error("❌ Cannot connect to MySQL")
             return 0
 
         cursor = conn.cursor()
         saved_count = 0
 
         try:
-            # Get table structure
             cursor.execute("SHOW COLUMNS FROM sap_reservations")
             columns = [row[0] for row in cursor.fetchall()]
-            logger.info(f"📊 Table columns: {columns}")
-
-            # Log untuk debugging - tampilkan semua field yang ada di data SAP
-            if sap_data:
-                first_item = sap_data[0]
-                logger.info(f"🔍 Field yang tersedia dari SAP T_DATA1:")
-                sap_fields = list(first_item.keys())
-                for i, field in enumerate(sorted(sap_fields), 1):
-                    logger.info(f"  {i:2d}. {field}: {first_item.get(field)}")
 
             for item in sap_data:
                 try:
-                    # **PERBAIKAN: Gunakan PSMNG untuk quantity**
                     quantity = 0
-                    # Coba ambil dari PSMNG dulu, jika tidak ada coba PSMHD
                     if 'PSMNG' in item and item['PSMNG']:
                         quantity = float(item['PSMNG'])
                     elif 'PSMHD' in item and item['PSMHD']:
                         quantity = float(item['PSMHD'])
-                    else:
-                        quantity = 0
 
-                    # Prepare base data dengan SEMUA field dari SAP
                     base_data = {
                         'rsnum': item.get('RSNUM', ''),
                         'rspos': item.get('RSPOS', ''),
@@ -232,7 +91,6 @@ class MySQLHandler:
                         'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     }
 
-                    # **TAMBAHAN: Field-field yang sebelumnya NULL di database**
                     additional_fields = {
                         'nampl': item.get('NAMPL', ''),
                         'lgort': item.get('LGORT', ''),
@@ -312,27 +170,16 @@ class MySQLHandler:
                         'tel_number': item.get('TEL_NUMBER', ''),
                     }
 
-                    # Gabungkan base_data dengan additional_fields
                     base_data.update(additional_fields)
 
-                    # **PERBAIKAN: Filter hanya kolom yang ada di tabel**
                     data_to_insert = {}
                     for col in columns:
                         if col in base_data and base_data[col] is not None:
                             data_to_insert[col] = base_data[col]
 
-                    # Validasi data wajib
                     if not data_to_insert.get('rsnum') or not data_to_insert.get('matnr'):
-                        logger.warning(f"⚠️  Skipping record missing rsnum or matnr")
                         continue
 
-                    # Debug: Tampilkan data yang akan diinsert
-                    if saved_count == 0:
-                        logger.info(f"🔍 Data pertama yang akan diinsert:")
-                        for key, value in data_to_insert.items():
-                            logger.info(f"  {key}: {value}")
-
-                    # Build SQL
                     cols = list(data_to_insert.keys())
                     values = list(data_to_insert.values())
 
@@ -354,27 +201,20 @@ class MySQLHandler:
                     cursor.execute(sql, values)
                     saved_count += 1
 
-                    if saved_count % 100 == 0:
-                        logger.info(f"📝 Processed {saved_count} records...")
-
                 except Exception as e:
-                    logger.error(f"❌ Error processing record: {e}")
-                    logger.error(f"Record data keys: {list(item.keys())}")
-                    logger.error(f"Error details: {traceback.format_exc()}")
+                    logger.error(f"Error processing record: {e}")
                     continue
 
             conn.commit()
-            logger.info(f"✅ Saved {saved_count} records from {len(sap_data)} SAP records")
+            return saved_count
 
         except Exception as e:
-            logger.error(f"❌ Save error: {e}")
-            logger.error(f"Error traceback: {traceback.format_exc()}")
+            logger.error(f"Save error: {e}")
             conn.rollback()
+            return 0
         finally:
             cursor.close()
             conn.close()
-
-        return saved_count
 
     def _parse_sap_date(self, date_value):
         """Parse SAP date (YYYYMMDD) to MySQL date"""
@@ -387,8 +227,380 @@ class MySQLHandler:
             elif len(date_str) == 10 and date_str[4] == '-' and date_str[7] == '-':
                 return date_str
         except Exception as e:
-            logger.warning(f"⚠️  Failed to parse date {date_value}: {e}")
-        return None
+            return None
+
+    def save_transfer_to_db(self, transfer_data, sap_response, item_results, user_id=None, user_name=None):
+        """Save transfer data to MySQL transfers table"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+
+        cursor = conn.cursor()
+
+        try:
+            # Extract data from transfer_data
+            transfer_info = transfer_data.get('transfer_info', {})
+            items = transfer_data.get('items', [])
+
+            # Get material document from SAP response
+            material_doc = None
+
+            # Check multiple possible field names for material document
+            if sap_response and isinstance(sap_response, dict):
+                material_doc = (
+                    sap_response.get('MAT_DOC') or
+                    sap_response.get('MATDOC') or
+                    sap_response.get('MATERIALDOC') or
+                    sap_response.get('EV_MATERIAL_DOC')
+                )
+
+            # If still not found, check in RETURN messages
+            if not material_doc and sap_response and 'RETURN' in sap_response:
+                for msg in sap_response['RETURN']:
+                    if msg.get('MESSAGE', '').find('Material document') != -1:
+                        # Try to extract material document number from message
+                        import re
+                        match = re.search(r'\d+', msg.get('MESSAGE', ''))
+                        if match:
+                            material_doc = match.group()
+                            break
+
+            # Calculate totals
+            total_items = len([item for item in items if item.get('material_code')])
+            total_quantity = sum(float(item.get('quantity', 0)) for item in items if item.get('quantity'))
+
+            # PERBAIKAN: Check jika document_id valid, jika tidak gunakan NULL
+            document_id = transfer_info.get('document_id')
+
+            # PERBAIKAN: Cek apakah document_id valid dengan mencoba mencari di reservation_documents
+            # Jika tidak valid, kita akan set NULL atau skip document_id
+            valid_document_id = None
+            if document_id:
+                try:
+                    # Cek apakah document_id ada di reservation_documents
+                    cursor.execute("SELECT id FROM reservation_documents WHERE id = %s", (document_id,))
+                    if cursor.fetchone():
+                        valid_document_id = document_id
+                except Exception as e:
+                    logger.warning(f"Error checking document_id {document_id}: {e}")
+
+            # PERBAIKAN: Siapkan data untuk INSERT
+            # Kita akan mencoba INSERT tanpa document_id jika tidak valid
+            insert_data = {
+                'document_no': transfer_info.get('document_no', 'TRF-' + datetime.now().strftime('%Y%m%d-%H%M%S')),
+                'transfer_no': material_doc,
+                'plant_supply': transfer_info.get('plant_supply', ''),
+                'plant_destination': transfer_info.get('plant_destination', ''),
+                'move_type': transfer_info.get('move_type', '311'),
+                'total_items': total_items,
+                'total_quantity': total_quantity,
+                'status': 'COMPLETED' if material_doc else 'SUBMITTED',
+                'sap_message': json.dumps(sap_response.get('RETURN', []), ensure_ascii=False, default=str) if sap_response else '',
+                'remarks': transfer_info.get('remarks', ''),
+                'created_by': user_id if user_id else 0,
+                'created_by_name': user_name if user_name else 'SYSTEM',
+                'completed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S') if material_doc else None,
+                'sap_response': json.dumps(sap_response, ensure_ascii=False, default=str) if sap_response else None,
+                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+
+            # PERBAIKAN: Tambahkan document_id hanya jika valid
+            if valid_document_id:
+                insert_data['document_id'] = valid_document_id
+
+            # PERBAIKAN: Check struktur tabel untuk menghindari error kolom tidak ada
+            try:
+                cursor.execute("SHOW COLUMNS FROM transfers")
+                columns_info = cursor.fetchall()
+                table_columns = [col[0] for col in columns_info]
+
+                # Filter hanya kolom yang ada di tabel
+                filtered_data = {}
+                for key, value in insert_data.items():
+                    if key in table_columns:
+                        filtered_data[key] = value
+
+                # Jika document_id tidak ada di filtered_data, berarti kita tidak menyertakannya
+                # Ini akan membuat database menggunakan nilai default atau NULL
+
+                columns = list(filtered_data.keys())
+                values = list(filtered_data.values())
+
+                if not columns:
+                    logger.error("No valid columns to insert")
+                    return None
+
+                placeholders = ['%s'] * len(columns)
+
+                sql = f"""
+                    INSERT INTO transfers ({', '.join(columns)})
+                    VALUES ({', '.join(placeholders)})
+                """
+
+                logger.info(f"Executing SQL with columns: {columns}")
+                cursor.execute(sql, values)
+                conn.commit()
+
+                # Get the inserted ID
+                transfer_id = cursor.lastrowid
+
+                logger.info(f"Transfer saved to database with ID: {transfer_id}, Material Doc: {material_doc}")
+
+                # Save transfer items if table exists
+                try:
+                    self.save_transfer_items_to_db(transfer_id, items, item_results)
+                except Exception as e:
+                    logger.warning(f"Could not save transfer items: {e}")
+                    # Continue even if items saving fails
+
+                return {
+                    'transfer_id': transfer_id,
+                    'material_doc': material_doc,
+                    'total_items': total_items,
+                    'total_quantity': total_quantity,
+                    'document_id_included': 'document_id' in filtered_data
+                }
+
+            except Exception as e:
+                logger.error(f"Error preparing insert data: {e}")
+                raise
+
+        except mysql.connector.errors.IntegrityError as ie:
+            # PERBAIKAN: Handle foreign key constraint error secara spesifik
+            logger.error(f"IntegrityError saving transfer: {ie}")
+            conn.rollback()
+
+            # Coba lagi tanpa document_id
+            try:
+                # Remove document_id from insert_data
+                if 'document_id' in insert_data:
+                    del insert_data['document_id']
+
+                # Filter hanya kolom yang ada di tabel
+                cursor.execute("SHOW COLUMNS FROM transfers")
+                columns_info = cursor.fetchall()
+                table_columns = [col[0] for col in columns_info]
+
+                filtered_data = {}
+                for key, value in insert_data.items():
+                    if key in table_columns:
+                        filtered_data[key] = value
+
+                columns = list(filtered_data.keys())
+                values = list(filtered_data.values())
+
+                if columns:
+                    placeholders = ['%s'] * len(columns)
+
+                    sql = f"""
+                        INSERT INTO transfers ({', '.join(columns)})
+                        VALUES ({', '.join(placeholders)})
+                    """
+
+                    logger.info(f"Retrying INSERT without document_id. Columns: {columns}")
+                    cursor.execute(sql, values)
+                    conn.commit()
+
+                    transfer_id = cursor.lastrowid
+                    logger.info(f"Transfer saved (retry) with ID: {transfer_id}, Material Doc: {material_doc}")
+
+                    return {
+                        'transfer_id': transfer_id,
+                        'material_doc': material_doc,
+                        'total_items': total_items,
+                        'total_quantity': total_quantity,
+                        'document_id_included': False,
+                        'retry_success': True
+                    }
+                else:
+                    logger.error("No columns to insert after removing document_id")
+                    return None
+
+            except Exception as retry_error:
+                logger.error(f"Retry also failed: {retry_error}")
+                conn.rollback()
+                return None
+
+        except Exception as e:
+            logger.error(f"Error saving transfer to database: {e}")
+            logger.error(traceback.format_exc())
+            conn.rollback()
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+
+    def save_transfer_items_to_db(self, transfer_id, items, item_results):
+        """Save transfer items to a separate table (if exists)"""
+        conn = self.get_connection()
+        if not conn:
+            return 0
+
+        cursor = conn.cursor()
+        saved_count = 0
+
+        try:
+            # Check if transfer_items table exists
+            cursor.execute("SHOW TABLES LIKE 'transfer_items'")
+            table_exists = cursor.fetchone()
+
+            if not table_exists:
+                logger.info("Table 'transfer_items' does not exist, skipping items save")
+                return 0
+
+            for idx, item in enumerate(items):
+                # Find corresponding item result
+                item_result = next((ir for ir in item_results if ir.get('item_number') == idx + 1), {})
+
+                insert_data = {
+                    'transfer_id': transfer_id,
+                    'item_number': idx + 1,
+                    'material_code': item.get('material_code', ''),
+                    'material_code_raw': item.get('material_code_raw', item.get('material_code', '')),
+                    'batch': item.get('batch', ''),
+                    'batch_sloc': item.get('batch_sloc', ''),
+                    'quantity': float(item.get('quantity', 0)) if item.get('quantity') else 0.0,
+                    'unit': item.get('unit', 'PC'),
+                    'unit_sap': 'ST' if item.get('unit', 'PC').upper() == 'PC' else item.get('unit', ''),
+                    'plant_supply': item.get('plant_supply', ''),
+                    'sloc_supply': item.get('batch_sloc', '').replace('SLOC:', ''),
+                    'plant_destination': item.get('plant_tujuan', ''),
+                    'sloc_destination': item.get('sloc_tujuan', ''),
+                    'sales_ord': item.get('sales_ord', ''),
+                    's_ord_item': item.get('s_ord_item', ''),
+                    'sap_status': item_result.get('status', ''),
+                    'sap_message': item_result.get('message', ''),
+                    'material_formatted': item_result.get('material_formatted', False),
+                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+
+                # Build columns and values
+                columns = list(insert_data.keys())
+                values = list(insert_data.values())
+                placeholders = ['%s'] * len(columns)
+
+                sql = f"""
+                    INSERT INTO transfer_items ({', '.join(columns)})
+                    VALUES ({', '.join(placeholders)})
+                """
+
+                cursor.execute(sql, values)
+                saved_count += 1
+
+            conn.commit()
+            logger.info(f"Saved {saved_count} items for transfer ID: {transfer_id}")
+            return saved_count
+
+        except Exception as e:
+            logger.error(f"Error saving transfer items: {e}")
+            logger.error(traceback.format_exc())
+            conn.rollback()
+            return 0
+        finally:
+            cursor.close()
+            conn.close()
+
+class SAPConnector:
+    def __init__(self):
+        self.conn = None
+        self.params = {
+            'ashost': os.getenv('SAP_ASHOST', '192.168.254.154'),
+            'sysnr': os.getenv('SAP_SYSNR', '01'),
+            'client': os.getenv('SAP_CLIENT', '300'),
+            'user': os.getenv('SAP_USERNAME', 'sapuser'),
+            'passwd': os.getenv('SAP_PASSWORD', 'sappassword'),
+            'lang': os.getenv('SAP_LANG', 'EN')
+        }
+
+    def connect(self):
+        """Connect to SAP"""
+        try:
+            logger.info(f"Attempting SAP connection with params: host={self.params['ashost']}, client={self.params['client']}, user={self.params['user'][:5]}...")
+            self.conn = pyrfc.Connection(**self.params)
+
+            # Test connection
+            result = self.conn.call('RFC_PING')
+            logger.info("SAP Connection successful")
+            return True
+
+        except pyrfc._exception.LogonError as e:
+            logger.error(f"SAP Logon failed: {e}")
+            return False
+        except pyrfc._exception.CommunicationError as e:
+            logger.error(f"SAP Communication failed: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"SAP Connection failed: {e}")
+            return False
+
+    def disconnect(self):
+        """Disconnect from SAP"""
+        if self.conn:
+            try:
+                self.conn.close()
+                logger.info("SAP connection closed")
+            except Exception as e:
+                logger.error(f"Error closing SAP connection: {e}")
+
+    def get_reservation_data(self, plant: str, pro_numbers: list):
+        """Get reservation data from SAP - Loop per PRO number"""
+        all_data = []
+
+        try:
+            if not self.conn and not self.connect():
+                return None
+
+            for pro_number in pro_numbers:
+                try:
+                    result = self.conn.call(
+                        'Z_FM_YMMF005',
+                        P_WERKS=plant,
+                        P_AUFNR=pro_number
+                    )
+
+                    if 'T_DATA1' in result:
+                        data = result['T_DATA1']
+                        if isinstance(data, list) and data:
+                            for item in data:
+                                item['PRO_NUMBER'] = pro_number
+                                all_data.append(item)
+
+                except Exception as e:
+                    logger.error(f"Error getting data for PRO {pro_number}: {e}")
+                    continue
+
+            return all_data
+
+        except Exception as e:
+            logger.error(f"Error in get_reservation_data: {e}")
+            return None
+
+    def get_stock_data(self, plant: str, matnr: str):
+        """Get stock data from SAP using RFC Z_FM_YMMR006NX"""
+        try:
+            if not self.conn and not self.connect():
+                return None
+
+            result = self.conn.call(
+                'Z_FM_YMMR006NX',
+                P_WERKS=plant,
+                P_MATNR=matnr
+            )
+
+            if 'T_DATA' in result:
+                data = result['T_DATA']
+                if isinstance(data, list) and data:
+                    return data
+                else:
+                    return []
+            else:
+                return []
+
+        except Exception as e:
+            logger.error(f"Error getting stock data: {e}")
+            return None
 
 # Initialize
 sap = SAPConnector()
@@ -399,9 +611,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'service': 'SAP Sync',
-        'timestamp': datetime.now().isoformat(),
-        'version': '1.4.0',
-        'features': ['all_sap_fields', 'enhanced_logging', 'complete_data_mapping', 'stock_inquiry']
+        'timestamp': datetime.now().isoformat()
     })
 
 @app.route('/api/sap/sync', methods=['POST'])
@@ -414,20 +624,12 @@ def sync_reservations():
         pro_numbers = data.get('pro_numbers', [])
         user_id = data.get('user_id')
 
-        logger.info(f"🔄 Starting sync process", {
-            'plant': plant,
-            'pro_numbers': pro_numbers,
-            'pro_count': len(pro_numbers),
-            'user_id': user_id
-        })
-
         if not plant or not pro_numbers:
             return jsonify({
                 'success': False,
                 'message': 'Plant and PRO numbers are required'
             }), 400
 
-        # Get data from SAP
         sap_data = sap.get_reservation_data(plant, pro_numbers)
 
         if sap_data is None:
@@ -445,21 +647,10 @@ def sync_reservations():
                 'processing_time': round(time.time() - start_time, 2)
             })
 
-        # Save to MySQL
         saved_count = db.save_reservation_data(plant, pro_numbers, sap_data, user_id)
-
-        # Disconnect SAP
         sap.disconnect()
 
         processing_time = round(time.time() - start_time, 2)
-
-        logger.info(f"✅ Sync completed", {
-            'plant': plant,
-            'pro_count': len(pro_numbers),
-            'sap_records': len(sap_data),
-            'saved_count': saved_count,
-            'processing_time': processing_time
-        })
 
         return jsonify({
             'success': True,
@@ -467,18 +658,14 @@ def sync_reservations():
             'synced_count': saved_count,
             'total_pros': len(pro_numbers),
             'records_from_sap': len(sap_data),
-            'processing_time': processing_time,
-            'data': sap_data
+            'processing_time': processing_time
         })
 
     except Exception as e:
-        logger.error(f"🔥 Sync error: {e}")
-        logger.error(traceback.format_exc())
-
+        logger.error(f"Sync error: {e}")
         return jsonify({
             'success': False,
-            'message': f'Sync failed: {str(e)}',
-            'error_details': str(e)
+            'message': f'Sync failed: {e}'
         }), 500
 
 @app.route('/api/sap/stock', methods=['POST'])
@@ -497,9 +684,6 @@ def get_stock():
                 'message': 'Plant and Material are required'
             }), 400
 
-        logger.info(f"📦 Getting stock data for Plant: {plant}, Material: {matnr}")
-
-        # Get stock data from SAP
         stock_data = sap.get_stock_data(plant, matnr)
 
         if stock_data is None:
@@ -510,7 +694,6 @@ def get_stock():
 
         processing_time = round(time.time() - start_time, 2)
 
-        # Format data untuk konsistensi
         formatted_data = []
         for item in stock_data:
             formatted_item = {
@@ -524,26 +707,8 @@ def get_stock():
                 'MEINS': item.get('MEINS', ''),
                 'VBELN': item.get('VBELN', ''),
                 'POSNR': item.get('POSNR', ''),
-                'LABST': float(item.get('LABST', 0)) if item.get('LABST') else 0,
-                'UMLMC': float(item.get('UMLMC', 0)) if item.get('UMLMC') else 0,
-                'INSME': float(item.get('INSME', 0)) if item.get('INSME') else 0,
-                'SPEME': float(item.get('SPEME', 0)) if item.get('SPEME') else 0,
-                'EINME': float(item.get('EINME', 0)) if item.get('EINME') else 0,
-                'RETME': float(item.get('RETME', 0)) if item.get('RETME') else 0,
-                'HERBL': item.get('HERBL', ''),
-                'HERKL': item.get('HERKL', ''),
-                'SOBKZ': item.get('SOBKZ', ''),
-                'KUNNR': item.get('KUNNR', ''),
-                'PSPNR': item.get('PSPNR', ''),
-                'KDAUF': item.get('KDAUF', ''),
-                'KDPOS': item.get('KDPOS', ''),
-                'SHKZG': item.get('SHKZG', ''),
-                'WAERS': item.get('WAERS', ''),
-                'DMBTR': float(item.get('DMBTR', 0)) if item.get('DMBTR') else 0,
             }
             formatted_data.append(formatted_item)
-
-        logger.info(f"✅ Stock data retrieved: {len(formatted_data)} records")
 
         return jsonify({
             'success': True,
@@ -556,117 +721,362 @@ def get_stock():
         })
 
     except Exception as e:
-        logger.error(f"🔥 Stock data error: {e}")
-        logger.error(traceback.format_exc())
-
+        logger.error(f"Stock data error: {e}")
         return jsonify({
             'success': False,
-            'message': f'Failed to get stock data: {str(e)}'
+            'message': f'Failed to get stock data: {e}'
         }), 500
 
-@app.route('/api/sap/stock/batch', methods=['POST'])
-def get_stock_batch():
-    """Get stock data for multiple materials"""
+@app.route('/api/sap/transfer', methods=['POST'])
+def create_sap_transfer():
+    """Create goods movement transfer in SAP using RFC Z_RFC_GOODSMVT_PYCHAR4"""
     start_time = time.time()
 
     try:
         data = request.get_json()
-        plant = data.get('plant')
-        materials = data.get('materials', [])
+        transfer_data = data.get('transfer_data', {})
+        sap_credentials = data.get('sap_credentials', {})
         user_id = data.get('user_id')
+        user_name = data.get('user_name', 'WEBUSER')
 
-        if not plant or not materials:
+        if not transfer_data or 'items' not in transfer_data:
             return jsonify({
                 'success': False,
-                'message': 'Plant and Materials are required'
+                'message': 'Transfer data is required'
             }), 400
 
-        logger.info(f"📦 Getting stock data for {len(materials)} materials in Plant: {plant}")
-
-        all_stock_data = []
-        errors = []
-
-        for i, matnr in enumerate(materials):
-            try:
-                logger.info(f"Processing material {i+1}/{len(materials)}: {matnr}")
-
-                stock_data = sap.get_stock_data(plant, matnr)
-
-                if stock_data:
-                    # Tambahkan material info ke setiap record
-                    for item in stock_data:
-                        item['REQUESTED_MATNR'] = matnr
-                    all_stock_data.extend(stock_data)
-
-                    logger.info(f"Got {len(stock_data)} stock records for material {matnr}")
-                else:
-                    logger.warning(f"No stock data for material {matnr}")
-                    errors.append(f"No stock data for material {matnr}")
-
-                # Delay kecil untuk menghindari overload SAP
-                if i < len(materials) - 1:
-                    time.sleep(0.1)
-
-            except Exception as e:
-                error_msg = f"Error processing material {matnr}: {str(e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
-                continue
-
-        processing_time = round(time.time() - start_time, 2)
-
-        return jsonify({
-            'success': True,
-            'message': f'Stock data retrieved for {len(materials)} materials',
-            'plant': plant,
-            'total_materials': len(materials),
-            'total_records': len(all_stock_data),
-            'processing_time': processing_time,
-            'errors': errors,
-            'data': all_stock_data
-        })
-
-    except Exception as e:
-        logger.error(f"🔥 Batch stock data error: {e}")
-        logger.error(traceback.format_exc())
-
-        return jsonify({
-            'success': False,
-            'message': f'Failed to get batch stock data: {str(e)}'
-        }), 500
-
-# Endpoint untuk debugging struktur data SAP
-@app.route('/api/sap/debug/structure', methods=['POST'])
-def debug_sap_structure():
-    try:
-        data = request.get_json()
-        plant = data.get('plant', '3000')
-        pro_numbers = data.get('pro_numbers', [''])
-
-        # Ambil satu record untuk debugging
-        sap_data = sap.get_reservation_data(plant, pro_numbers[:1])
-
-        if sap_data and len(sap_data) > 0:
-            first_record = sap_data[0]
-            return jsonify({
-                'success': True,
-                'record_count': len(sap_data),
-                'fields': list(first_record.keys()),
-                'sample_record': first_record
-            })
-        else:
+        items = transfer_data.get('items', [])
+        if not items:
             return jsonify({
                 'success': False,
-                'message': 'No data returned from SAP'
-            }), 404
+                'message': 'No items in transfer'
+            }), 400
 
-    except Exception as e:
+        # Setup SAP connection with credentials
+        sap_conn = SAPConnector()
+
+        # Use credentials from request or environment
+        if sap_credentials:
+            sap_conn.params.update({
+                'ashost': sap_credentials.get('ashost', os.getenv('SAP_ASHOST')),
+                'sysnr': sap_credentials.get('sysnr', os.getenv('SAP_SYSNR')),
+                'client': sap_credentials.get('client', os.getenv('SAP_CLIENT')),
+                'user': sap_credentials.get('user', os.getenv('SAP_USERNAME')),
+                'passwd': sap_credentials.get('passwd', os.getenv('SAP_PASSWORD')),
+                'lang': sap_credentials.get('lang', os.getenv('SAP_LANG', 'EN'))
+            })
+
+        # Connect to SAP
+        if not sap_conn.connect():
+            return jsonify({
+                'success': False,
+                'message': 'SAP connection failed. Please check SAP credentials and connection.'
+            }), 500
+
+        try:
+            # Prepare IT_ITEMS table for RFC
+            it_items = []
+            item_results = []
+
+            transfer_info = transfer_data.get('transfer_info', {})
+            plant_supply = transfer_info.get('plant_supply', '')
+
+            for idx, item in enumerate(items, start=1):
+                try:
+                    # Ambil kode material dari item
+                    material_code_raw = str(item.get('material_code', '')).strip()
+
+                    # Format kode material dengan leading zero untuk numerik
+                    if material_code_raw.isdigit():
+                        # Hapus leading zero yang ada untuk menghindari double zero
+                        material_code_clean = material_code_raw.lstrip('0')
+                        if not material_code_clean:
+                            material_code_clean = '0'
+                        # Tambahkan leading zero hingga 18 karakter
+                        material_code = material_code_clean.zfill(18)
+                        material_code_note = f" (Format: {material_code_raw} → {material_code})"
+                    else:
+                        material_code = material_code_raw
+                        material_code_note = " (Format asli)"
+
+                    # Get values from item
+                    quantity = float(item.get('quantity', 0))
+
+                    # Ambil unit dari frontend, default 'PC'
+                    unit_from_frontend = item.get('unit', 'PC')
+
+                    # Jika unit dari frontend adalah 'PC', ubah menjadi 'ST' untuk SAP
+                    sap_unit = 'ST' if unit_from_frontend.upper() == 'PC' else unit_from_frontend
+
+                    # Parse batch_sloc - format: "SLOC:XXXX" or just "XXXX"
+                    batch_sloc = item.get('batch_sloc', '')
+                    if batch_sloc and batch_sloc.startswith('SLOC:'):
+                        batch_sloc = batch_sloc.replace('SLOC:', '')
+
+                    # Get batch from item
+                    batch = item.get('batch', '')
+
+                    # Get plant tujuan and sloc tujuan
+                    plant_tujuan = item.get('plant_tujuan', '')
+                    sloc_tujuan = item.get('sloc_tujuan', '')
+
+                    # Validasi field wajib
+                    if not material_code:
+                        raise ValueError("Material code is required")
+                    if quantity <= 0:
+                        raise ValueError("Quantity must be greater than 0")
+                    if not plant_supply:
+                        raise ValueError("Plant supply is required")
+
+                    # Format quantity to string (SAP expects string for ENTRY_QTY_CHAR)
+                    quantity_str = f"{quantity:.3f}".rstrip('0').rstrip('.')
+
+                    # Field SALES_ORD dan S_ORD_ITEM harus numeric string
+                    sales_ord = item.get('sales_ord', '0000000000')
+                    s_ord_item = item.get('s_ord_item', '000000')
+
+                    # Pastikan hanya berisi angka dan memiliki panjang yang sesuai
+                    sales_ord = ''.join(filter(str.isdigit, sales_ord)) or '0000000000'
+                    s_ord_item = ''.join(filter(str.isdigit, s_ord_item)) or '000000'
+
+                    # Pastikan panjang minimal untuk numeric string
+                    if len(sales_ord) < 10:
+                        sales_ord = sales_ord.zfill(10)
+                    if len(s_ord_item) < 6:
+                        s_ord_item = s_ord_item.zfill(6)
+
+                    # Sesuai dengan field RFC SAP
+                    sap_item = {
+                        'MANDT': sap_conn.params.get('client', '300'),
+                        'MATERIAL': material_code,
+                        'PLANT': plant_supply,
+                        'STGE_LOC': batch_sloc if batch_sloc else '',
+                        'BATCH': batch if batch else '',
+                        'MOVE_TYPE': '311',
+                        'ENTRY_QTY_CHAR': quantity_str,
+                        'ENTRY_UOM': sap_unit,
+                        'MOVE_PLANT': plant_tujuan,
+                        'MOVE_STGE_LOC': sloc_tujuan,
+                        'MOVE_BATCH': batch if batch else '',
+                        'SALES_ORD': sales_ord,
+                        'S_ORD_ITEM': s_ord_item
+                    }
+                    it_items.append(sap_item)
+
+                    # Catat konversi unit dan format material dalam hasil item
+                    unit_conversion_note = ""
+                    if unit_from_frontend.upper() == 'PC':
+                        unit_conversion_note = f" (Unit diubah dari PC ke ST untuk SAP)"
+
+                    item_results.append({
+                        'item_number': idx,
+                        'material_code': material_code,
+                        'material_code_raw': material_code_raw,
+                        'status': 'PREPARED',
+                        'message': f'Item prepared for transfer{material_code_note}{unit_conversion_note}',
+                        'unit_frontend': unit_from_frontend,
+                        'unit_sap': sap_unit,
+                        'material_formatted': material_code_raw.isdigit()
+                    })
+
+                except Exception as e:
+                    logger.error(f"Error preparing item {idx}: {e}")
+                    item_results.append({
+                        'item_number': idx,
+                        'material_code': item.get('material_code', ''),
+                        'material_code_raw': item.get('material_code', ''),
+                        'status': 'ERROR',
+                        'message': f'Error: {e}',
+                        'unit_frontend': item.get('unit', ''),
+                        'unit_sap': '',
+                        'material_formatted': False
+                    })
+                    continue
+
+            if not it_items:
+                return jsonify({
+                    'success': False,
+                    'message': 'No valid items to transfer',
+                    'item_results': item_results
+                }), 400
+
+            # Prepare RFC parameters
+            rfc_params = {
+                'IT_ITEMS': it_items,
+            }
+
+            logger.info(f"Calling RFC Z_RFC_GOODSMVT_PYCHAR4 with {len(it_items)} items")
+
+            # Log konversi unit jika ada
+            pc_to_st_items = [item for item in item_results if item.get('unit_frontend', '').upper() == 'PC' and item.get('unit_sap', '') == 'ST']
+            if pc_to_st_items:
+                logger.info(f"Converted {len(pc_to_st_items)} items from PC to ST for SAP")
+
+            # Log format material jika ada
+            formatted_materials = [item for item in item_results if item.get('material_formatted', False)]
+            if formatted_materials:
+                logger.info(f"Formatted {len(formatted_materials)} numeric material codes to 18 digits with leading zeros")
+
+            # Call SAP RFC
+            result = sap_conn.conn.call('Z_RFC_GOODSMVT_PYCHAR4', **rfc_params)
+
+            # Check result
+            if result is None:
+                logger.error("SAP transfer returned None result")
+                return jsonify({
+                    'success': False,
+                    'message': 'SAP transfer returned no result',
+                    'item_results': item_results
+                }), 500
+
+            # Check for errors in RETURN table
+            errors = []
+            if 'RETURN' in result:
+                for msg in result['RETURN']:
+                    msg_type = msg.get('TYPE', '')
+                    msg_text = msg.get('MESSAGE', '')
+                    if msg_type in ['E', 'A', 'X']:
+                        errors.append(f"{msg_type}: {msg_text}")
+
+            # Get material document from SAP response
+            material_doc = (
+                result.get('MAT_DOC') or
+                result.get('MATDOC') or
+                result.get('MATERIALDOC') or
+                result.get('EV_MATERIAL_DOC')
+            )
+
+            # Save transfer to MySQL database
+            db_result = db.save_transfer_to_db(
+                transfer_data=transfer_data,
+                sap_response=result,
+                item_results=item_results,
+                user_id=user_id,
+                user_name=user_name
+            )
+
+            if errors:
+                error_message = 'SAP transfer failed: ' + ' | '.join(errors[:3])
+                logger.error(f"Transfer failed with errors: {errors}")
+                return jsonify({
+                    'success': False,
+                    'message': error_message,
+                    'errors': errors,
+                    'item_results': item_results,
+                    'db_saved': db_result is not None,
+                    'processing_time': round(time.time() - start_time, 2)
+                }), 400
+
+            if material_doc:
+                logger.info(f"Transfer successful: Material Document {material_doc} created")
+
+                response_data = {
+                    'success': True,
+                    'message': f'Material Document {material_doc} created successfully',
+                    'transfer_no': material_doc,
+                    'status': 'COMPLETED',
+                    'item_results': item_results,
+                    'processing_time': round(time.time() - start_time, 2)
+                }
+
+                if db_result is not None:
+                    response_data['db_saved'] = True
+                    response_data['transfer_id'] = db_result.get('transfer_id')
+                    response_data['document_id_included'] = db_result.get('document_id_included', False)
+                else:
+                    response_data['db_saved'] = False
+                    response_data['message'] += ' (but failed to save to database)'
+
+                return jsonify(response_data)
+            else:
+                logger.warning(f"Transfer completed without material document. Checking for success...")
+
+                # Check if any success message in RETURN table
+                success_messages = []
+                if 'RETURN' in result:
+                    for msg in result['RETURN']:
+                        msg_type = msg.get('TYPE', '')
+                        msg_text = msg.get('MESSAGE', '')
+                        if msg_type in ['S', 'I', 'W']:
+                            success_messages.append(msg_text)
+
+                if success_messages and not errors:
+                    response_data = {
+                        'success': True,
+                        'message': 'Transfer submitted successfully: ' + ' | '.join(success_messages[:2]),
+                        'status': 'SUBMITTED',
+                        'item_results': item_results,
+                        'processing_time': round(time.time() - start_time, 2)
+                    }
+
+                    if db_result is not None:
+                        response_data['db_saved'] = True
+                        response_data['transfer_id'] = db_result.get('transfer_id')
+                    else:
+                        response_data['db_saved'] = False
+
+                    return jsonify(response_data)
+                else:
+                    return jsonify({
+                        'success': False,
+                        'message': 'Transfer failed: No material document created',
+                        'item_results': item_results,
+                        'db_saved': db_result is not None,
+                        'processing_time': round(time.time() - start_time, 2)
+                    }), 400
+
+        except pyrfc._exception.RFCError as rfc_error:
+            error_code = getattr(rfc_error, 'code', 'UNKNOWN')
+            error_message = getattr(rfc_error, 'message', str(rfc_error) if not isinstance(rfc_error, pyrfc._exception.RFCError) else 'RFC Error')
+            error_key = getattr(rfc_error, 'key', '')
+
+            logger.error(f"RFC Error during SAP transfer. Code: {error_code}, Message: {error_message}, Key: {error_key}")
+
+            return jsonify({
+                'success': False,
+                'message': f'SAP RFC Error: {error_message}',
+                'error_code': error_code,
+                'error_key': error_key,
+                'error_type': 'RFC_ERROR',
+                'item_results': item_results
+            }), 500
+
+        except Exception as e:
+            logger.error(f"Error during SAP transfer: {e}")
+            logger.error(traceback.format_exc())
+            return jsonify({
+                'success': False,
+                'message': f'SAP transfer error: {e}',
+                'error_type': 'GENERAL_ERROR',
+                'item_results': item_results
+            }), 500
+
+        finally:
+            try:
+                sap_conn.disconnect()
+            except:
+                pass
+
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {e}")
         return jsonify({
             'success': False,
-            'message': str(e)
+            'message': f'Invalid JSON data: {e}'
+        }), 400
+
+    except Exception as e:
+        logger.error(f"Transfer creation error: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'Transfer failed: {e}'
         }), 500
 
 if __name__ == '__main__':
-    logger.info("🚀 Starting SAP Sync Service v1.4.0")
-    logger.info("✨ Features: Complete SAP field mapping, enhanced logging, stock inquiry")
+    print("=" * 50)
+    print("SAP Transfer Service Started")
+    print(f"Environment: SAP_HOST={os.getenv('SAP_ASHOST', 'Not Set')}")
+    print(f"Environment: SAP_CLIENT={os.getenv('SAP_CLIENT', 'Not Set')}")
+    print("=" * 50)
     app.run(host='0.0.0.0', port=5000, debug=True)
+
