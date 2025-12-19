@@ -7,6 +7,7 @@ use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\ReservationDocumentController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\TransferController;
+use App\Http\Controllers\ProfileController;
 
 // Redirect root to login page
 Route::get('/', function () {
@@ -19,18 +20,39 @@ Route::middleware(['guest'])->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::get('/register', [AuthController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
+
+    // Password reset routes
+    Route::get('/forgot-password', [AuthController::class, 'showForgotPasswordForm'])->name('password.request');
+    Route::post('/forgot-password', [AuthController::class, 'sendResetLinkEmail'])->name('password.email');
+    Route::get('/reset-password/{token}', [AuthController::class, 'showResetPasswordForm'])->name('password.reset');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
 });
 
 // Logout Route
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+// Email verification routes
+Route::middleware(['auth'])->group(function () {
+    Route::get('/email/verify', [AuthController::class, 'showVerifyEmail'])->name('verification.notice');
+    Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
+        ->middleware(['signed', 'throttle:6,1'])
+        ->name('verification.verify');
+    Route::post('/email/verification-notification', [AuthController::class, 'sendVerificationEmail'])
+        ->middleware(['throttle:6,1'])
+        ->name('verification.send');
+});
+
 // Protected Routes (Require Authentication)
 Route::middleware(['auth'])->group(function () {
+    // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::get('/profile', function () {
-        return view('profile.index');
-    })->name('profile');
+    // Profile Routes - Single route untuk profile
+    Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
+    Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::put('/profile/update', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('/profile/update-password', [ProfileController::class, 'updatePassword'])->name('profile.update.password');
+    Route::delete('/profile/delete-account', [ProfileController::class, 'deleteAccount'])->name('profile.delete');
 
     // Reservation Routes
     Route::prefix('reservations')->name('reservations.')->group(function () {
@@ -69,7 +91,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/create-document', [ReservationController::class, 'createDocument'])->name('createDocument');
     });
 
-    // Document Routes - Diperbarui dengan route baru
+    // Document Routes
     Route::prefix('documents')->name('documents.')->group(function () {
         Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
@@ -111,4 +133,14 @@ Route::middleware(['auth'])->group(function () {
 
     // Single route untuk create transfer (bisa dari mana saja)
     Route::post('/transfer/create', [TransferController::class, 'createTransfer'])->name('transfer.create');
+
+    // Additional utility routes
+    Route::get('/settings', function () {
+        return view('settings.index');
+    })->name('settings');
+});
+
+// Fallback route for 404
+Route::fallback(function () {
+    return response()->view('errors.404', [], 404);
 });

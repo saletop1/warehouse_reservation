@@ -120,6 +120,64 @@ class AuthController extends Controller
         return view('auth.register');
     }
 
+    // Add these methods to AuthController
+
+    /**
+     * Show forgot password form
+     */
+    public function showForgotPasswordForm()
+    {
+        return view('auth.forgot-password');
+    }
+
+    /**
+     * Send reset link email
+     */
+    public function sendResetLinkEmail(Request $request)
+    {
+        // Implementation for sending reset link
+        // You can use Laravel's built-in functionality
+    }
+
+    /**
+     * Show reset password form
+     */
+    public function showResetPasswordForm(Request $request, $token = null)
+    {
+        return view('auth.reset-password', ['token' => $token, 'email' => $request->email]);
+    }
+
+    /**
+     * Reset password
+     */
+    public function resetPassword(Request $request)
+    {
+        // Implementation for resetting password
+    }
+
+    /**
+     * Show email verification notice
+     */
+    public function showVerifyEmail()
+    {
+        return view('auth.verify-email');
+    }
+
+    /**
+     * Verify email
+     */
+    public function verifyEmail(Request $request)
+    {
+        // Implementation for email verification
+    }
+
+    /**
+     * Send verification email
+     */
+    public function sendVerificationEmail(Request $request)
+    {
+        // Implementation for sending verification email
+    }
     /**
      * Handle a registration request for the application (optional feature).
      *
