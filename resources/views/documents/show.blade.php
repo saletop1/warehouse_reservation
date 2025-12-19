@@ -1,90 +1,118 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container-fluid">
-    <div class="row mb-3">
-        <div class="col-md-12">
-            <!-- Breadcrumb -->
-            <nav aria-label="breadcrumb" class="mb-3">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ route('documents.index') }}" class="text-decoration-none">Documents</a></li>
-                    <li class="breadcrumb-item active text-muted">Document Details</li>
-                </ol>
-            </nav>
+                    <div class="container-fluid">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <!-- Breadcrumb -->
+                                <nav aria-label="breadcrumb" class="mb-3">
+                                    <ol class="breadcrumb">
+                                        <li class="breadcrumb-item"><a href="{{ route('documents.index') }}" class="text-decoration-none">Documents</a></li>
+                                        <li class="breadcrumb-item active text-muted">Document Details</li>
+                                    </ol>
+                                </nav>
 
-            <!-- Header Section -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h1 class="h3 mb-0 fw-bold text-dark">Document Details</h1>
-                </div>
-                <div class="d-flex gap-2">
-                    <a href="{{ route('documents.index') }}" class="btn btn-outline-secondary btn-sm">
-                        <i class="fas fa-arrow-left me-1"></i> Back
-                    </a>
-                    <a href="{{ route('documents.edit', $document->id) }}" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-edit me-1"></i> Edit
-                    </a>
-                    <a href="{{ route('documents.print', $document->id) }}" class="btn btn-outline-success btn-sm">
-                        <i class="fas fa-print me-1"></i> Print
-                    </a>
-                    <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-outline-danger btn-sm">
-                        <i class="fas fa-file-pdf me-1"></i> PDF
-                    </a>
-                </div>
-            </div>
+                                <!-- Header Section -->
+                                <div class="d-flex justify-content-between align-items-center mb-4">
+                                    <div>
+                                        <h1 class="h3 mb-0 fw-bold text-dark">Document Details</h1>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <a href="{{ route('documents.index') }}" class="btn btn-outline-secondary btn-sm">
+                                            <i class="fas fa-arrow-left me-1"></i> Back
+                                        </a>
+                                        <a href="{{ route('documents.edit', $document->id) }}" class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-edit me-1"></i> Edit
+                                        </a>
+                                        <a href="{{ route('documents.print', $document->id) }}" class="btn btn-outline-success btn-sm">
+                                            <i class="fas fa-print me-1"></i> Print
+                                        </a>
+                                        <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-outline-danger btn-sm">
+                                            <i class="fas fa-file-pdf me-1"></i> PDF
+                                        </a>
+                                    </div>
+                                </div>
 
-            <!-- Alert Messages -->
-            @if(session('success'))
-                <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-check-circle me-2"></i>
-                        <div class="flex-grow-1">{{ session('success') }}</div>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                <!-- Alert Messages -->
+                                @if(session('success'))
+                                    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-check-circle me-2"></i>
+                                            <div class="flex-grow-1">{{ session('success') }}</div>
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                        </div>
+                                    </div>
+                                @endif
+
+                                @if(session('error'))
+                                    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-exclamation-circle me-2"></i>
+                                            <div class="flex-grow-1">{{ session('error') }}</div>
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                        </div>
+                                    </div>
+                                @endif
+
+                                <!-- Document Info Card -->
+                                <div class="card border-0 shadow-sm mb-4">
+                                    <div class="card-header bg-white border-bottom py-2">
+                                        <h5 class="mb-0 fw-semibold text-dark">
+                                            <i class="fas fa-info-circle me-2 text-primary"></i>Document Information
+                                        </h5>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="document-info-compact">
+                                            <!-- Column 1 -->
+                                            <div class="info-column">
+                                                <div class="info-item">
+                        <span class="info-label">Transfer No</span>
+                        <span class="info-value">
+                            @php
+                                // Filter transfer yang memiliki transfer_no
+                                $validTransfers = $document->transfers->filter(function($transfer) {
+                                    return !empty($transfer->transfer_no);
+                                });
+
+                                $transferCount = $validTransfers->count();
+                            @endphp
+
+                            @if($transferCount > 0)
+                                @if($transferCount <= 2)
+                                    <!-- Tampilkan langsung jika 1 atau 2 transfer -->
+                                    @foreach($validTransfers as $transfer)
+                                        <div class="text-primary mb-1">{{ $transfer->transfer_no }}</div>
+                                    @endforeach
+                                @else
+                                    <!-- Tampilkan dropdown jika lebih dari 2 -->
+                                    <div class="dropdown transfer-dropdown">
+                                        <button class="btn btn-sm btn-outline-primary dropdown-toggle"
+                                                type="button"
+                                                data-bs-toggle="dropdown"
+                                                aria-expanded="false">
+                                            <span class="badge bg-primary">{{ $transferCount }}</span> Transfer(s)
+                                        </button>
+                                        <ul class="dropdown-menu transfer-dropdown-menu">
+                                            @foreach($validTransfers as $transfer)
+                                                <li>
+                                                    <a class="dropdown-item" href="#">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <span class="transfer-no-text">{{ $transfer->transfer_no }}</span>
+                                                            <small class="text-muted">
+                                                                {{ \Carbon\Carbon::parse($transfer->created_at)->format('d/m/Y') }}
+                                                            </small>
+                                                        </div>
+                                                    </a>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                            @else
+                                <span class="text-muted">-</span>
+                            @endif
+                        </span>
                     </div>
-                </div>
-            @endif
-
-            @if(session('error'))
-                <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-exclamation-circle me-2"></i>
-                        <div class="flex-grow-1">{{ session('error') }}</div>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                </div>
-            @endif
-
-            <!-- Document Info Card -->
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom py-2">
-                    <h5 class="mb-0 fw-semibold text-dark">
-                        <i class="fas fa-info-circle me-2 text-primary"></i>Document Information
-                    </h5>
-                </div>
-                <div class="card-body p-2">
-                    <div class="document-info-compact">
-                        <!-- Column 1 -->
-                        <div class="info-column">
-                            <div class="info-item">
-                                <span class="info-label">Document No</span>
-                                <span class="info-value fw-bold">{{ $document->document_no }}</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">Transfer No</span>
-                                <span class="info-value">
-                                    @if($document->transfers->count() > 0)
-                                        @foreach($document->transfers as $transfer)
-                                            @if($transfer->transfer_no)
-                                                <div class="text-primary">{{ $transfer->transfer_no }}</div>
-                                            @else
-                                                <span class="text-muted">-</span>
-                                            @endif
-                                        @endforeach
-                                    @else
-                                        <span class="text-muted">-</span>
-                                    @endif
-                                </span>
-                            </div>
                         </div>
 
                         <!-- Column 2 -->
@@ -347,7 +375,7 @@
                                                             </div>
                                                         @else
                                                             <div class="stock-custom-low fw-medium">
-                                                                
+
                                                                 {{ \App\Helpers\NumberHelper::formatStockNumber($totalStock) }}
                                                             </div>
                                                         @endif
@@ -624,6 +652,101 @@
 
 <style>
 /* Global Styles */
+/* Transfer Dropdown Styles */
+.transfer-dropdown {
+    display: inline-block;
+}
+
+.transfer-dropdown .btn {
+    padding: 2px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.transfer-dropdown .badge {
+    font-size: 10px;
+    padding: 2px 5px;
+    margin-right: 4px;
+}
+
+.transfer-dropdown-menu {
+    max-height: 200px;
+    overflow-y: auto;
+    min-width: 200px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border: 1px solid #dee2e6;
+}
+
+.transfer-dropdown-menu .dropdown-item {
+    padding: 6px 10px;
+    font-size: 13px;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.transfer-dropdown-menu .dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+.transfer-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.transfer-dropdown .dropdown-menu {
+    z-index: 99999 !important;
+    position: absolute;
+    min-width: 250px;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 2px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.175);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+/* Ensure parent containers don't clip the dropdown */
+.card-body {
+    overflow: visible !important;
+}
+
+.info-value {
+    position: relative;
+    overflow: visible;
+}
+
+/* Fix for modal backdrop issue */
+.modal-backdrop {
+    z-index: 1040;
+}
+
+.modal {
+    z-index: 1050;
+}
+
+.transfer-dropdown-menu {
+    z-index: 99999;
+}
+
+/* Ensure dropdown appears above table headers */
+.table-responsive {
+    position: relative;
+    z-index: 1;
+}
+
+.transfer-dropdown .btn {
+    z-index: 2;
+    position: relative;
+}
+
+.transfer-dropdown-menu .dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.transfer-no-text {
+    font-family: monospace;
+    font-weight: 500;
+    color: #0d6efd;
+}
+
 .card {
     border-radius: 8px;
     border: 1px solid #e9ecef;
