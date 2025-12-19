@@ -48,7 +48,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/sync', [ReservationController::class, 'sync'])->name('sync');
         Route::post('/sync-from-sap', [ReservationController::class, 'syncFromSAP'])->name('sync.from-sap');
         Route::post('/clear-and-create', [ReservationController::class, 'clearAndCreate'])->name('clear-and-create');
-        Route::post('/clear-all-sync-data', [ReservationController::class, 'clearAllSyncData'])->name('clearAllSyncData'); // DITAMBAHKAN
+        Route::post('/clear-all-sync-data', [ReservationController::class, 'clearAllSyncData'])->name('clearAllSyncData');
 
         // Sync status checking
         Route::get('/check-sync-data', [ReservationController::class, 'checkSyncData'])->name('check-sync-data');
@@ -69,7 +69,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/create-document', [ReservationController::class, 'createDocument'])->name('createDocument');
     });
 
-    // Document Routes - Hanya routes yang benar-benar ada
+    // Document Routes - Diperbarui dengan route baru
     Route::prefix('documents')->name('documents.')->group(function () {
         Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
@@ -78,8 +78,17 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
 
-        // Transfer from document - HANYA SATU ROUTE
+        // Transfer from document
         Route::post('/{id}/create-transfer', [TransferController::class, 'createTransfer'])->name('create-transfer');
+
+        // Toggle document status (OPEN/CLOSED)
+        Route::patch('/{id}/toggle-status', [ReservationDocumentController::class, 'toggleStatus'])
+            ->name('toggle-status')
+            ->middleware('can:toggle_document_status');
+
+        // Log unauthorized SAP attempt
+        Route::post('/{id}/log-unauthorized-attempt', [ReservationDocumentController::class, 'logUnauthorizedAttempt'])
+            ->name('log-unauthorized-attempt');
     });
 
     // Stock Routes
@@ -92,7 +101,7 @@ Route::middleware(['auth'])->group(function () {
             ->name('fetch');
     });
 
-    // Transfer Routes (standalone) - HANYA SATU SET ROUTES
+    // Transfer Routes (standalone)
     Route::prefix('transfers')->name('transfers.')->group(function () {
         Route::get('/', [TransferController::class, 'index'])->name('index');
         Route::get('/{id}', [TransferController::class, 'show'])->name('show');

@@ -8,6 +8,8 @@ use App\Models\ReservationStock;
 use Illuminate\Http\Request;
 use App\Exports\ReservationDocumentsSelectedExport;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class ReservationDocumentController extends Controller
 {
@@ -53,7 +55,7 @@ class ReservationDocumentController extends Controller
         return view('documents.index', compact('documents', 'totalCount'));
     }
 
-            public function show($id)
+    public function show($id)
     {
         try {
             $document = ReservationDocument::with(['items'])->findOrFail($id);
@@ -64,7 +66,41 @@ class ReservationDocumentController extends Controller
             // Hitung summary stock
             $stockSummary = $this->calculateStockSummary($document);
 
-            return view('documents.show', compact('document', 'stockSummary'));
+            // Cek apakah user memiliki hak akses untuk membuat transfer
+            $user = Auth::user();
+
+            // SOLUSI 1: Cek berdasarkan kolom 'role' di tabel users (paling sederhana)
+            // Asumsi: ada kolom 'role' di tabel users yang menyimpan string role
+            $allowedRoles = ['warehouse', 'developer'];
+            $userRole = $user->role ?? 'user'; // default ke 'user' jika tidak ada
+
+            $canGenerateTransfer = in_array($userRole, $allowedRoles);
+
+            // SOLUSI 2: Jika menggunakan package spatie/laravel-permission
+            /*
+            if (class_exists('Spatie\Permission\Traits\HasRoles')) {
+                $canGenerateTransfer = $user->hasRole($allowedRoles) ||
+                                      $user->hasPermissionTo('generate-transfer');
+            }
+            */
+
+            // SOLUSI 3: Jika Anda ingin restriksi berdasarkan email tertentu
+            $restrictedEmails = ['viewer@example.com', 'guest@example.com', 'auditor@example.com'];
+            $isRestrictedUser = in_array($user->email, $restrictedEmails);
+
+            if ($isRestrictedUser) {
+                $canGenerateTransfer = false;
+            }
+
+            // SOLUSI 4: Jika ingin cek berdasarkan user ID tertentu
+            /*
+            $restrictedUserIds = [5, 10, 15]; // ID user yang dilarang
+            if (in_array($user->id, $restrictedUserIds)) {
+                $canGenerateTransfer = false;
+            }
+            */
+
+            return view('documents.show', compact('document', 'stockSummary', 'canGenerateTransfer'));
 
         } catch (\Exception $e) {
             Log::error('Error in show document: ' . $e->getMessage());
@@ -73,7 +109,7 @@ class ReservationDocumentController extends Controller
         }
     }
 
-            /**
+    /**
      * Load stock data untuk document
      */
     private function loadStockDataForDocument($document)
@@ -115,7 +151,7 @@ class ReservationDocumentController extends Controller
         }
     }
 
-     /**
+    /**
      * Calculate stock summary untuk document
      */
     private function calculateStockSummary($document)
@@ -154,58 +190,59 @@ class ReservationDocumentController extends Controller
         ];
     }
 
-            /**
-         * Create transfer document from selected items
-         */
-        public function createTransfer(Request $request)
-        {
-            try {
-                $request->validate([
-                    'document_id' => 'required|exists:reservation_documents,id',
-                    'document_no' => 'required|string',
-                    'items' => 'required|array',
-                    'items.*.id' => 'required|exists:reservation_document_items,id',
-                    'items.*.qty' => 'required|numeric|min:0.001',
-                ]);
+    /**
+     * Create transfer document from selected items
+     */
+    public function createTransfer(Request $request)
+    {
+        try {
+            $request->validate([
+                'document_id' => 'required|exists:reservation_documents,id',
+                'document_no' => 'required|string',
+                'items' => 'required|array',
+                'items.*.id' => 'required|exists:reservation_document_items,id',
+                'items.*.qty' => 'required|numeric|min:0.001',
+            ]);
 
-                $document = ReservationDocument::findOrFail($request->document_id);
+            $document = ReservationDocument::findOrFail($request->document_id);
 
-                // Log the transfer creation
-                Log::info('Creating transfer document', [
-                    'document_id' => $document->id,
+            // Log the transfer creation
+            Log::info('Creating transfer document', [
+                'document_id' => $document->id,
+                'document_no' => $document->document_no,
+                'user_id' => auth()->id(),
+                'items_count' => count($request->items)
+            ]);
+
+            // Here you would typically:
+            // 1. Create a new transfer document
+            // 2. Update stock records
+            // 3. Generate transfer slip
+            // 4. Send notification, etc.
+
+            // For now, return success response
+            return response()->json([
+                'success' => true,
+                'message' => 'Transfer document created successfully',
+                'data' => [
                     'document_no' => $document->document_no,
-                    'user_id' => auth()->id(),
-                    'items_count' => count($request->items)
-                ]);
+                    'transfer_id' => 'TRF-' . time(),
+                    'items_count' => count($request->items),
+                    'total_qty' => array_sum(array_column($request->items, 'qty')),
+                    'created_at' => now()->format('Y-m-d H:i:s')
+                ]
+            ]);
 
-                // Here you would typically:
-                // 1. Create a new transfer document
-                // 2. Update stock records
-                // 3. Generate transfer slip
-                // 4. Send notification, etc.
+        } catch (\Exception $e) {
+            Log::error('Error creating transfer document: ' . $e->getMessage());
 
-                // For now, return success response
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Transfer document created successfully',
-                    'data' => [
-                        'document_no' => $document->document_no,
-                        'transfer_id' => 'TRF-' . time(),
-                        'items_count' => count($request->items),
-                        'total_qty' => array_sum(array_column($request->items, 'qty')),
-                        'created_at' => now()->format('Y-m-d H:i:s')
-                    ]
-                ]);
-
-            } catch (\Exception $e) {
-                Log::error('Error creating transfer document: ' . $e->getMessage());
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to create transfer document: ' . $e->getMessage()
-                ], 500);
-            }
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create transfer document: ' . $e->getMessage()
+            ], 500);
         }
+    }
+
     /**
      * Get stock data for a specific material and plant
      */
