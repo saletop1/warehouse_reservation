@@ -1622,7 +1622,7 @@
                 _token: csrfToken
             };
 
-            showLoading('Loading material data...', 'Formatting data for database matching');
+            // showLoading('Loading material data...', 'Formatting data for database matching');
 
             $.ajax({
                 url: '/reservations/load-multiple-pro',
