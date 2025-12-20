@@ -1459,7 +1459,7 @@
                 return;
             }
 
-            showLoading('Loading PRO numbers...', 'Please wait');
+            // showLoading('Loading PRO numbers...', 'Please wait');
 
             const materialsForAPI = selectedMaterials.map(m => formatMaterialCodeForDB(m));
 
