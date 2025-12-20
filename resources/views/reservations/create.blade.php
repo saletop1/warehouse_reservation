@@ -189,7 +189,7 @@
                                         </div>
                                     </div>
 
-                                    <div class="mb-3">
+                                    <!-- <div class="mb-3">
                                         <div id="pro-numbers-checkbox-container" class="border rounded p-2" style="max-height: 350px; overflow-y: auto;">
                                             <div class="text-center py-3">
                                                 <div class="spinner-border text-primary spinner-border-sm" role="status">
@@ -198,7 +198,7 @@
                                                 <p class="mt-2 small">Loading PRO numbers...</p>
                                             </div>
                                         </div>
-                                    </div>
+                                    </div> -->
                                 </div>
                             </div>
                         </div>
