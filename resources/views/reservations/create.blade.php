@@ -857,7 +857,7 @@
     };
 
     // MRP yang diperbolehkan untuk edit quantity
-    const allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
+    const allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21'];
 
     // PERUBAHAN: Daftar UOM yang menggunakan desimal (tanpa desimal untuk PC, ST, SET)
     const decimalUOMs = ['KG', 'M', 'M2', 'M3', 'L', 'ML', 'G', 'MG', 'CM', 'MM', 'IN', 'FT', 'YD'];

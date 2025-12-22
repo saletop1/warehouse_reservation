@@ -71,6 +71,10 @@
                                     <th>Document No</th>
                                     <th>Plant</th>
                                     <th>Status</th>
+                                    <th>Total Items</th>
+                                    <th>Total Qty</th>
+                                    <th>Transferred</th>
+                                    <th>Completion</th>
                                     <th>Remarks</th>
                                     <th>Created By</th>
                                     <th>Created At</th>
@@ -89,13 +93,35 @@
                                             <span class="badge bg-info">{{ $document->plant }}</span>
                                         </td>
                                         <td>
-                                            @if($document->status == 'created')
-                                                <span class="badge bg-warning">Created</span>
-                                            @elseif($document->status == 'posted')
-                                                <span class="badge bg-success">Posted</span>
+                                            @if($document->status == 'booked')
+                                                <span class="badge bg-warning">Booked</span>
+                                            @elseif($document->status == 'partial')
+                                                <span class="badge bg-info">Partial</span>
+                                            @elseif($document->status == 'closed')
+                                                <span class="badge bg-success">Closed</span>
                                             @else
                                                 <span class="badge bg-danger">Cancelled</span>
                                             @endif
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark">{{ $document->total_items }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-medium">{{ number_format($document->total_qty) }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-medium">{{ number_format($document->total_transferred ?? 0) }}</span>
+                                        </td>
+                                        <td>
+                                            @php
+                                                $completionRate = $document->completion_rate ?? 0;
+                                                $color = $completionRate == 100 ? 'success' :
+                                                         ($completionRate > 0 ? 'info' : 'secondary');
+                                            @endphp
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar bg-{{ $color }}" style="width: {{ $completionRate }}%"></div>
+                                            </div>
+                                            <small>{{ round($completionRate, 1) }}%</small>
                                         </td>
                                         <td class="text-start">
                                             @if($document->remarks && trim($document->remarks) != '')
@@ -111,7 +137,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted py-5">
+                                        <td colspan="10" class="text-center text-muted py-5">
                                             <i class="fas fa-file-alt fa-3x mb-3"></i>
                                             <h5>No documents found</h5>
                                         </td>
@@ -161,6 +187,10 @@
         overflow: hidden;
         text-overflow: ellipsis;
         cursor: help;
+    }
+    .progress {
+        width: 80px;
+        margin: 0 auto;
     }
 </style>
 

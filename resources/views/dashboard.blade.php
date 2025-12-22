@@ -42,96 +42,96 @@
         </div>
     </div>
 
-    {{-- Quick Stats Section --}}
+    {{-- Document Status Summary --}}
     <div class="row mb-4">
         <div class="col-md-3 mb-4">
             <div class="card border-0 shadow-sm h-100 hover-lift">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <h6 class="text-uppercase text-muted small fw-semibold mb-1">Total Reservations</h6>
-                            <h2 class="fw-bold mb-1">{{ \Illuminate\Support\Facades\DB::table('sap_reservations')->count() }}</h2>
-                            <span class="text-success small">
-                                <i class="fas fa-arrow-up me-1"></i>SAP Sync
-                            </span>
-                        </div>
-                        <div class="icon-wrapper bg-primary bg-opacity-10 rounded-circle p-3">
-                            <i class="fas fa-database fa-lg text-primary"></i>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <small class="text-muted">Synced from SAP system</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3 mb-4">
-            <div class="card border-0 shadow-sm h-100 hover-lift">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="text-uppercase text-muted small fw-semibold mb-1">Documents Created</h6>
-                            <h2 class="fw-bold mb-1">{{ \App\Models\ReservationDocument::count() }}</h2>
-                            <div class="d-flex gap-2">
-                                <span class="badge bg-success bg-opacity-10 text-success border-0 py-1 px-2">
-                                    {{ \App\Models\ReservationDocument::where('status', 'created')->count() }} Open
-                                </span>
-                                <span class="badge bg-info bg-opacity-10 text-info border-0 py-1 px-2">
-                                    {{ \App\Models\ReservationDocument::where('status', 'posted')->count() }} Posted
-                                </span>
-                            </div>
-                        </div>
-                        <div class="icon-wrapper bg-success bg-opacity-10 rounded-circle p-3">
-                            <i class="fas fa-file-alt fa-lg text-success"></i>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <small class="text-muted">Today: {{ \App\Models\ReservationDocument::whereDate('created_at', today())->count() }}</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3 mb-4">
-            <div class="card border-0 shadow-sm h-100 hover-lift">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="text-uppercase text-muted small fw-semibold mb-1">Total Materials</h6>
-                            <h2 class="fw-bold mb-1">{{ \Illuminate\Support\Facades\DB::table('sap_reservations')->distinct('matnr')->count('matnr') }}</h2>
-                            <span class="text-info small">
-                                <i class="fas fa-box me-1"></i>Unique Items
-                            </span>
-                        </div>
-                        <div class="icon-wrapper bg-info bg-opacity-10 rounded-circle p-3">
-                            <i class="fas fa-boxes fa-lg text-info"></i>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <small class="text-muted">Across all reservations</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3 mb-4">
-            <div class="card border-0 shadow-sm h-100 hover-lift">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="text-uppercase text-muted small fw-semibold mb-1">Total Quantity</h6>
-                            <h2 class="fw-bold mb-1">{{ number_format(\Illuminate\Support\Facades\DB::table('sap_reservations')->sum('psmng'), 0) }}</h2>
+                            <h6 class="text-uppercase text-muted small fw-semibold mb-1">Booked Documents</h6>
+                            <h2 class="fw-bold mb-1">{{ $documentStats['booked'] ?? 0 }}</h2>
                             <span class="text-warning small">
-                                <i class="fas fa-weight-hanging me-1"></i>Requested Qty
+                                <i class="fas fa-clock me-1"></i>Waiting for Transfer
                             </span>
                         </div>
                         <div class="icon-wrapper bg-warning bg-opacity-10 rounded-circle p-3">
-                            <i class="fas fa-weight fa-lg text-warning"></i>
+                            <i class="fas fa-file-alt fa-lg text-warning"></i>
                         </div>
                     </div>
                     <div class="mt-3">
-                        <small class="text-muted">Units across all items</small>
+                        <small class="text-muted">Documents ready for processing</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-4">
+            <div class="card border-0 shadow-sm h-100 hover-lift">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="text-uppercase text-muted small fw-semibold mb-1">Partial Transfers</h6>
+                            <h2 class="fw-bold mb-1">{{ $documentStats['partial'] ?? 0 }}</h2>
+                            <span class="text-info small">
+                                <i class="fas fa-tasks me-1"></i>In Progress
+                            </span>
+                        </div>
+                        <div class="icon-wrapper bg-info bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-exchange-alt fa-lg text-info"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">Partially transferred documents</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-4">
+            <div class="card border-0 shadow-sm h-100 hover-lift">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="text-uppercase text-muted small fw-semibold mb-1">Closed Documents</h6>
+                            <h2 class="fw-bold mb-1">{{ $documentStats['closed'] ?? 0 }}</h2>
+                            <span class="text-success small">
+                                <i class="fas fa-check-circle me-1"></i>Completed
+                            </span>
+                        </div>
+                        <div class="icon-wrapper bg-success bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-check fa-lg text-success"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">Fully transferred documents</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-4">
+            <div class="card border-0 shadow-sm h-100 hover-lift">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="text-uppercase text-muted small fw-semibold mb-1">Today's Activity</h6>
+                            <h2 class="fw-bold mb-1">{{ $todayStats['documents_created'] ?? 0 }}</h2>
+                            <div class="d-flex gap-2">
+                                <span class="badge bg-primary bg-opacity-10 text-primary border-0 py-1 px-2">
+                                    {{ $todayStats['transfers_created'] ?? 0 }} Transfers
+                                </span>
+                                <span class="badge bg-success bg-opacity-10 text-success border-0 py-1 px-2">
+                                    {{ $todayStats['documents_closed'] ?? 0 }} Closed
+                                </span>
+                            </div>
+                        </div>
+                        <div class="icon-wrapper bg-primary bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-chart-line fa-lg text-primary"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">Activities for {{ now()->format('d M Y') }}</small>
                     </div>
                 </div>
             </div>
@@ -150,25 +150,25 @@
                 <div class="card-body p-4">
                     <div class="row g-3">
                         <div class="col-6 col-md-3">
-                            <a href="{{ route('reservations.create') }}" class="card border-0 shadow-sm h-100 text-decoration-none hover-lift">
+                            <a href="{{ route('reservations.index') }}?sync=true" class="card border-0 shadow-sm h-100 text-decoration-none hover-lift">
                                 <div class="card-body text-center py-4">
                                     <div class="icon-wrapper bg-primary bg-opacity-10 rounded-circle p-3 mb-3 mx-auto">
-                                        <i class="fas fa-plus-circle fa-2x text-primary"></i>
+                                        <i class="fas fa-sync fa-2x text-primary"></i>
                                     </div>
-                                    <h6 class="mb-2 fw-semibold">Create Reservation</h6>
-                                    <p class="text-muted small mb-0">Create new SAP reservation</p>
+                                    <h6 class="mb-2 fw-semibold">Sync from SAP</h6>
+                                    <p class="text-muted small mb-0">Refresh SAP reservation data</p>
                                 </div>
                             </a>
                         </div>
 
                         <div class="col-6 col-md-3">
-                            <a href="{{ route('reservations.index') }}" class="card border-0 shadow-sm h-100 text-decoration-none hover-lift">
+                            <a href="{{ route('reservations.create') }}" class="card border-0 shadow-sm h-100 text-decoration-none hover-lift">
                                 <div class="card-body text-center py-4">
                                     <div class="icon-wrapper bg-success bg-opacity-10 rounded-circle p-3 mb-3 mx-auto">
-                                        <i class="fas fa-list fa-2x text-success"></i>
+                                        <i class="fas fa-plus-circle fa-2x text-success"></i>
                                     </div>
-                                    <h6 class="mb-2 fw-semibold">View Reservations</h6>
-                                    <p class="text-muted small mb-0">Browse all reservations</p>
+                                    <h6 class="mb-2 fw-semibold">Create Document</h6>
+                                    <p class="text-muted small mb-0">Create new reservation document</p>
                                 </div>
                             </a>
                         </div>
@@ -177,22 +177,22 @@
                             <a href="{{ route('documents.index') }}" class="card border-0 shadow-sm h-100 text-decoration-none hover-lift">
                                 <div class="card-body text-center py-4">
                                     <div class="icon-wrapper bg-info bg-opacity-10 rounded-circle p-3 mb-3 mx-auto">
-                                        <i class="fas fa-file-alt fa-2x text-info"></i>
+                                        <i class="fas fa-list fa-2x text-info"></i>
                                     </div>
                                     <h6 class="mb-2 fw-semibold">View Documents</h6>
-                                    <p class="text-muted small mb-0">Manage transfer documents</p>
+                                    <p class="text-muted small mb-0">Browse all reservation documents</p>
                                 </div>
                             </a>
                         </div>
 
                         <div class="col-6 col-md-3">
-                            <a href="{{ route('reservations.index') }}?sync=true" class="card border-0 shadow-sm h-100 text-decoration-none hover-lift">
+                            <a href="{{ route('transfers.index') }}" class="card border-0 shadow-sm h-100 text-decoration-none hover-lift">
                                 <div class="card-body text-center py-4">
                                     <div class="icon-wrapper bg-warning bg-opacity-10 rounded-circle p-3 mb-3 mx-auto">
-                                        <i class="fas fa-sync fa-2x text-warning"></i>
+                                        <i class="fas fa-truck fa-2x text-warning"></i>
                                     </div>
-                                    <h6 class="mb-2 fw-semibold">Sync from SAP</h6>
-                                    <p class="text-muted small mb-0">Refresh SAP data</p>
+                                    <h6 class="mb-2 fw-semibold">View Transfers</h6>
+                                    <p class="text-muted small mb-0">Monitor transfer activities</p>
                                 </div>
                             </a>
                         </div>
@@ -224,8 +224,9 @@
                             </div>
                             <select class="form-select form-select-sm" id="statusFilter" style="width: 120px;">
                                 <option value="">All Status</option>
-                                <option value="created">Created</option>
-                                <option value="posted">Posted</option>
+                                <option value="booked">Booked</option>
+                                <option value="partial">Partial</option>
+                                <option value="closed">Closed</option>
                                 <option value="cancelled">Cancelled</option>
                             </select>
                         </div>
@@ -233,7 +234,8 @@
                 </div>
                 <div class="card-body p-0">
                     @php
-                        $recentDocuments = \App\Models\ReservationDocument::orderBy('created_at', 'desc')
+                        $recentDocuments = \App\Models\ReservationDocument::withCount(['transfers', 'items'])
+                            ->orderBy('created_at', 'desc')
                             ->limit(10)
                             ->get();
                     @endphp
@@ -247,6 +249,7 @@
                                         <th class="py-2">Plant</th>
                                         <th class="py-2">Status</th>
                                         <th class="py-2">Items</th>
+                                        <th class="py-2">Transfers</th>
                                         <th class="py-2">Created By</th>
                                         <th class="py-2">Created At</th>
                                         <th class="pe-3 py-2 text-center">Actions</th>
@@ -255,7 +258,8 @@
                                 <tbody>
                                     @foreach($recentDocuments as $doc)
                                         @php
-                                            $itemsCount = $doc->items()->count();
+                                            $itemsCount = $doc->items_count ?? $doc->items()->count();
+                                            $transfersCount = $doc->transfers_count ?? $doc->transfers()->count();
                                             $bgColor = $doc->plant == '3000' ? 'bg-primary bg-opacity-10' :
                                                       ($doc->plant == '4000' ? 'bg-success bg-opacity-10' : 'bg-info bg-opacity-10');
                                         @endphp
@@ -271,13 +275,17 @@
                                                 <span class="badge {{ $bgColor }} text-dark border-0">{{ $doc->plant }}</span>
                                             </td>
                                             <td>
-                                                @if($doc->status == 'created')
+                                                @if($doc->status == 'booked')
                                                     <span class="badge bg-warning bg-opacity-10 text-warning border border-warning">
-                                                        <i class="fas fa-clock me-1"></i>Created
+                                                        <i class="fas fa-clock me-1"></i>Booked
                                                     </span>
-                                                @elseif($doc->status == 'posted')
+                                                @elseif($doc->status == 'partial')
+                                                    <span class="badge bg-info bg-opacity-10 text-info border border-info">
+                                                        <i class="fas fa-tasks me-1"></i>Partial
+                                                    </span>
+                                                @elseif($doc->status == 'closed')
                                                     <span class="badge bg-success bg-opacity-10 text-success border border-success">
-                                                        <i class="fas fa-check-circle me-1"></i>Posted
+                                                        <i class="fas fa-check-circle me-1"></i>Closed
                                                     </span>
                                                 @else
                                                     <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">
@@ -287,6 +295,9 @@
                                             </td>
                                             <td>
                                                 <span class="badge bg-light text-dark border">{{ $itemsCount }} items</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-light text-dark border">{{ $transfersCount }} transfers</span>
                                             </td>
                                             <td>
                                                 <div class="d-flex align-items-center">
@@ -316,7 +327,7 @@
                                                        title="View">
                                                         <i class="fas fa-eye"></i>
                                                     </a>
-                                                    @if($doc->status == 'created')
+                                                    @if($doc->status == 'booked')
                                                     <a href="{{ route('documents.edit', $doc->id) }}"
                                                        class="btn btn-outline-warning"
                                                        title="Edit">
@@ -361,7 +372,7 @@
             </div>
         </div>
 
-        {{-- Recent Activity & Today's Summary Column --}}
+        {{-- Recent Transfers & Today's Summary Column --}}
         <div class="col-lg-4 mb-4">
             {{-- Today's Summary --}}
             <div class="card border-0 shadow-sm mb-4">
@@ -376,7 +387,7 @@
                         <div class="col-4 mb-3">
                             <div class="p-2">
                                 <h3 class="text-primary mb-1 fw-bold">
-                                    {{ \App\Models\ReservationDocument::whereDate('created_at', today())->count() }}
+                                    {{ $todayStats['documents_created'] ?? 0 }}
                                 </h3>
                                 <small class="text-muted">Documents</small>
                             </div>
@@ -384,7 +395,7 @@
                         <div class="col-4 mb-3">
                             <div class="p-2">
                                 <h3 class="text-success mb-1 fw-bold">
-                                    {{ \App\Models\ReservationDocument::where('status', 'posted')->whereDate('created_at', today())->count() }}
+                                    {{ $todayStats['transfers_created'] ?? 0 }}
                                 </h3>
                                 <small class="text-muted">Transfers</small>
                             </div>
@@ -392,37 +403,40 @@
                         <div class="col-4 mb-3">
                             <div class="p-2">
                                 <h3 class="text-warning mb-1 fw-bold">
-                                    {{ \Illuminate\Support\Facades\DB::table('sap_reservations')->whereDate('sync_date', today())->count() }}
+                                    {{ $todayStats['documents_closed'] ?? 0 }}
                                 </h3>
-                                <small class="text-muted">Reservations</small>
+                                <small class="text-muted">Closed</small>
                             </div>
                         </div>
                     </div>
 
-                    {{-- Plant Distribution --}}
+                    {{-- Document Status Distribution --}}
                     <div class="mt-3">
-                        <h6 class="small text-uppercase text-muted mb-2">Plant Distribution</h6>
+                        <h6 class="small text-uppercase text-muted mb-2">Document Status Distribution</h6>
                         <div class="d-flex gap-2">
                             <div class="flex-grow-1">
                                 <div class="progress" style="height: 8px;">
                                     @php
                                         $totalDocs = \App\Models\ReservationDocument::count();
-                                        $plant3000 = \App\Models\ReservationDocument::where('plant', '3000')->count();
-                                        $plant4000 = \App\Models\ReservationDocument::where('plant', '4000')->count();
-                                        $plantOthers = $totalDocs - $plant3000 - $plant4000;
+                                        $bookedDocs = \App\Models\ReservationDocument::where('status', 'booked')->count();
+                                        $partialDocs = \App\Models\ReservationDocument::where('status', 'partial')->count();
+                                        $closedDocs = \App\Models\ReservationDocument::where('status', 'closed')->count();
+                                        $cancelledDocs = \App\Models\ReservationDocument::where('status', 'cancelled')->count();
 
-                                        $plant3000Percent = $totalDocs > 0 ? ($plant3000 / $totalDocs) * 100 : 0;
-                                        $plant4000Percent = $totalDocs > 0 ? ($plant4000 / $totalDocs) * 100 : 0;
-                                        $plantOthersPercent = $totalDocs > 0 ? ($plantOthers / $totalDocs) * 100 : 0;
+                                        $bookedPercent = $totalDocs > 0 ? ($bookedDocs / $totalDocs) * 100 : 0;
+                                        $partialPercent = $totalDocs > 0 ? ($partialDocs / $totalDocs) * 100 : 0;
+                                        $closedPercent = $totalDocs > 0 ? ($closedDocs / $totalDocs) * 100 : 0;
+                                        $cancelledPercent = $totalDocs > 0 ? ($cancelledDocs / $totalDocs) * 100 : 0;
                                     @endphp
-                                    <div class="progress-bar bg-primary" style="width: {{ $plant3000Percent }}%" title="Plant 3000"></div>
-                                    <div class="progress-bar bg-success" style="width: {{ $plant4000Percent }}%" title="Plant 4000"></div>
-                                    <div class="progress-bar bg-info" style="width: {{ $plantOthersPercent }}%" title="Other Plants"></div>
+                                    <div class="progress-bar bg-warning" style="width: {{ $bookedPercent }}%" title="Booked"></div>
+                                    <div class="progress-bar bg-info" style="width: {{ $partialPercent }}%" title="Partial"></div>
+                                    <div class="progress-bar bg-success" style="width: {{ $closedPercent }}%" title="Closed"></div>
+                                    <div class="progress-bar bg-danger" style="width: {{ $cancelledPercent }}%" title="Cancelled"></div>
                                 </div>
                                 <div class="d-flex justify-content-between small text-muted mt-1">
-                                    <span>3000: {{ $plant3000 }}</span>
-                                    <span>4000: {{ $plant4000 }}</span>
-                                    <span>Others: {{ $plantOthers }}</span>
+                                    <span>Booked: {{ $bookedDocs }}</span>
+                                    <span>Partial: {{ $partialDocs }}</span>
+                                    <span>Closed: {{ $closedDocs }}</span>
                                 </div>
                             </div>
                         </div>
@@ -430,69 +444,44 @@
                 </div>
             </div>
 
-            {{-- System Status --}}
+            {{-- Recent Transfers --}}
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-bottom py-3">
                     <h5 class="mb-0 fw-semibold">
-                        <i class="fas fa-server me-2 text-info"></i>System Status
+                        <i class="fas fa-truck me-2 text-primary"></i>Recent Transfers
                     </h5>
                 </div>
-                <div class="card-body">
-                    <div class="list-group list-group-flush">
-                        <div class="list-group-item px-0 py-2 border-0">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="fas fa-database text-primary me-2"></i>
-                                    <span>SAP Connection</span>
+                <div class="card-body p-0">
+                    @if(isset($recentTransfers) && $recentTransfers->count() > 0)
+                        <div class="list-group list-group-flush">
+                            @foreach($recentTransfers as $transfer)
+                                <div class="list-group-item px-3 py-2 border-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="fw-medium small">{{ $transfer->transfer_no }}</div>
+                                            <small class="text-muted">Doc: {{ $transfer->document_no }}</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="fw-bold">{{ number_format($transfer->total_qty) }}</div>
+                                            <small class="text-muted">
+                                                {{ \Carbon\Carbon::parse($transfer->created_at)->format('H:i') }}
+                                            </small>
+                                        </div>
+                                    </div>
                                 </div>
-                                <span class="badge bg-success bg-opacity-10 text-success border border-success">
-                                    <i class="fas fa-check-circle me-1"></i>Active
-                                </span>
-                            </div>
+                            @endforeach
                         </div>
-                        <div class="list-group-item px-0 py-2 border-0">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="fas fa-sync text-warning me-2"></i>
-                                    <span>Last Sync</span>
-                                </div>
-                                <span class="text-muted small">
-                                    @php
-                                        $lastSync = \Illuminate\Support\Facades\DB::table('sap_reservations')
-                                            ->orderBy('sync_date', 'desc')
-                                            ->value('sync_date');
-                                    @endphp
-                                    @if($lastSync)
-                                        {{ \Carbon\Carbon::parse($lastSync)->diffForHumans() }}
-                                    @else
-                                        Never
-                                    @endif
-                                </span>
-                            </div>
+                    @else
+                        <div class="text-center py-4">
+                            <i class="fas fa-truck fa-2x text-muted opacity-25 mb-2"></i>
+                            <p class="text-muted small mb-0">No recent transfers</p>
                         </div>
-                        <div class="list-group-item px-0 py-2 border-0">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="fas fa-users text-success me-2"></i>
-                                    <span>Total Users</span>
-                                </div>
-                                <span class="text-muted small">
-                                    {{ \App\Models\User::count() }} registered
-                                </span>
-                            </div>
-                        </div>
-                        <div class="list-group-item px-0 py-2 border-0">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="fas fa-hdd text-info me-2"></i>
-                                    <span>Database</span>
-                                </div>
-                                <span class="text-muted small">
-                                    {{ \Illuminate\Support\Facades\DB::table('sap_reservations')->count() }} records
-                                </span>
-                            </div>
-                        </div>
-                    </div>
+                    @endif
+                </div>
+                <div class="card-footer bg-white border-top py-2">
+                    <a href="{{ route('transfers.index') }}" class="btn btn-sm btn-outline-primary w-100">
+                        View All Transfers <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
                 </div>
             </div>
         </div>
@@ -772,15 +761,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateTime, 60000);
     updateTime();
     updateWelcomeMessage();
-
-    // Real-time update simulation (for demo purposes)
-    setInterval(() => {
-        // In real implementation, you would fetch actual data
-        const shouldUpdate = Math.random() < 0.1; // 10% chance
-        if (shouldUpdate) {
-            showToast('New document has been created', 'info');
-        }
-    }, 30000); // Check every 30 seconds
 });
 </script>
 @endsection

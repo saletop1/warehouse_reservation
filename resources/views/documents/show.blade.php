@@ -1,118 +1,140 @@
 @extends('layouts.app')
 
 @section('content')
-                    <div class="container-fluid">
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <!-- Breadcrumb -->
-                                <nav aria-label="breadcrumb" class="mb-3">
-                                    <ol class="breadcrumb">
-                                        <li class="breadcrumb-item"><a href="{{ route('documents.index') }}" class="text-decoration-none">Documents</a></li>
-                                        <li class="breadcrumb-item active text-muted">Document Details</li>
-                                    </ol>
-                                </nav>
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <!-- Breadcrumb -->
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ route('documents.index') }}" class="text-decoration-none">Documents</a></li>
+                    <li class="breadcrumb-item active text-muted">Document Details</li>
+                </ol>
+            </nav>
 
-                                <!-- Header Section -->
-                                <div class="d-flex justify-content-between align-items-center mb-4">
-                                    <div>
-                                        <h1 class="h3 mb-0 fw-bold text-dark">Document Details</h1>
-                                    </div>
-                                    <div class="d-flex gap-2">
-                                        <a href="{{ route('documents.index') }}" class="btn btn-outline-secondary btn-sm">
-                                            <i class="fas fa-arrow-left me-1"></i> Back
-                                        </a>
-                                        <a href="{{ route('documents.edit', $document->id) }}" class="btn btn-outline-primary btn-sm">
-                                            <i class="fas fa-edit me-1"></i> Edit
-                                        </a>
-                                        <a href="{{ route('documents.print', $document->id) }}" class="btn btn-outline-success btn-sm">
-                                            <i class="fas fa-print me-1"></i> Print
-                                        </a>
-                                        <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-outline-danger btn-sm">
-                                            <i class="fas fa-file-pdf me-1"></i> PDF
-                                        </a>
-                                    </div>
-                                </div>
-
-                                <!-- Alert Messages -->
-                                @if(session('success'))
-                                    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-check-circle me-2"></i>
-                                            <div class="flex-grow-1">{{ session('success') }}</div>
-                                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                                        </div>
-                                    </div>
-                                @endif
-
-                                @if(session('error'))
-                                    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-exclamation-circle me-2"></i>
-                                            <div class="flex-grow-1">{{ session('error') }}</div>
-                                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                                        </div>
-                                    </div>
-                                @endif
-
-                                <!-- Document Info Card -->
-                                <div class="card border-0 shadow-sm mb-4">
-                                    <div class="card-header bg-white border-bottom py-2">
-                                        <h5 class="mb-0 fw-semibold text-dark">
-                                            <i class="fas fa-info-circle me-2 text-primary"></i>Document Information
-                                        </h5>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="document-info-compact">
-                                            <!-- Column 1 -->
-                                            <div class="info-column">
-                                                <div class="info-item">
-                        <span class="info-label">Transfer No</span>
-                        <span class="info-value">
-                            @php
-                                // Filter transfer yang memiliki transfer_no
-                                $validTransfers = $document->transfers->filter(function($transfer) {
-                                    return !empty($transfer->transfer_no);
-                                });
-
-                                $transferCount = $validTransfers->count();
-                            @endphp
-
-                            @if($transferCount > 0)
-                                @if($transferCount <= 2)
-                                    <!-- Tampilkan langsung jika 1 atau 2 transfer -->
-                                    @foreach($validTransfers as $transfer)
-                                        <div class="text-primary mb-1">{{ $transfer->transfer_no }}</div>
-                                    @endforeach
-                                @else
-                                    <!-- Tampilkan dropdown jika lebih dari 2 -->
-                                    <div class="dropdown transfer-dropdown">
-                                        <button class="btn btn-sm btn-outline-primary dropdown-toggle"
-                                                type="button"
-                                                data-bs-toggle="dropdown"
-                                                aria-expanded="false">
-                                            <span class="badge bg-primary">{{ $transferCount }}</span> Transfer(s)
-                                        </button>
-                                        <ul class="dropdown-menu transfer-dropdown-menu">
-                                            @foreach($validTransfers as $transfer)
-                                                <li>
-                                                    <a class="dropdown-item" href="#">
-                                                        <div class="d-flex justify-content-between align-items-center">
-                                                            <span class="transfer-no-text">{{ $transfer->transfer_no }}</span>
-                                                            <small class="text-muted">
-                                                                {{ \Carbon\Carbon::parse($transfer->created_at)->format('d/m/Y') }}
-                                                            </small>
-                                                        </div>
-                                                    </a>
-                                                </li>
-                                            @endforeach
-                                        </ul>
-                                    </div>
-                                @endif
-                            @else
-                                <span class="text-muted">-</span>
-                            @endif
-                        </span>
+            <!-- Header Section -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0 fw-bold text-dark">Document Details</h1>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        @if($document->status == 'booked')
+                            <span class="badge bg-warning">
+                                <i class="fas fa-clock me-1"></i>Booked
+                            </span>
+                        @elseif($document->status == 'partial')
+                            <span class="badge bg-info">
+                                <i class="fas fa-tasks me-1"></i>Partial Transfer
+                            </span>
+                        @elseif($document->status == 'closed')
+                            <span class="badge bg-success">
+                                <i class="fas fa-check-circle me-1"></i>Closed
+                            </span>
+                        @else
+                            <span class="badge bg-danger">
+                                <i class="fas fa-times-circle me-1"></i>Cancelled
+                            </span>
+                        @endif
+                        <span class="text-muted small">• Completion: {{ round($document->completion_rate ?? 0, 2) }}%</span>
                     </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ route('documents.index') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-arrow-left me-1"></i> Back
+                    </a>
+                    @if($document->status == 'booked')
+                    <a href="{{ route('documents.edit', $document->id) }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-edit me-1"></i> Edit
+                    </a>
+                    @endif
+                    <a href="{{ route('documents.print', $document->id) }}" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-print me-1"></i> Print
+                    </a>
+                    <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-outline-danger btn-sm">
+                        <i class="fas fa-file-pdf me-1"></i> PDF
+                    </a>
+                </div>
+            </div>
+
+            <!-- Alert Messages -->
+            @if(session('success'))
+                <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <div class="flex-grow-1">{{ session('success') }}</div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                </div>
+            @endif
+
+            @if(session('error'))
+                <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <div class="flex-grow-1">{{ session('error') }}</div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                </div>
+            @endif
+
+            <!-- Document Info Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom py-2">
+                    <h5 class="mb-0 fw-semibold text-dark">
+                        <i class="fas fa-info-circle me-2 text-primary"></i>Document Information
+                    </h5>
+                </div>
+                <div class="card-body p-2">
+                    <div class="document-info-compact">
+                        <!-- Column 1 -->
+                        <div class="info-column">
+                            <div class="info-item">
+                                <span class="info-label">Transfer No</span>
+                                <span class="info-value">
+                                    @php
+                                        // Filter transfer yang memiliki transfer_no
+                                        $validTransfers = $document->transfers->filter(function($transfer) {
+                                            return !empty($transfer->transfer_no);
+                                        });
+
+                                        $transferCount = $validTransfers->count();
+                                    @endphp
+
+                                    @if($transferCount > 0)
+                                        @if($transferCount <= 2)
+                                            <!-- Tampilkan langsung jika 1 atau 2 transfer -->
+                                            @foreach($validTransfers as $transfer)
+                                                <div class="text-primary mb-1">{{ $transfer->transfer_no }}</div>
+                                            @endforeach
+                                        @else
+                                            <!-- Tampilkan dropdown jika lebih dari 2 -->
+                                            <div class="dropdown transfer-dropdown">
+                                                <button class="btn btn-sm btn-outline-primary dropdown-toggle"
+                                                        type="button"
+                                                        data-bs-toggle="dropdown"
+                                                        aria-expanded="false">
+                                                    <span class="badge bg-primary">{{ $transferCount }}</span> Transfer(s)
+                                                </button>
+                                                <ul class="dropdown-menu transfer-dropdown-menu">
+                                                    @foreach($validTransfers as $transfer)
+                                                        <li>
+                                                            <a class="dropdown-item" href="#">
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    <span class="transfer-no-text">{{ $transfer->transfer_no }}</span>
+                                                                    <small class="text-muted">
+                                                                        {{ \Carbon\Carbon::parse($transfer->created_at)->format('d/m/Y') }}
+                                                                    </small>
+                                                                </div>
+                                                            </a>
+                                                        </li>
+                                                    @endforeach
+                                                </ul>
+                                            </div>
+                                        @endif
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </span>
+                            </div>
                         </div>
 
                         <!-- Column 2 -->
@@ -122,17 +144,30 @@
                                 <span class="info-value">{{ $document->plant }}</span>
                             </div>
                             <div class="info-item">
-                                <span class="info-label">Created By</span>
-                                <span class="info-value">{{ $document->created_by_name ?? $document->created_by }}</span>
+                                <span class="info-label">Status</span>
+                                <span class="info-value">
+                                    @if($document->status == 'booked')
+                                        <span class="badge bg-warning">Booked</span>
+                                    @elseif($document->status == 'partial')
+                                        <span class="badge bg-info">Partial Transfer</span>
+                                    @elseif($document->status == 'closed')
+                                        <span class="badge bg-success">Closed</span>
+                                    @else
+                                        <span class="badge bg-danger">Cancelled</span>
+                                    @endif
+                                </span>
                             </div>
                         </div>
 
                         <!-- Column 3 -->
                         <div class="info-column">
+                            <!-- PERBAIKAN: Ganti dari Plant Supply menjadi Plant Supply dengan field yang benar -->
                             <div class="info-item">
                                 <span class="info-label">Plant Supply</span>
                                 <span class="info-value">
-                                    @if($document->sloc_supply)
+                                    @if(isset($document->plant_supply) && !empty($document->plant_supply))
+                                        {{ $document->plant_supply }}
+                                    @elseif(isset($document->sloc_supply) && !empty($document->sloc_supply))
                                         {{ $document->sloc_supply }}
                                     @else
                                         <span class="text-muted">Not specified</span>
@@ -140,8 +175,13 @@
                                 </span>
                             </div>
                             <div class="info-item">
-                                <span class="info-label">Created Date</span>
-                                <span class="info-value">{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d M Y, H:i') }}</span>
+                                <span class="info-label">Completion Rate</span>
+                                <span class="info-value">
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar bg-success" style="width: {{ round($document->completion_rate ?? 0, 2) }}%"></div>
+                                    </div>
+                                    <small>{{ round($document->completion_rate ?? 0, 2) }}%</small>
+                                </span>
                             </div>
                         </div>
 
@@ -154,8 +194,8 @@
                             </div>
                             @endif
                             <div class="info-item">
-                                <span class="info-label">Last Updated</span>
-                                <span class="info-value">{{ \Carbon\Carbon::parse($document->updated_at)->setTimezone('Asia/Jakarta')->format('d M Y, H:i') }}</span>
+                                <span class="info-label">Total Transferred</span>
+                                <span class="info-value">{{ number_format($document->total_transferred ?? 0) }} / {{ number_format($document->total_qty) }}</span>
                             </div>
                         </div>
                     </div>
@@ -173,11 +213,14 @@
                                     <h5 class="mb-0 fw-semibold text-dark">
                                         <i class="fas fa-list-ul me-2 text-primary"></i>Document Items
                                     </h5>
+                                    <small class="text-muted">{{ $document->items->count() }} items • {{ number_format($document->total_qty) }} total quantity</small>
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="me-2">
                                         <span class="badge bg-light border text-dark" id="selectedCount">0 selected</span>
                                     </div>
+                                    <!-- PERUBAHAN DI SINI: Tampilkan tombol Stock jika dokumen status 'booked' -->
+                                    @if($document->status == 'booked')
                                     <form id="checkStockForm" action="{{ route('stock.fetch', $document->document_no) }}" method="POST" class="d-inline">
                                         @csrf
                                         <div class="input-group input-group-sm">
@@ -192,6 +235,7 @@
                                             </button>
                                         </div>
                                     </form>
+                                    @endif
                                     @php
                                         $hasStockInfo = false;
                                         foreach ($document->items as $item) {
@@ -201,7 +245,8 @@
                                             }
                                         }
                                     @endphp
-                                    @if($hasStockInfo)
+                                    <!-- PERUBAHAN DI SINI: Tampilkan tombol Reset jika ada stock info dan dokumen 'booked' -->
+                                    @if($hasStockInfo && $document->status == 'booked')
                                     <form id="resetStockForm" action="{{ route('stock.clear-cache', $document->document_no) }}" method="POST" class="d-inline">
                                         @csrf
                                         @method('DELETE')
@@ -228,6 +273,8 @@
                                             <th class="border-end-0">Source PRO</th>
                                             <th class="border-end-0 text-center">MRP</th>
                                             <th class="border-end-0 text-center">Req Qty</th>
+                                            <th class="border-end-0 text-center">Transferred</th>
+                                            <th class="border-end-0 text-center">Remaining</th>
                                             <th class="border-end-0 text-center">Stock</th>
                                             <th class="border-end-0 text-center">Uom</th>
                                             <th class="text-center">Batch</th>
@@ -269,6 +316,8 @@
                                                 }
 
                                                 $requestedQty = is_numeric($item->requested_qty ?? 0) ? floatval($item->requested_qty) : 0;
+                                                $transferredQty = is_numeric($item->transferred_qty ?? 0) ? floatval($item->transferred_qty) : 0;
+                                                $remainingQty = max(0, $requestedQty - $transferredQty);
 
                                                 // Stock information
                                                 $stockInfo = $item->stock_info ?? null;
@@ -282,19 +331,35 @@
                                                         $batchInfo[] = [
                                                             'batch' => $detail['charg'] ?? '',
                                                             'sloc' => $detail['lgort'] ?? '',
-                                                            'qty' => is_numeric($detail['clabs'] ?? 0) ? floatval($detail['clabs']) : 0
+                                                            'qty' => is_numeric($detail['clabs'] ?? 0) ? floatval($detail['clabs']) : 0,
+                                                            'clabs' => is_numeric($detail['clabs'] ?? 0) ? floatval($detail['clabs']) : 0
                                                         ];
                                                     }
                                                 }
 
                                                 // Check if stock is available
                                                 $hasStock = $totalStock > 0;
-                                                $canTransfer = $hasStock && $totalStock >= $requestedQty;
-                                                $transferableQty = min($requestedQty, $totalStock);
+                                                $canTransfer = $hasStock && $remainingQty > 0;
+                                                $transferableQty = min($remainingQty, $totalStock);
+
+                                                // Determine status color
+                                                if ($transferredQty >= $requestedQty) {
+                                                    $statusClass = 'stock-custom-available';
+                                                    $statusIcon = 'fa-check-circle';
+                                                    $statusText = 'Completed';
+                                                } elseif ($transferredQty > 0) {
+                                                    $statusClass = 'stock-custom-partial';
+                                                    $statusIcon = 'fa-tasks';
+                                                    $statusText = 'Partial';
+                                                } else {
+                                                    $statusClass = 'stock-custom-unavailable';
+                                                    $statusIcon = 'fa-clock';
+                                                    $statusText = 'Pending';
+                                                }
 
                                                 // Determine stock color class
                                                 if ($totalStock > 0) {
-                                                    if ($canTransfer) {
+                                                    if ($transferableQty > 0) {
                                                         $stockClass = 'stock-custom-available';
                                                         $stockIcon = 'fa-check-circle';
                                                     } else {
@@ -312,6 +377,8 @@
                                                 data-material-code="{{ $materialCode }}"
                                                 data-material-description="{{ $item->material_description }}"
                                                 data-requested-qty="{{ $requestedQty }}"
+                                                data-transferred-qty="{{ $transferredQty }}"
+                                                data-remaining-qty="{{ $remainingQty }}"
                                                 data-available-stock="{{ $totalStock }}"
                                                 data-transferable-qty="{{ $transferableQty }}"
                                                 data-unit="{{ $unit }}"
@@ -323,14 +390,14 @@
                                                     <input type="checkbox"
                                                            class="form-check-input row-select"
                                                            data-item-id="{{ $item->id }}"
-                                                           {{ $hasStock ? '' : 'disabled' }}>
+                                                           {{ $canTransfer ? '' : 'disabled' }}>
                                                 </td>
                                                 <td class="text-center border-end-0 align-middle">{{ $index + 1 }}</td>
                                                 <td class="border-end-0 align-middle">
                                                     <div class="fw-medium text-dark">{{ $materialCode }}</div>
                                                 </td>
                                                 <td class="border-end-0">
-                                                    <div class="text-truncate-2" style="max-height: 2.8em; line-height: 1.4em;" title="{{ $item->material_description }}">
+                                                    <div class="text-wrap" style="max-width: 300px;" title="{{ $item->material_description }}">
                                                         {{ $item->material_description }}
                                                     </div>
                                                 </td>
@@ -367,15 +434,23 @@
                                                     <div class="fw-medium text-dark">{{ \App\Helpers\NumberHelper::formatQuantity($requestedQty) }}</div>
                                                 </td>
                                                 <td class="text-center border-end-0 align-middle">
+                                                    <div class="{{ $statusClass }} fw-medium">
+                                                        {{ \App\Helpers\NumberHelper::formatQuantity($transferredQty) }}
+                                                    </div>
+                                                </td>
+                                                <td class="text-center border-end-0 align-middle">
+                                                    <div class="fw-bold text-dark">
+                                                        {{ \App\Helpers\NumberHelper::formatQuantity($remainingQty) }}
+                                                    </div>
+                                                </td>
+                                                <td class="text-center border-end-0 align-middle">
                                                     @if($totalStock > 0)
-                                                        @if($canTransfer)
+                                                        @if($transferableQty > 0)
                                                             <div class="stock-custom-available fw-bold">
-
                                                                 {{ \App\Helpers\NumberHelper::formatStockNumber($totalStock) }}
                                                             </div>
                                                         @else
                                                             <div class="stock-custom-low fw-medium">
-
                                                                 {{ \App\Helpers\NumberHelper::formatStockNumber($totalStock) }}
                                                             </div>
                                                         @endif
@@ -398,13 +473,12 @@
                                                                     // Determine batch color
                                                                     if ($batchQty > 0) {
                                                                         $batchClass = 'stock-custom-available';
-
                                                                     } else {
                                                                         $batchClass = 'stock-custom-unavailable';
-
                                                                     }
                                                                 @endphp
-                                                                    <div class="text-truncate {{ $batchClass }}" style="max-width: 150px;" title="SLOC: {{ $batchSloc }} | Batch: {{ $batchNumber }} | Qty: {{ \App\Helpers\NumberHelper::formatStockNumber($batchQty) }}">
+                                                                    <div class="{{ $batchClass }} text-wrap"
+                                                                         title="SLOC: {{ $batchSloc }} | Batch: {{ $batchNumber }} | Qty: {{ \App\Helpers\NumberHelper::formatStockNumber($batchQty) }}">
                                                                         {{ $batchSloc }} | {{ $batchNumber }}: {{ \App\Helpers\NumberHelper::formatStockNumber($batchQty) }}
                                                                     </div>
                                                                 @endforeach
@@ -426,16 +500,19 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="selectAllHeader">
                                     <label class="form-check-label text-muted" for="selectAllHeader">
-                                        Select All
+                                        Select All Transferable Items
                                     </label>
                                 </div>
                                 <div class="d-flex gap-2">
                                     <button type="button" class="btn btn-outline-secondary btn-sm" id="clearSelection">
                                         <i class="fas fa-times me-1"></i> Clear
                                     </button>
+                                    <!-- PERUBAHAN DI SINI: Pastikan button Add Selected muncul jika ada item transferable -->
+                                    @if($hasTransferableItems && $canGenerateTransfer)
                                     <button type="button" class="btn btn-primary btn-sm" id="addSelectedToTransfer">
                                         <i class="fas fa-arrow-right me-1"></i> Add Selected
                                     </button>
+                                    @endif
                                 </div>
                             </div>
                         </div>
@@ -453,7 +530,7 @@
                                 <span class="badge bg-primary" id="transferCount">0</span>
                             </div>
                             <div class="text-muted small">
-                                <i class="fas fa-info-circle me-1"></i>Drag items here. Only items with available stock
+                                <i class="fas fa-info-circle me-1"></i>Only items with available stock and remaining quantity
                             </div>
                         </div>
                         <div class="card-body p-0">
@@ -470,18 +547,30 @@
                         </div>
                         <div class="card-footer bg-white border-top py-2">
                             <div class="d-grid gap-2">
+                                <!-- PERUBAHAN DI SINI: Tampilkan button berdasarkan kondisi yang benar -->
+                                @if($hasTransferableItems && $canGenerateTransfer)
                                 <button type="button"
                                         class="btn btn-primary"
-                                        id="generateTransferList"
-                                        @if(!$canGenerateTransfer) disabled @endif>
+                                        id="generateTransferList">
                                     <i class="fas fa-file-export me-1"></i> Generate Transfer
                                 </button>
                                 <button type="button"
                                         class="btn btn-outline-danger"
-                                        id="clearTransferList"
-                                        @if(!$canGenerateTransfer) disabled @endif>
+                                        id="clearTransferList">
                                     <i class="fas fa-trash me-1"></i> Clear All
                                 </button>
+                                @else
+                                <button type="button" class="btn btn-secondary" disabled>
+                                    <i class="fas fa-ban me-1"></i>
+                                    @if(!$hasTransferableItems)
+                                        No Transferable Items
+                                    @elseif(!$canGenerateTransfer)
+                                        No Permission
+                                    @else
+                                        Transfer Not Available
+                                    @endif
+                                </button>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -511,60 +600,6 @@
     </div>
 </div>
 
-<!-- SAP Credentials Modal -->
-<div class="modal fade" id="sapCredentialsModal" tabindex="-1" aria-labelledby="sapCredentialsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header border-bottom py-3">
-                <h5 class="modal-title fw-semibold" id="sapCredentialsModalLabel">
-                    <i class="fas fa-key me-2 text-primary"></i>SAP Credentials
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-4">
-                <div class="alert alert-info border-0 bg-light mb-4">
-                    <i class="fas fa-info-circle me-2"></i>Enter your SAP credentials to process transfer
-                </div>
-
-                <form id="sapCredsForm">
-                    <div class="mb-3">
-                        <label for="sap_user" class="form-label fw-semibold">SAP Username *</label>
-                        <input type="text"
-                               class="form-control"
-                               id="sap_user"
-                               placeholder="Enter SAP username"
-                               required
-                               autocomplete="off">
-                    </div>
-
-                    <div class="mb-4">
-                        <label for="sap_password" class="form-label fw-semibold">SAP Password *</label>
-                        <div class="input-group">
-                            <input type="password"
-                                   class="form-control"
-                                   id="sap_password"
-                                   placeholder="Enter SAP password"
-                                   required
-                                   autocomplete="off">
-                            <button class="btn btn-outline-secondary" type="button" id="togglePassword">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer border-top py-3">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-1"></i> Cancel
-                </button>
-                <button type="button" class="btn btn-primary" id="saveSapCredentials">
-                    <i class="fas fa-paper-plane me-1"></i> Process
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Transfer Preview Modal -->
 <div class="modal fade" id="transferPreviewModal" tabindex="-1" aria-labelledby="transferPreviewModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
@@ -587,8 +622,8 @@
                                 <th class="text-center" style="width: 40px;">#</th>
                                 <th style="width: 90px;">Material</th>
                                 <th style="min-width: 150px;">Description</th>
-                                <th class="text-center" style="width: 70px;">Req Qty</th>
-                                <th class="text-center" style="width: 70px;">Stock</th>
+                                <th class="text-center" style="width: 70px;">Remaining</th>
+                                <th class="text-center" style="width: 70px;">Selected Batch Qty</th>
                                 <th class="text-center" style="width: 90px;">Transfer Qty *</th>
                                 <th class="text-center" style="width: 50px;">Unit</th>
                                 <th class="text-center" style="width: 80px;">Plant Dest *</th>
@@ -626,9 +661,18 @@
                                     <span class="text-muted">Total Transfer Qty:</span>
                                     <span class="fw-bold" id="modalTotalQty">0</span>
                                 </div>
+                                <!-- PERBAIKAN: Tampilkan Plant Supply dengan field yang benar -->
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted">Plant Supply:</span>
-                                    <span class="fw-medium">{{ $document->sloc_supply ?? 'N/A' }}</span>
+                                    <span class="fw-medium">
+                                        @if(isset($document->plant_supply) && !empty($document->plant_supply))
+                                            {{ $document->plant_supply }}
+                                        @elseif(isset($document->sloc_supply) && !empty($document->sloc_supply))
+                                            {{ $document->sloc_supply }}
+                                        @else
+                                            N/A
+                                        @endif
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -641,6 +685,47 @@
                 </button>
                 <button type="button" class="btn btn-primary" id="confirmTransfer">
                     <i class="fas fa-paper-plane me-1"></i> Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SAP Credentials Modal -->
+<div class="modal fade" id="sapCredentialsModal" tabindex="-1" aria-labelledby="sapCredentialsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-bottom py-3">
+                <h5 class="modal-title fw-semibold" id="sapCredentialsModalLabel">
+                    <i class="fas fa-key me-2 text-primary"></i>SAP Credentials Required
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-warning border-0 bg-light mb-4">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Please enter your SAP credentials to proceed with the transfer.
+                </div>
+                <div class="mb-3">
+                    <label for="sapUsername" class="form-label fw-semibold">
+                        <i class="fas fa-user me-1 text-muted"></i>SAP Username *
+                    </label>
+                    <input type="text" class="form-control uppercase-input" id="sapUsername"
+                           placeholder="Enter SAP username" required>
+                </div>
+                <div class="mb-3">
+                    <label for="sapPassword" class="form-label fw-semibold">
+                        <i class="fas fa-lock me-1 text-muted"></i>SAP Password *
+                    </label>
+                    <input type="password" class="form-control" id="sapPassword"
+                           placeholder="Enter SAP password" required>
+                </div>
+            </div>
+            <div class="modal-footer border-top py-3">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-primary" id="submitSapCredentials">
+                    <i class="fas fa-paper-plane me-1"></i> Submit & Process Transfer
                 </button>
             </div>
         </div>
@@ -821,15 +906,23 @@
     font-size: 14px;
 }
 
-/* Text truncate for 2 lines */
-.text-truncate-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.4em;
-    max-height: 2.8em;
+/* Text wrapping untuk batch dan description */
+.text-wrap {
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    word-break: break-word !important;
+}
+
+/* Pastikan tabel responsive */
+.table-responsive {
+    overflow-x: auto !important;
+}
+
+/* Atur lebar kolom batch lebih fleksibel */
+#itemsTable td:nth-child(13),
+#itemsTable th:nth-child(13) {
+    min-width: 180px;
+    max-width: 250px;
 }
 
 /* Transfer Container */
@@ -861,7 +954,7 @@
 .transfer-item-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items-center;
     margin-bottom: 4px;
 }
 
@@ -892,7 +985,7 @@
 
 .transfer-item-qty {
     display: flex;
-    align-items: center;
+    align-items-center;
     flex-wrap: wrap;
     gap: 6px;
     margin-top: 4px;
@@ -1332,9 +1425,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Variables
     let transferItems = [];
     let selectedItems = new Set();
-
-    // Cek apakah user memiliki izin untuk generate transfer
-    const canGenerateTransfer = @json($canGenerateTransfer ?? true);
+    let pendingTransferData = null; // Untuk menyimpan data transfer sebelum dikirim
 
     // Helper functions
     function formatAngka(num, decimalDigits = 2) {
@@ -1404,9 +1495,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const dropZone = document.getElementById('transferContainer');
 
         rows.forEach(function(row) {
+            const remainingQty = parseFloat(row.dataset.remainingQty || 0);
             const availableStock = parseFloat(row.dataset.availableStock || 0);
 
-            if (availableStock > 0 && canGenerateTransfer) {
+            if (remainingQty > 0 && availableStock > 0) {
                 row.draggable = true;
 
                 row.addEventListener('dragstart', function(e) {
@@ -1428,12 +1520,15 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 row.draggable = false;
                 row.classList.add('zero-stock');
-                row.title = availableStock > 0 ? 'No permission to transfer' : 'No stock available';
+                row.title = remainingQty <= 0 ? 'Already transferred' : 'No stock available';
             }
         });
 
         // Drop zone events
-        if (canGenerateTransfer) {
+        const canGenerateTransfer = @json($canGenerateTransfer ?? false);
+        const hasTransferableItems = @json($hasTransferableItems ?? false);
+
+        if (canGenerateTransfer && hasTransferableItems) {
             dropZone.addEventListener('dragover', function(e) {
                 e.preventDefault();
                 this.classList.add('drag-over');
@@ -1636,6 +1731,8 @@ document.addEventListener('DOMContentLoaded', function() {
             materialCode: row.dataset.materialCode,
             materialDesc: row.dataset.materialDescription,
             requestedQty: parseFloat(row.dataset.requestedQty || 0),
+            transferredQty: parseFloat(row.dataset.transferredQty || 0),
+            remainingQty: parseFloat(row.dataset.remainingQty || 0),
             availableStock: parseFloat(row.dataset.availableStock || 0),
             unit: row.dataset.unit || 'PC',
             sloc: row.dataset.sloc || '',
@@ -1646,6 +1743,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add selected items to transfer
     function addSelectedItemsToTransfer() {
+        const canGenerateTransfer = @json($canGenerateTransfer ?? false);
         if (!canGenerateTransfer) {
             showToast('You do not have permission to create transfers', 'error');
             return;
@@ -1663,7 +1761,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const itemData = getItemDataFromRow(itemRow);
 
                 if (!transferItems.some(function(transferItem) { return transferItem.id === itemData.id; })) {
-                    if (itemData.availableStock > 0) {
+                    if (itemData.remainingQty > 0 && itemData.availableStock > 0) {
                         addItemToTransferByData(itemData);
                         addedCount++;
                     }
@@ -1682,6 +1780,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add item by ID
     function addItemById(itemId) {
+        const canGenerateTransfer = @json($canGenerateTransfer ?? false);
         if (!canGenerateTransfer) {
             showToast('You do not have permission to create transfers', 'error');
             return;
@@ -1697,6 +1796,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (transferItems.some(function(transferItem) { return transferItem.id === itemData.id; })) {
             showToast('Item already in transfer list', 'warning');
+            return;
+        }
+
+        if (itemData.remainingQty <= 0) {
+            showToast('Item already fully transferred', 'error');
             return;
         }
 
@@ -1731,15 +1835,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        // Calculate transferable quantity - PERUBAHAN: gunakan batchQty bukan total stock
+        const maxTransferable = Math.min(item.remainingQty, batchQty > 0 ? batchQty : item.availableStock);
+
         // Add to transfer items array
         const transferItem = {
             id: item.id,
             materialCode: item.materialCode,
             materialDesc: item.materialDesc,
-            maxQty: item.availableStock,
-            requestedQty: item.requestedQty,
+            maxQty: maxTransferable,
+            remainingQty: item.remainingQty,
             availableStock: item.availableStock,
-            qty: Math.min(item.requestedQty, item.availableStock),
+            batchQty: batchQty, // Simpan batch quantity terpisah
+            qty: maxTransferable,
+            quantity: maxTransferable, // Duplicate for backend compatibility
             unit: item.unit,
             sloc: item.sloc,
             batchInfo: item.batchInfo,
@@ -1747,7 +1856,9 @@ document.addEventListener('DOMContentLoaded', function() {
             batchQty: batchQty,
             batchSloc: batchSloc,
             plantTujuan: defaultPlant,
-            slocTujuan: '' // Kosong secara default
+            plant_dest: defaultPlant, // Duplicate for backend compatibility
+            slocTujuan: '', // Kosong secara default
+            sloc_dest: '' // Duplicate for backend compatibility
         };
 
         transferItems.push(transferItem);
@@ -1791,7 +1902,7 @@ document.addEventListener('DOMContentLoaded', function() {
             '</div>' +
             '<div class="transfer-item-desc">' + (item.materialDesc.length > 50 ? item.materialDesc.substring(0, 50) + '...' : item.materialDesc) + '</div>' +
             '<div class="transfer-item-qty">' +
-            '<span class="text-muted">Req: ' + formatAngka(item.requestedQty) + '</span>' +
+            '<span class="text-muted">Remaining: ' + formatAngka(item.remainingQty) + '</span>' +
             '<span class="text-muted ms-2">Max: ' + formatAngka(item.maxQty) + '</span>' +
             '<span class="text-muted ms-2">' + item.unit + '</span>' +
             '</div>';
@@ -1884,6 +1995,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const generateTransferListBtn = document.getElementById('generateTransferList');
     if (generateTransferListBtn) {
         generateTransferListBtn.addEventListener('click', function() {
+            const canGenerateTransfer = @json($canGenerateTransfer ?? false);
             if (!canGenerateTransfer) {
                 showToast('You do not have permission to create transfers', 'error');
                 return;
@@ -1928,8 +2040,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 '<td class="text-center align-middle">' + (index + 1) + '</td>' +
                 '<td class="align-middle"><div class="fw-medium">' + item.materialCode + '</div></td>' +
                 '<td class="align-middle"><div class="text-truncate-2" title="' + item.materialDesc + '">' + (item.materialDesc.length > 40 ? item.materialDesc.substring(0, 40) + '...' : item.materialDesc) + '</div></td>' +
-                '<td class="text-center align-middle"><div class="fw-medium">' + formatAngka(item.requestedQty) + '</div></td>' +
-                '<td class="text-center align-middle"><div class="' + (item.availableStock > 0 ? 'stock-custom-available' : 'stock-custom-unavailable') + ' fw-medium">' + formatAngka(item.availableStock) + '</div></td>' +
+                '<td class="text-center align-middle"><div class="fw-medium">' + formatAngka(item.remainingQty) + '</div></td>' +
+                '<td class="text-center align-middle"><div class="' + (item.batchQty > 0 ? 'stock-custom-available' : 'stock-custom-unavailable') + ' fw-medium" id="batchQtyDisplay-' + index + '">' + formatAngka(item.batchQty || 0) + '</div></td>' +
                 '<td class="text-center align-middle">' +
                     '<input type="text" class="form-control form-control-sm qty-transfer-input uppercase-input" value="' + formatAngka(item.qty || 0) + '" placeholder="0" data-index="' + index + '" required style="width: 80px;">' +
                 '</td>' +
@@ -1941,7 +2053,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     '<input type="text" class="form-control form-control-sm sloc-tujuan-input uppercase-input" value="' + (item.slocTujuan || '') + '" placeholder="Enter SLOC" data-index="' + index + '" required style="width: 70px;">' +
                 '</td>' +
                 '<td class="text-center align-middle">' +
-                    '<select class="form-control form-control-sm batch-source-select" data-index="' + index + '" required style="width: 180px;">' +
+                    '<select class="form-control form-control-sm batch-source-select" data-index="' + index + '" required style="min-width: 200px;">' +
                         '<option value="">Select Batch *</option>' +
                         batchOptions +
                     '</select>' +
@@ -1996,21 +2108,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Parse number
                 let parsedValue = parseAngka(value);
 
-                // Validation
-                const maxQty = transferItems[index].availableStock;
+                // PERUBAHAN: Validasi berdasarkan batchQty saja, tidak validasi remainingQty
+                const batchQty = transferItems[index].batchQty || 0;
 
                 if (isNaN(parsedValue) || parsedValue < 0) {
                     this.value = '';
                     transferItems[index].qty = 0;
+                    transferItems[index].quantity = 0;
                     showToast('Quantity for ' + transferItems[index].materialCode + ' is required', 'error');
-                } else if (parsedValue > maxQty) {
-                    this.value = formatAngka(maxQty);
-                    transferItems[index].qty = maxQty;
-                    showToast('Quantity cannot exceed ' + formatAngka(maxQty), 'warning');
+                } else if (parsedValue > batchQty) {
+                    // PERUBAHAN: Tidak boleh melebihi batch quantity
+                    this.value = formatAngka(batchQty);
+                    transferItems[index].qty = batchQty;
+                    transferItems[index].quantity = batchQty;
+                    showToast('Quantity cannot exceed selected batch quantity (' + formatAngka(batchQty) + ')', 'warning');
                 } else {
                     // Reformat with Indonesian format
                     this.value = formatAngka(parsedValue);
                     transferItems[index].qty = parsedValue;
+                    transferItems[index].quantity = parsedValue;
                 }
 
                 updateModalTotals();
@@ -2045,6 +2161,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 transferItems[index].plantTujuan = this.value.toUpperCase();
+                transferItems[index].plant_dest = this.value.toUpperCase();
             });
 
             // Check on blur
@@ -2072,6 +2189,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 transferItems[index].slocTujuan = this.value.toUpperCase();
+                transferItems[index].sloc_dest = this.value.toUpperCase();
             });
 
             // Check on blur
@@ -2100,21 +2218,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 const batchQty = parseFloat(selectedOption.dataset.qty) || 0;
                 const batchSloc = selectedOption.dataset.sloc || selectedValue;
 
+                // Update transfer item dengan batch yang dipilih
                 transferItems[index].selectedBatch = selectedValue;
                 transferItems[index].batchQty = batchQty;
                 transferItems[index].batchSloc = batchSloc;
 
+                // Update tampilan batch quantity
+                const batchQtyDisplay = document.getElementById('batchQtyDisplay-' + index);
+                if (batchQtyDisplay) {
+                    batchQtyDisplay.textContent = formatAngka(batchQty);
+                    batchQtyDisplay.className = batchQty > 0 ? 'stock-custom-available fw-medium' : 'stock-custom-unavailable fw-medium';
+                }
+
                 // Get related quantity input
                 const qtyInput = document.querySelector('.qty-transfer-input[data-index="' + index + '"]');
-                const maxQty = batchQty;
+
+                // PERUBAHAN: Hitung max transfer berdasarkan batch quantity saja, tidak perlu remainingQty
+                const maxTransferable = batchQty;
 
                 if (qtyInput) {
                     // If quantity exceeds batch qty, adjust it
                     const currentQty = parseAngka(qtyInput.value);
-                    if (currentQty > maxQty && maxQty > 0) {
-                        qtyInput.value = formatAngka(maxQty);
-                        transferItems[index].qty = maxQty;
-                        showToast('Quantity adjusted to available batch: ' + formatAngka(maxQty), 'info');
+                    if (currentQty > maxTransferable && maxTransferable > 0) {
+                        qtyInput.value = formatAngka(maxTransferable);
+                        transferItems[index].qty = maxTransferable;
+                        transferItems[index].quantity = maxTransferable;
+                        showToast('Quantity adjusted to available batch: ' + formatAngka(maxTransferable), 'info');
                         updateModalTotals();
                     }
                 }
@@ -2150,7 +2279,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Confirm transfer button
+    // Confirm transfer button - Tampilkan modal SAP credentials dulu
     const confirmTransferBtn = document.getElementById('confirmTransfer');
     if (confirmTransferBtn) {
         confirmTransferBtn.addEventListener('click', function() {
@@ -2184,7 +2313,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Validate quantities
+            // PERUBAHAN: Validasi quantities berdasarkan batch quantity saja, tidak validasi remaining quantity
             transferItems.forEach(function(item, index) {
                 if (!item.qty || item.qty <= 0) {
                     isValid = false;
@@ -2192,9 +2321,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
-                if (item.qty > item.availableStock) {
+                // Validasi: jumlah transfer tidak boleh melebihi batch quantity
+                if (item.qty > item.batchQty) {
                     isValid = false;
-                    errorMessage = 'Quantity for ' + item.materialCode + ' (' + formatAngka(item.qty) + ') exceeds available stock (' + formatAngka(item.availableStock) + ')';
+                    errorMessage = 'Quantity for ' + item.materialCode + ' (' + formatAngka(item.qty) + ') exceeds selected batch quantity (' + formatAngka(item.batchQty) + ')';
                     return;
                 }
             });
@@ -2204,7 +2334,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Update transferItems with data from modal
+            // Update transferItems dengan data dari modal
             document.querySelectorAll('.qty-transfer-input').forEach(function(input) {
                 const index = parseInt(input.dataset.index);
                 let value = input.value.trim();
@@ -2212,6 +2342,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (value) {
                     let parsedValue = parseAngka(value);
                     transferItems[index].qty = parsedValue;
+                    transferItems[index].quantity = parsedValue;
                 }
             });
 
@@ -2219,21 +2350,30 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.plant-tujuan-input').forEach(function(input) {
                 const index = parseInt(input.dataset.index);
                 transferItems[index].plantTujuan = input.value.toUpperCase();
+                transferItems[index].plant_dest = input.value.toUpperCase();
             });
 
             document.querySelectorAll('.sloc-tujuan-input').forEach(function(input) {
                 const index = parseInt(input.dataset.index);
                 transferItems[index].slocTujuan = input.value.toUpperCase();
+                transferItems[index].sloc_dest = input.value.toUpperCase();
             });
 
-            // Update selected batch
+            // Update selected batch - PERUBAHAN: Kirim batch dan batch_sloc dari batch source
             document.querySelectorAll('.batch-source-select').forEach(function(select) {
                 const index = parseInt(select.dataset.index);
                 const selectedOption = select.options[select.selectedIndex];
 
                 if (selectedOption) {
-                    transferItems[index].selectedBatch = select.value;
-                    transferItems[index].batchSloc = selectedOption.dataset.sloc || '';
+                    // Batch: nilai dari select (batch number)
+                    const batchValue = select.value;
+                    // Batch_sloc: dari data-sloc (storage location)
+                    const batchSloc = selectedOption.dataset.sloc || '';
+
+                    transferItems[index].selectedBatch = batchValue;
+                    transferItems[index].batch = batchValue; // Untuk BATCH di Python
+                    transferItems[index].batchSloc = batchSloc; // Untuk batch_sloc di Python
+                    transferItems[index].batchQty = parseFloat(selectedOption.dataset.qty) || 0;
                 }
             });
 
@@ -2242,7 +2382,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 item.remarks = remarks;
             });
 
-            // Close preview modal first
+            // PERBAIKAN: Ambil plant_supply atau sloc_supply dari document
+            const plantSupply = "{{ $document->plant_supply ?? '' }}";
+            const slocSupply = "{{ $document->sloc_supply ?? '' }}";
+            const finalPlantSupply = plantSupply || slocSupply;
+
+            // PERUBAHAN: Struktur data yang dikirim ke Laravel harus sesuai dengan yang diharapkan Python
+            pendingTransferData = {
+                document_no: "{{ $document->document_no }}",
+                plant: "{{ $document->plant }}",
+                plant_supply: finalPlantSupply, // Untuk STGE_LOC di Python
+                move_type: "311",
+                posting_date: new Date().toISOString().split('T')[0].replace(/-/g, ''),
+                header_text: "Transfer from Document {{ $document->document_no }}",
+                items: transferItems.map(function(item) {
+                    return {
+                        id: item.id,
+                        material_code: item.materialCode,
+                        material_desc: item.materialDesc,
+                        requested_qty: item.requestedQty,
+                        transferred_qty: item.transferredQty,
+                        remaining_qty: item.remainingQty,
+                        quantity: item.quantity, // Transfer Qty - untuk ENTRY_QTY_CHAR di Python
+                        transfer_qty: item.quantity,
+                        unit: item.unit,
+                        plant_tujuan: item.plantTujuan, // Plant Dest - untuk MOVE_PLANT di Python
+                        plant_dest: item.plant_dest,
+                        sloc_tujuan: item.slocTujuan, // Sloc Dest - untuk MOVE_STGE_LOC di Python
+                        sloc_dest: item.sloc_dest,
+                        batch: item.batch || item.selectedBatch, // Batch Source - untuk BATCH dan MOVE_BATCH di Python
+                        batch_sloc: item.batchSloc, // Batch Source SLOC - untuk STGE_LOC di Python
+                        available_stock: item.batchQty,
+                        remarks: item.remarks
+                    };
+                }),
+                remarks: remarks
+            };
+
+            // Debug: Log data yang akan dikirim
+            console.log('Data transfer yang akan dikirim ke backend:', JSON.stringify(pendingTransferData, null, 2));
+
+            // Tutup modal transfer preview
             const transferModalElement = document.getElementById('transferPreviewModal');
             if (transferModalElement) {
                 const transferModal = bootstrap.Modal.getInstance(transferModalElement);
@@ -2251,188 +2431,190 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Wait for modal to close, then show SAP credentials modal
-            setTimeout(function() {
-                const sapModalElement = document.getElementById('sapCredentialsModal');
-                if (sapModalElement) {
-                    const sapModal = new bootstrap.Modal(sapModalElement, {
-                        backdrop: 'static',
-                        keyboard: false
-                    });
-                    sapModal.show();
-
-                    // Reset form SAP credentials
-                    const sapUserInput = document.getElementById('sap_user');
-                    const sapPasswordInput = document.getElementById('sap_password');
-                    if (sapUserInput) sapUserInput.value = '';
-                    if (sapPasswordInput) sapPasswordInput.value = '';
-                    if (sapUserInput) sapUserInput.focus();
-                }
-            }, 300);
+            // Tampilkan modal SAP credentials
+            const sapCredentialsModal = new bootstrap.Modal(document.getElementById('sapCredentialsModal'));
+            sapCredentialsModal.show();
         });
     }
 
-    // Toggle password visibility
-    const togglePasswordBtn = document.getElementById('togglePassword');
-    if (togglePasswordBtn) {
-        togglePasswordBtn.addEventListener('click', function() {
-            const passwordInput = document.getElementById('sap_password');
-            if (passwordInput) {
-                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                passwordInput.setAttribute('type', type);
-                this.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
-            }
-        });
-    }
+                // Submit SAP credentials dan proses transfer
+            const submitSapCredentialsBtn = document.getElementById('submitSapCredentials');
+            if (submitSapCredentialsBtn) {
+                submitSapCredentialsBtn.addEventListener('click', function() {
+                    const sapUsername = document.getElementById('sapUsername').value.trim();
+                    const sapPassword = document.getElementById('sapPassword').value.trim();
 
-    // Handle SAP credentials save
-    const saveSapCredentialsBtn = document.getElementById('saveSapCredentials');
-    if (saveSapCredentialsBtn) {
-        saveSapCredentialsBtn.addEventListener('click', function() {
-            const sapUser = document.getElementById('sap_user').value;
-            const sapPassword = document.getElementById('sap_password').value;
+                    if (!sapUsername || !sapPassword) {
+                        showToast('SAP username and password are required', 'error');
+                        return;
+                    }
 
-            if (!sapUser || !sapPassword) {
-                showToast('Please fill all required SAP credentials', 'error');
-                return;
-            }
+                    // Tutup modal SAP credentials
+                    const sapCredentialsModalElement = document.getElementById('sapCredentialsModal');
+                    if (sapCredentialsModalElement) {
+                        const sapCredentialsModal = bootstrap.Modal.getInstance(sapCredentialsModalElement);
+                        if (sapCredentialsModal) {
+                            sapCredentialsModal.hide();
+                        }
+                    }
 
-            // Hide SAP credentials modal
-            const sapModalElement = document.getElementById('sapCredentialsModal');
-            const sapModal = bootstrap.Modal.getInstance(sapModalElement);
-            if (sapModal) {
-                sapModal.hide();
-            }
+                    // Show custom loading modal with transfer action
+                    const loadingModal = showLoader('transfer', 'Processing Transfer...');
 
-            // Show custom loading modal with transfer action
-            const loadingModal = showLoader('transfer', 'Processing Transfer to SAP...');
+                    // PERBAIKAN: Struktur data sesuai dengan yang diharapkan Laravel controller
+                    // Field plant, sloc_supply, dan items harus di root request
+                    // plant_supply diisi dengan plant_supply atau sloc_supply dari document
+                    const plantSupply = "{{ $document->plant_supply ?? '' }}";
+                    const slocSupply = "{{ $document->sloc_supply ?? '' }}";
+                    const finalPlantSupply = plantSupply || slocSupply || "{{ $document->plant }}";
 
-            // Prepare items for SAP transfer
-            const sapTransferItems = transferItems.map(function(item) {
-                // Parse batch_sloc
-                let batchSloc = item.batchSloc || '';
-                if (batchSloc && !batchSloc.startsWith('SLOC:')) {
-                    batchSloc = 'SLOC:' + batchSloc;
-                }
+                    const transferData = {
+                        // PERBAIKAN: Field yang diperlukan oleh validasi Laravel di root
+                        plant: pendingTransferData.plant || "{{ $document->plant }}",
+                        sloc_supply: finalPlantSupply, // Menggunakan plant_supply sebagai sloc_supply
+                        items: pendingTransferData.items,
 
-                return {
-                    material_code: item.materialCode,
-                    material_desc: item.materialDesc,
-                    quantity: item.qty || 0,
-                    unit: item.unit,
-                    plant_tujuan: item.plantTujuan || '{{ $document->plant }}',
-                    sloc_tujuan: item.slocTujuan || '',
-                    batch: item.selectedBatch || '',
-                    batch_sloc: batchSloc,
-                    requested_qty: item.requestedQty,
-                    available_stock: item.availableStock
-                };
-            });
+                        // Data untuk dikirim ke Python service
+                        transfer_data: {
+                            transfer_info: {
+                                document_no: pendingTransferData.document_no,
+                                plant_supply: finalPlantSupply, // PERBAIKAN: Tambahkan plant_supply di transfer_info
+                                plant_destination: "{{ $document->plant }}", // Tujuan default
+                                move_type: pendingTransferData.move_type,
+                                posting_date: pendingTransferData.posting_date,
+                                header_text: pendingTransferData.header_text,
+                                remarks: pendingTransferData.remarks,
+                                created_by: '{{ auth()->user()->name ?? "SYSTEM" }}',
+                                created_at: new Date().toISOString().split('T')[0].replace(/-/g, '')
+                            },
+                            items: pendingTransferData.items.map(function(item) {
+                                return {
+                                    // PERBAIKAN: Pastikan semua field yang diperlukan Python dikirim
+                                    material_code: item.material_code || item.materialCode,
+                                    material_code_raw: item.material_code || item.materialCode,
+                                    quantity: item.quantity || item.qty,
+                                    unit: item.unit,
+                                    plant_supply: finalPlantSupply, // PERBAIKAN: Tambahkan plant_supply di item
+                                    plant_tujuan: item.plant_tujuan || item.plant_dest,
+                                    sloc_tujuan: item.sloc_tujuan || item.sloc_dest,
+                                    batch: item.batch || item.selectedBatch,
+                                    batch_sloc: item.batch_sloc || item.batchSloc,
+                                    sales_ord: item.sales_ord || '',
+                                    s_ord_item: item.s_ord_item || '',
+                                    requested_qty: item.requested_qty,
+                                    transferred_qty: item.transferred_qty,
+                                    remaining_qty: item.remaining_qty,
+                                    available_stock: item.available_stock
+                                };
+                            })
+                        },
+                        sap_credentials: {
+                            user: sapUsername,
+                            passwd: sapPassword,
+                            ashost: '{{ env("SAP_ASHOST", "192.168.254.154") }}',
+                            sysnr: '{{ env("SAP_SYSNR", "01") }}',
+                            client: '{{ env("SAP_CLIENT", "300") }}',
+                            lang: 'EN'
+                        },
+                        user_id: {{ auth()->id() ?? 0 }},
+                        user_name: '{{ auth()->user()->name ?? "SYSTEM" }}'
+                    };
 
-            // Prepare transfer data
-            const transferData = {
-                plant: "{{ $document->plant }}",
-                sloc_supply: "{{ $document->sloc_supply }}",
-                items: sapTransferItems,
-                header_text: document.getElementById('transferRemarks') ?
-                            "Transfer from Document {{ $document->document_no }} - " +
-                            document.getElementById('transferRemarks').value :
-                            "Transfer from Document {{ $document->document_no }}",
-                remarks: document.getElementById('transferRemarks') ?
-                         document.getElementById('transferRemarks').value : '',
-                sap_credentials: {
-                    user: sapUser,
-                    passwd: sapPassword,
-                    client: "{{ env('SAP_CLIENT', '100') }}",
-                    lang: "{{ env('SAP_LANG', 'EN') }}",
-                    ashost: "{{ env('SAP_ASHOST', 'localhost') }}",
-                    sysnr: "{{ env('SAP_SYSNR', '00') }}"
-                }
-            };
+                    // Debug: Log data yang akan dikirim
+                    console.log('Data lengkap yang dikirim ke Laravel:', JSON.stringify(transferData, null, 2));
 
-            // Send to Laravel controller
-            fetch('{{ route("documents.create-transfer", $document->id) }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(transferData)
-            })
-            .then(function(response) {
-                // Check if response is JSON
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    return response.text().then(function(text) {
-                        console.error('Non-JSON response:', text);
-                        throw new Error('Expected JSON response but got: ' + text.substring(0, 100));
+                    // Send to Laravel controller
+                    fetch('{{ route("documents.create-transfer", $document->id) }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(transferData)
+                    })
+                    .then(function(response) {
+                        // Check if response is JSON
+                        const contentType = response.headers.get('content-type');
+                        if (!contentType || !contentType.includes('application/json')) {
+                            return response.text().then(function(text) {
+                                console.error('Non-JSON response:', text);
+                                throw new Error('Expected JSON response but got: ' + text.substring(0, 100));
+                            });
+                        }
+
+                        if (!response.ok) {
+                            return response.json().then(function(errData) {
+                                console.error('Server error response:', errData);
+                                throw new Error(errData.message || 'Server Error: ' + response.statusText);
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        // Hide loading modal
+                        const loadingModalElement = document.getElementById('customLoadingModal');
+                        if (loadingModalElement) {
+                            const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
+                            if (loadingModal) {
+                                loadingModal.hide();
+                            }
+                        }
+
+                        if (data.success) {
+                            // Show transfer number
+                            const transferNo = data.transfer_no || 'PENDING';
+                            showToast('Transfer successful! Transfer No: ' + transferNo + ' created', 'success');
+
+                            // Clear transfer list
+                            document.getElementById('clearTransferList').click();
+
+                            // Refresh page after 1.5 seconds
+                            setTimeout(function() {
+                                window.location.reload();
+                            }, 1500);
+                        } else {
+                            let errorMsg = data.message || 'Unknown error occurred';
+                            if (data.errors && Array.isArray(data.errors)) {
+                                errorMsg = data.errors.join(', ');
+                            } else if (data.errors && typeof data.errors === 'object') {
+                                errorMsg = Object.values(data.errors).flat().join(', ');
+                            }
+                            showToast('Transfer Error: ' + errorMsg, 'error');
+                        }
+                    })
+                    .catch(function(error) {
+                        // Hide loading modal
+                        const loadingModalElement = document.getElementById('customLoadingModal');
+                        if (loadingModalElement) {
+                            const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
+                            if (loadingModal) {
+                                loadingModal.hide();
+                            }
+                        }
+
+                        console.error('Error:', error);
+
+                        let errorMsg = error.message || 'Error creating transfer document';
+                        if (errorMsg.includes('RFC_RC') || errorMsg.includes('RFC')) {
+                            errorMsg = 'SAP RFC Error: Please check SAP connection and credentials.';
+                        } else if (errorMsg.includes('Network') || errorMsg.includes('Failed to fetch')) {
+                            errorMsg = 'Network Error: Cannot connect to server. Please check your connection.';
+                        } else if (errorMsg.includes('Validation error')) {
+                            errorMsg = 'Validation Error: Please check all required fields are filled correctly.';
+                        }
+
+                        showToast(errorMsg, 'error');
                     });
-                }
+                });
+            }
 
-                if (!response.ok) {
-                    return response.json().then(function(errData) {
-                        console.error('Server error response:', errData);
-                        throw new Error(errData.message || 'Server Error: ' + response.statusText);
-                    });
-                }
-                return response.json();
-            })
-            .then(function(data) {
-                // Hide loading modal
-                const loadingModalElement = document.getElementById('customLoadingModal');
-                if (loadingModalElement) {
-                    const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
-                    if (loadingModal) {
-                        loadingModal.hide();
-                    }
-                }
-
-                if (data.success) {
-                    // Show transfer number
-                    const transferNo = data.transfer_no || 'PENDING';
-                    showToast('Transfer successful! Material Document: ' + transferNo + ' created', 'success');
-
-                    // Clear transfer list
-                    document.getElementById('clearTransferList').click();
-
-                    // Refresh page after 1.5 seconds
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 1500);
-                } else {
-                    let errorMsg = data.message || 'Unknown error occurred';
-                    if (data.errors && Array.isArray(data.errors)) {
-                        errorMsg = data.errors.join(', ');
-                    } else if (data.errors && typeof data.errors === 'object') {
-                        errorMsg = Object.values(data.errors).flat().join(', ');
-                    }
-                    showToast('Transfer Error: ' + errorMsg, 'error');
-                }
-            })
-            .catch(function(error) {
-                // Hide loading modal
-                const loadingModalElement = document.getElementById('customLoadingModal');
-                if (loadingModalElement) {
-                    const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
-                    if (loadingModal) {
-                        loadingModal.hide();
-                    }
-                }
-
-                console.error('Error:', error);
-
-                let errorMsg = error.message || 'Error creating transfer document';
-                if (errorMsg.includes('RFC_RC') || errorMsg.includes('RFC')) {
-                    errorMsg = 'SAP RFC Error: Please check SAP connection and credentials.';
-                } else if (errorMsg.includes('Network') || errorMsg.includes('Failed to fetch')) {
-                    errorMsg = 'Network Error: Cannot connect to server. Please check your connection.';
-                } else if (errorMsg.includes('Validation error')) {
-                    errorMsg = 'Validation Error: Please check all required fields are filled correctly.';
-                }
-
-                showToast(errorMsg, 'error');
-            });
+    // Reset form SAP credentials setiap kali modal ditampilkan
+    const sapCredentialsModalElement = document.getElementById('sapCredentialsModal');
+    if (sapCredentialsModalElement) {
+        sapCredentialsModalElement.addEventListener('show.bs.modal', function() {
+            document.getElementById('sapUsername').value = '';
+            document.getElementById('sapPassword').value = '';
         });
     }
 

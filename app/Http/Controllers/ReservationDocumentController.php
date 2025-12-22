@@ -5,11 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\ReservationDocument;
 use App\Models\ReservationDocumentItem;
 use App\Models\ReservationStock;
+use App\Models\ReservationTransfer; // Model untuk reservation_transfers
 use Illuminate\Http\Request;
 use App\Exports\ReservationDocumentsSelectedExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class ReservationDocumentController extends Controller
 {
@@ -20,7 +23,7 @@ class ReservationDocumentController extends Controller
 
     public function index(Request $request)
     {
-        $query = ReservationDocument::query();
+        $query = ReservationDocument::withCount(['transfers', 'items']);
 
         // Apply filters
         if ($request->filled('document_no')) {
@@ -58,7 +61,7 @@ class ReservationDocumentController extends Controller
     public function show($id)
     {
         try {
-            $document = ReservationDocument::with(['items'])->findOrFail($id);
+            $document = ReservationDocument::with(['items', 'transfers'])->findOrFail($id);
 
             // Ambil data stock untuk semua material di document
             $this->loadStockDataForDocument($document);
@@ -66,41 +69,19 @@ class ReservationDocumentController extends Controller
             // Hitung summary stock
             $stockSummary = $this->calculateStockSummary($document);
 
+            // Hitung status transfer
+            $this->calculateTransferStatus($document);
+
             // Cek apakah user memiliki hak akses untuk membuat transfer
             $user = Auth::user();
-
-            // SOLUSI 1: Cek berdasarkan kolom 'role' di tabel users (paling sederhana)
-            // Asumsi: ada kolom 'role' di tabel users yang menyimpan string role
-            $allowedRoles = ['warehouse', 'developer'];
-            $userRole = $user->role ?? 'user'; // default ke 'user' jika tidak ada
-
+            $allowedRoles = ['warehouse', 'developer', 'admin', 'supervisor'];
+            $userRole = $user->role ?? 'user';
             $canGenerateTransfer = in_array($userRole, $allowedRoles);
 
-            // SOLUSI 2: Jika menggunakan package spatie/laravel-permission
-            /*
-            if (class_exists('Spatie\Permission\Traits\HasRoles')) {
-                $canGenerateTransfer = $user->hasRole($allowedRoles) ||
-                                      $user->hasPermissionTo('generate-transfer');
-            }
-            */
+            // Cek apakah masih ada item yang bisa ditransfer
+            $hasTransferableItems = $this->hasTransferableItems($document);
 
-            // SOLUSI 3: Jika Anda ingin restriksi berdasarkan email tertentu
-            $restrictedEmails = ['viewer@example.com', 'guest@example.com', 'auditor@example.com'];
-            $isRestrictedUser = in_array($user->email, $restrictedEmails);
-
-            if ($isRestrictedUser) {
-                $canGenerateTransfer = false;
-            }
-
-            // SOLUSI 4: Jika ingin cek berdasarkan user ID tertentu
-            /*
-            $restrictedUserIds = [5, 10, 15]; // ID user yang dilarang
-            if (in_array($user->id, $restrictedUserIds)) {
-                $canGenerateTransfer = false;
-            }
-            */
-
-            return view('documents.show', compact('document', 'stockSummary', 'canGenerateTransfer'));
+            return view('documents.show', compact('document', 'stockSummary', 'canGenerateTransfer', 'hasTransferableItems'));
 
         } catch (\Exception $e) {
             Log::error('Error in show document: ' . $e->getMessage());
@@ -148,6 +129,14 @@ class ReservationDocumentController extends Controller
                     'details' => []
                 ];
             }
+
+            // Hitung jumlah yang sudah ditransfer
+            $transferredQty = $item->transferred_qty ?? 0;
+            $remainingQty = max(0, $item->requested_qty - $transferredQty);
+
+            $item->transferred_qty = $transferredQty;
+            $item->remaining_qty = $remainingQty;
+            $item->transfer_status = $this->getItemTransferStatus($item);
         }
     }
 
@@ -159,7 +148,9 @@ class ReservationDocumentController extends Controller
         $totalMaterials = $document->items->count();
         $totalRequested = 0;
         $totalStock = 0;
+        $totalTransferred = 0;
         $materialsWithStock = 0;
+        $materialsTransferred = 0;
 
         foreach ($document->items as $item) {
             // Hitung total requested
@@ -179,67 +170,292 @@ class ReservationDocumentController extends Controller
                     }
                 }
             }
+
+            // Hitung total transferred
+            $transferredQty = $item->transferred_qty ?? 0;
+            $totalTransferred += $transferredQty;
+            if ($transferredQty > 0) {
+                $materialsTransferred++;
+            }
         }
+
+        $completionRate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
 
         return [
             'total_materials' => $totalMaterials,
             'materials_with_stock' => $materialsWithStock,
+            'materials_transferred' => $materialsTransferred,
             'total_requested' => $totalRequested,
             'total_stock' => $totalStock,
-            'balance' => $totalStock - $totalRequested
+            'total_transferred' => $totalTransferred,
+            'balance' => $totalStock - $totalRequested,
+            'completion_rate' => $completionRate
         ];
     }
 
     /**
-     * Create transfer document from selected items
+     * Calculate transfer status untuk document
      */
-    public function createTransfer(Request $request)
+    private function calculateTransferStatus($document)
+    {
+        $totalItems = $document->items->count();
+        $totalRequested = $document->items->sum('requested_qty');
+        $totalTransferred = $document->items->sum('transferred_qty') ?? 0;
+
+        // Update status document berdasarkan transfer
+        $oldStatus = $document->status;
+        $newStatus = $oldStatus;
+
+        if ($totalTransferred >= $totalRequested) {
+            $newStatus = 'closed'; // Semua item sudah ditransfer
+        } elseif ($totalTransferred > 0) {
+            $newStatus = 'partial'; // Sebagian item sudah ditransfer
+        } elseif ($oldStatus == 'created') {
+            $newStatus = 'booked'; // Document baru dibuat
+        }
+
+        // Update status jika berubah
+        if ($newStatus != $oldStatus) {
+            $document->status = $newStatus;
+            $document->save();
+
+            Log::info('Document status updated', [
+                'document_no' => $document->document_no,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'total_transferred' => $totalTransferred,
+                'total_requested' => $totalRequested
+            ]);
+        }
+
+        $document->total_transferred = $totalTransferred;
+        $document->completion_rate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
+    }
+
+    /**
+     * Get item transfer status
+     */
+    private function getItemTransferStatus($item)
+    {
+        $requested = $item->requested_qty;
+        $transferred = $item->transferred_qty ?? 0;
+
+        if ($transferred >= $requested) {
+            return 'completed';
+        } elseif ($transferred > 0) {
+            return 'partial';
+        } else {
+            return 'pending';
+        }
+    }
+
+    /**
+     * Check if document has transferable items
+     */
+    private function hasTransferableItems($document)
+    {
+        foreach ($document->items as $item) {
+            $stockInfo = $item->stock_info ?? null;
+            $totalStock = $stockInfo['total_stock'] ?? 0;
+            $transferred = $item->transferred_qty ?? 0;
+            $remaining = max(0, $item->requested_qty - $transferred);
+
+            if ($remaining > 0 && $totalStock > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Create transfer document via SAP service
+     */
+    public function createTransfer(Request $request, $id)
     {
         try {
-            $request->validate([
-                'document_id' => 'required|exists:reservation_documents,id',
-                'document_no' => 'required|string',
-                'items' => 'required|array',
-                'items.*.id' => 'required|exists:reservation_document_items,id',
-                'items.*.qty' => 'required|numeric|min:0.001',
-            ]);
+            $document = ReservationDocument::findOrFail($id);
 
-            $document = ReservationDocument::findOrFail($request->document_id);
+            // PERBAIKAN: Tangani data yang dikirim dari frontend
+            $transferData = $request->all();
 
-            // Log the transfer creation
-            Log::info('Creating transfer document', [
-                'document_id' => $document->id,
+            Log::info('Transfer request data:', [
+                'document_id' => $id,
                 'document_no' => $document->document_no,
-                'user_id' => auth()->id(),
-                'items_count' => count($request->items)
+                'request_data' => $transferData
             ]);
 
-            // Here you would typically:
-            // 1. Create a new transfer document
-            // 2. Update stock records
-            // 3. Generate transfer slip
-            // 4. Send notification, etc.
-
-            // For now, return success response
-            return response()->json([
-                'success' => true,
-                'message' => 'Transfer document created successfully',
-                'data' => [
-                    'document_no' => $document->document_no,
-                    'transfer_id' => 'TRF-' . time(),
-                    'items_count' => count($request->items),
-                    'total_qty' => array_sum(array_column($request->items, 'qty')),
-                    'created_at' => now()->format('Y-m-d H:i:s')
-                ]
+            // Validasi dasar
+            $validated = $request->validate([
+                'plant' => 'required|string',
+                'sloc_supply' => 'required|string',
+                'items' => 'required|array|min:1',
+                'items.*.material_code' => 'required|string',
+                'items.*.quantity' => 'required|numeric|min:0.001',
+                'sap_credentials' => 'required|array',
+                'sap_credentials.user' => 'required|string',
+                'sap_credentials.passwd' => 'required|string',
             ]);
 
-        } catch (\Exception $e) {
-            Log::error('Error creating transfer document: ' . $e->getMessage());
+            // Persiapkan data untuk dikirim ke service Python
+            $pythonData = [
+                'transfer_data' => [
+                    'transfer_info' => [
+                        'document_no' => $document->document_no,
+                        'document_id' => $document->id, // Kirim document_id
+                        'plant_supply' => $request->sloc_supply, // PERBAIKAN: Gunakan sloc_supply sebagai plant_supply
+                        'plant_destination' => $document->plant,
+                        'move_type' => '311',
+                        'posting_date' => Carbon::now()->format('Ymd'),
+                        'header_text' => 'Transfer from Document ' . $document->document_no,
+                        'remarks' => $transferData['transfer_data']['remarks'] ?? '',
+                        'created_by' => Auth::user()->name,
+                        'created_at' => Carbon::now()->format('Ymd')
+                    ],
+                    'items' => $request->items
+                ],
+                'sap_credentials' => $request->sap_credentials,
+                'user_id' => Auth::id(),
+                'user_name' => Auth::user()->name
+            ];
+
+            Log::info('Sending data to Python service:', ['python_data' => $pythonData]);
+
+            // Kirim ke service Python
+            $pythonServiceUrl = env('PYTHON_SERVICE_URL', 'http://localhost:5000/api/sap/transfer');
+
+            $client = new \GuzzleHttp\Client();
+            $response = $client->post($pythonServiceUrl, [
+                'json' => $pythonData,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                ],
+                'timeout' => 120 // 2 menit timeout
+            ]);
+
+            $responseData = json_decode($response->getBody(), true);
+
+            Log::info('Python service response:', ['response' => $responseData]);
+
+            if ($responseData['success'] === true) {
+                // Update document transferred quantities
+                $this->updateDocumentTransferQuantities($document, $request->items);
+
+                // Update document status
+                $this->updateDocumentStatus($document);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => $responseData['message'],
+                    'transfer_no' => $responseData['transfer_no'] ?? null,
+                    'db_saved' => $responseData['db_saved'] ?? false,
+                    'item_results' => $responseData['item_results'] ?? []
+                ]);
+            } else {
+                throw new \Exception($responseData['message'] ?? 'Transfer failed');
+            }
+
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            Log::error('Python service connection error: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create transfer document: ' . $e->getMessage()
+                'message' => 'Cannot connect to transfer service. Please check if the service is running.'
             ], 500);
+
+        } catch (\Exception $e) {
+            Log::error('Error creating transfer: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create transfer: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update document item transferred quantities after successful transfer
+     */
+    private function updateDocumentTransferQuantities($document, $transferItems)
+    {
+        foreach ($transferItems as $transferItem) {
+            $item = ReservationDocumentItem::where('document_id', $document->id)
+                ->where('material_code', $transferItem['material_code'])
+                ->first();
+
+            if ($item) {
+                $newTransferred = ($item->transferred_qty ?? 0) + $transferItem['quantity'];
+                $item->transferred_qty = $newTransferred;
+                $item->save();
+
+                Log::info('Updated item transferred quantity', [
+                    'material_code' => $item->material_code,
+                    'old_transferred' => $item->transferred_qty - $transferItem['quantity'],
+                    'new_transferred' => $newTransferred
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Generate transfer number
+     */
+    private function generateTransferNumber($plant)
+    {
+        $prefix = ($plant == '3000') ? 'TRMG' : 'TRBY';
+
+        $latestSeq = DB::table('reservation_transfers') // PERBAIKAN: Gunakan tabel reservation_transfers
+            ->select(DB::raw('COALESCE(MAX(CAST(SUBSTRING(transfer_no, 5) AS UNSIGNED)), 0) as max_seq'))
+            ->where('transfer_no', 'LIKE', $prefix . '%')
+            ->value('max_seq');
+
+        $sequence = $latestSeq + 1;
+        $transferNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
+
+        // Verify unique
+        $counter = 0;
+        while (DB::table('reservation_transfers')->where('transfer_no', $transferNo)->exists()) { // PERBAIKAN: Gunakan tabel reservation_transfers
+            $sequence++;
+            $transferNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
+            $counter++;
+            if ($counter > 100) {
+                throw new \Exception('Failed to generate unique transfer number');
+            }
+        }
+
+        return $transferNo;
+    }
+
+    /**
+     * Update document status based on transfers
+     */
+    private function updateDocumentStatus($document)
+    {
+        $totalRequested = $document->items()->sum('requested_qty');
+        $totalTransferred = $document->items()->sum('transferred_qty');
+
+        $oldStatus = $document->status;
+        $newStatus = $oldStatus;
+
+        if ($totalTransferred >= $totalRequested) {
+            $newStatus = 'closed';
+        } elseif ($totalTransferred > 0 && $oldStatus == 'booked') {
+            $newStatus = 'partial';
+        } elseif ($totalTransferred == 0 && $oldStatus == 'created') {
+            $newStatus = 'booked';
+        }
+
+        if ($newStatus != $oldStatus) {
+            $document->status = $newStatus;
+            $document->save();
+
+            Log::info('Document status updated after transfer', [
+                'document_no' => $document->document_no,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'total_transferred' => $totalTransferred,
+                'total_requested' => $totalRequested
+            ]);
         }
     }
 
@@ -296,6 +512,12 @@ class ReservationDocumentController extends Controller
     {
         $document = ReservationDocument::with('items')->findOrFail($id);
 
+        // Hanya dokumen dengan status 'booked' yang bisa diedit
+        if ($document->status != 'booked') {
+            return redirect()->route('documents.show', $document->id)
+                ->with('error', 'Only documents with status "Booked" can be edited.');
+        }
+
         // Process items data for edit view
         $document->items->transform(function ($item) {
             // Pastikan kita memiliki data yang konsisten
@@ -341,6 +563,12 @@ class ReservationDocumentController extends Controller
     {
         $document = ReservationDocument::findOrFail($id);
 
+        // Hanya dokumen dengan status 'booked' yang bisa diupdate
+        if ($document->status != 'booked') {
+            return redirect()->route('documents.show', $document->id)
+                ->with('error', 'Only documents with status "Booked" can be edited.');
+        }
+
         // Validasi data
         $validated = $request->validate([
             'remarks' => 'nullable|string|max:500',
@@ -356,12 +584,13 @@ class ReservationDocumentController extends Controller
         $document->save();
 
         // Update items quantities
+        $totalQty = 0;
         foreach ($request->items as $itemData) {
             $item = ReservationDocumentItem::find($itemData['id']);
             if ($item && $item->document_id == $document->id) {
                 // Cek apakah quantity editable berdasarkan MRP
                 $isQtyEditable = true;
-                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
+                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21'];
 
                 if ($item->dispo && !in_array($item->dispo, $allowedMRP)) {
                     $isQtyEditable = false;
@@ -372,12 +601,13 @@ class ReservationDocumentController extends Controller
                     $item->requested_qty = $itemData['requested_qty'];
                     $item->save();
                 }
+                $totalQty += $item->requested_qty;
             }
         }
 
         // Hitung ulang total quantity
-        $totalQty = $document->items()->sum('requested_qty');
         $document->total_qty = $totalQty;
+        $document->total_items = count($request->items);
         $document->save();
 
         return redirect()->route('documents.show', $document->id)
@@ -403,8 +633,9 @@ class ReservationDocumentController extends Controller
                 // Header CSV
                 fputcsv($file, [
                     'Document No', 'Plant Request', 'Plant Supply', 'Status', 'Total Items', 'Total Qty',
-                    'Created By', 'Created At', 'Material Code', 'Material Description',
-                    'Unit', 'Requested Qty', 'Source PRO Numbers', 'Sortf', 'MRP', 'Sales Orders'
+                    'Total Transferred', 'Completion Rate', 'Created By', 'Created At', 'Material Code',
+                    'Material Description', 'Unit', 'Requested Qty', 'Transferred Qty', 'Remaining Qty',
+                    'Source PRO Numbers', 'Sortf', 'MRP', 'Sales Orders'
                 ]);
 
                 // Data rows
@@ -446,12 +677,16 @@ class ReservationDocumentController extends Controller
                             $document->status,
                             $document->total_items,
                             \App\Helpers\NumberHelper::formatQuantity($document->total_qty),
+                            \App\Helpers\NumberHelper::formatQuantity($document->total_transferred ?? 0),
+                            round($document->completion_rate ?? 0, 2) . '%',
                             $document->created_by_name,
                             \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('Y-m-d H:i:s'),
                             $item->material_code,
                             $item->material_description,
                             $item->unit,
                             \App\Helpers\NumberHelper::formatQuantity($item->requested_qty),
+                            \App\Helpers\NumberHelper::formatQuantity($item->transferred_qty ?? 0),
+                            \App\Helpers\NumberHelper::formatQuantity(($item->requested_qty - ($item->transferred_qty ?? 0))),
                             implode(', ', $processedSources),
                             $sortf ?? '',
                             $item->dispo ?? '',
@@ -471,7 +706,7 @@ class ReservationDocumentController extends Controller
 
     public function print($id)
     {
-        $document = ReservationDocument::with('items')->findOrFail($id);
+        $document = ReservationDocument::with(['items', 'transfers'])->findOrFail($id);
 
         // Process items data untuk print - ambil sortf dari pro_details
         $document->items->transform(function ($item) {
@@ -577,5 +812,89 @@ class ReservationDocumentController extends Controller
         });
 
         return view('documents.export-pdf', compact('documents'));
+    }
+
+    /**
+     * Toggle document status (OPEN/CLOSED)
+     */
+    public function toggleStatus(Request $request, $id)
+    {
+        try {
+            $document = ReservationDocument::findOrFail($id);
+            $user = Auth::user();
+
+            // Cek hak akses
+            if (!$user->hasPermissionTo('toggle_document_status')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You do not have permission to toggle document status'
+                ], 403);
+            }
+
+            $oldStatus = $document->status;
+
+            // Toggle status
+            if ($oldStatus == 'closed') {
+                $document->status = 'booked';
+            } else {
+                $document->status = 'closed';
+            }
+
+            $document->save();
+
+            Log::info('Document status toggled', [
+                'document_no' => $document->document_no,
+                'old_status' => $oldStatus,
+                'new_status' => $document->status,
+                'user_id' => $user->id,
+                'user_name' => $user->name
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document status updated successfully',
+                'new_status' => $document->status
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error toggling document status: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to toggle document status: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Log unauthorized SAP attempt
+     */
+    public function logUnauthorizedAttempt(Request $request, $id)
+    {
+        try {
+            $document = ReservationDocument::findOrFail($id);
+
+            Log::warning('Unauthorized SAP attempt', [
+                'document_no' => $document->document_no,
+                'user_id' => Auth::id(),
+                'user_name' => Auth::user()->name,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'attempted_action' => $request->input('action', 'unknown')
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Unauthorized attempt logged'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error logging unauthorized attempt: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to log unauthorized attempt'
+            ], 500);
+        }
     }
 }

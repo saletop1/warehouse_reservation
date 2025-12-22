@@ -47,11 +47,12 @@ Route::middleware(['auth'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Profile Routes - Single route untuk profile
+    // Profile Routes - Fixed: Support both 'profile' and 'profile.index'
     Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
+    Route::get('/profile/index', [ProfileController::class, 'index'])->name('profile.index');
     Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile/update', [ProfileController::class, 'update'])->name('profile.update');
-    Route::put('/profile/update-password', [ProfileController::class, 'updatePassword'])->name('profile.update.password');
+    Route::post('/profile/update-password', [ProfileController::class, 'updatePassword'])->name('profile.update.password');
     Route::delete('/profile/delete-account', [ProfileController::class, 'deleteAccount'])->name('profile.delete');
 
     // Reservation Routes

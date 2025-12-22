@@ -11,6 +11,7 @@ import mysql.connector
 from mysql.connector import Error
 import time
 import json
+import re
 
 # Load environment variables
 load_dotenv()
@@ -230,7 +231,7 @@ class MySQLHandler:
             return None
 
     def save_transfer_to_db(self, transfer_data, sap_response, item_results, user_id=None, user_name=None):
-        """Save transfer data to MySQL transfers table"""
+        """Save transfer data to MySQL reservation_transfers table"""
         conn = self.get_connection()
         if not conn:
             return None
@@ -241,6 +242,13 @@ class MySQLHandler:
             # Extract data from transfer_data
             transfer_info = transfer_data.get('transfer_info', {})
             items = transfer_data.get('items', [])
+
+            # PERBAIKAN: Ambil plant_supply dari transfer_info dengan fallback yang aman
+            plant_supply = transfer_info.get('plant_supply', '')
+
+            # Jika tidak ada di transfer_info, coba dari items pertama
+            if not plant_supply and items:
+                plant_supply = items[0].get('plant_supply', '') if items else ''
 
             # Get material document from SAP response
             material_doc = None
@@ -259,7 +267,6 @@ class MySQLHandler:
                 for msg in sap_response['RETURN']:
                     if msg.get('MESSAGE', '').find('Material document') != -1:
                         # Try to extract material document number from message
-                        import re
                         match = re.search(r'\d+', msg.get('MESSAGE', ''))
                         if match:
                             material_doc = match.group()
@@ -287,9 +294,10 @@ class MySQLHandler:
             # PERBAIKAN: Siapkan data untuk INSERT
             # Kita akan mencoba INSERT tanpa document_id jika tidak valid
             insert_data = {
+                'plant': plant_supply,  # PERBAIKAN: gunakan plant_supply yang sudah didefinisikan
                 'document_no': transfer_info.get('document_no', 'TRF-' + datetime.now().strftime('%Y%m%d-%H%M%S')),
                 'transfer_no': material_doc,
-                'plant_supply': transfer_info.get('plant_supply', ''),
+                'plant_supply': plant_supply,
                 'plant_destination': transfer_info.get('plant_destination', ''),
                 'move_type': transfer_info.get('move_type', '311'),
                 'total_items': total_items,
@@ -311,7 +319,8 @@ class MySQLHandler:
 
             # PERBAIKAN: Check struktur tabel untuk menghindari error kolom tidak ada
             try:
-                cursor.execute("SHOW COLUMNS FROM transfers")
+                # PERUBAHAN: Ganti dari 'transfers' menjadi 'reservation_transfers'
+                cursor.execute("SHOW COLUMNS FROM reservation_transfers")
                 columns_info = cursor.fetchall()
                 table_columns = [col[0] for col in columns_info]
 
@@ -333,8 +342,9 @@ class MySQLHandler:
 
                 placeholders = ['%s'] * len(columns)
 
+                # PERUBAHAN: Ganti dari 'transfers' menjadi 'reservation_transfers'
                 sql = f"""
-                    INSERT INTO transfers ({', '.join(columns)})
+                    INSERT INTO reservation_transfers ({', '.join(columns)})
                     VALUES ({', '.join(placeholders)})
                 """
 
@@ -378,7 +388,8 @@ class MySQLHandler:
                     del insert_data['document_id']
 
                 # Filter hanya kolom yang ada di tabel
-                cursor.execute("SHOW COLUMNS FROM transfers")
+                # PERUBAHAN: Ganti dari 'transfers' menjadi 'reservation_transfers'
+                cursor.execute("SHOW COLUMNS FROM reservation_transfers")
                 columns_info = cursor.fetchall()
                 table_columns = [col[0] for col in columns_info]
 
@@ -393,8 +404,9 @@ class MySQLHandler:
                 if columns:
                     placeholders = ['%s'] * len(columns)
 
+                    # PERUBAHAN: Ganti dari 'transfers' menjadi 'reservation_transfers'
                     sql = f"""
-                        INSERT INTO transfers ({', '.join(columns)})
+                        INSERT INTO reservation_transfers ({', '.join(columns)})
                         VALUES ({', '.join(placeholders)})
                     """
 
@@ -432,7 +444,7 @@ class MySQLHandler:
             conn.close()
 
     def save_transfer_items_to_db(self, transfer_id, items, item_results):
-        """Save transfer items to a separate table (if exists)"""
+        """Save transfer items to reservation_transfer_items table (if exists)"""
         conn = self.get_connection()
         if not conn:
             return 0
@@ -441,12 +453,12 @@ class MySQLHandler:
         saved_count = 0
 
         try:
-            # Check if transfer_items table exists
-            cursor.execute("SHOW TABLES LIKE 'transfer_items'")
+            # PERUBAHAN: Ganti dari 'transfer_items' menjadi 'reservation_transfer_items'
+            cursor.execute("SHOW TABLES LIKE 'reservation_transfer_items'")
             table_exists = cursor.fetchone()
 
             if not table_exists:
-                logger.info("Table 'transfer_items' does not exist, skipping items save")
+                logger.info("Table 'reservation_transfer_items' does not exist, skipping items save")
                 return 0
 
             for idx, item in enumerate(items):
@@ -467,6 +479,7 @@ class MySQLHandler:
                     'sloc_supply': item.get('batch_sloc', '').replace('SLOC:', ''),
                     'plant_destination': item.get('plant_tujuan', ''),
                     'sloc_destination': item.get('sloc_tujuan', ''),
+                    'move_type': item_result.get('move_type', '311'),
                     'sales_ord': item.get('sales_ord', ''),
                     's_ord_item': item.get('s_ord_item', ''),
                     'sap_status': item_result.get('status', ''),
@@ -481,8 +494,9 @@ class MySQLHandler:
                 values = list(insert_data.values())
                 placeholders = ['%s'] * len(columns)
 
+                # PERUBAHAN: Ganti dari 'transfer_items' menjadi 'reservation_transfer_items'
                 sql = f"""
-                    INSERT INTO transfer_items ({', '.join(columns)})
+                    INSERT INTO reservation_transfer_items ({', '.join(columns)})
                     VALUES ({', '.join(placeholders)})
                 """
 
@@ -779,7 +793,15 @@ def create_sap_transfer():
             item_results = []
 
             transfer_info = transfer_data.get('transfer_info', {})
+            # PERBAIKAN: Ambil plant_supply dari transfer_info
             plant_supply = transfer_info.get('plant_supply', '')
+
+            # PERBAIKAN: Jika tidak ada di transfer_info, coba dari item pertama
+            if not plant_supply and items:
+                plant_supply = items[0].get('plant_supply', '') if items else ''
+
+            # PERBAIKAN: Log plant_supply untuk debugging
+            logger.info(f"Transfer plant_supply: {plant_supply}")
 
             for idx, item in enumerate(items, start=1):
                 try:
@@ -816,17 +838,40 @@ def create_sap_transfer():
                     # Get batch from item
                     batch = item.get('batch', '')
 
-                    # Get plant tujuan and sloc tujuan
+                    # Get plant supply, plant tujuan dan sloc tujuan
+                    # Gunakan plant_supply dari item jika ada, jika tidak gunakan dari transfer_info
+                    plant_supply_item = item.get('plant_supply', plant_supply)
                     plant_tujuan = item.get('plant_tujuan', '')
                     sloc_tujuan = item.get('sloc_tujuan', '')
+
+                    # Tentukan MOVE_TYPE berdasarkan perbandingan plant supply dan plant tujuan
+                    # Jika sama -> 311 (transfer dalam plant yang sama)
+                    # Jika berbeda -> 301 (transfer antar plant)
+                    if plant_supply_item and plant_tujuan:
+                        if plant_supply_item == plant_tujuan:
+                            move_type = '311'
+                            move_type_note = " (transfer dalam plant yang sama)"
+                        else:
+                            move_type = '301'
+                            move_type_note = " (transfer antar plant)"
+                    else:
+                        # Default jika tidak ada data plant
+                        move_type = '311'
+                        move_type_note = " (default, plant tidak ditentukan)"
 
                     # Validasi field wajib
                     if not material_code:
                         raise ValueError("Material code is required")
                     if quantity <= 0:
                         raise ValueError("Quantity must be greater than 0")
-                    if not plant_supply:
+                    if not plant_supply_item:
                         raise ValueError("Plant supply is required")
+                    if not batch_sloc:
+                        raise ValueError("Storage location (batch_sloc) is required for material transfer")
+                    if not plant_tujuan:
+                        raise ValueError("Plant destination is required")
+                    if not sloc_tujuan:
+                        raise ValueError("SLOC destination is required")
 
                     # Format quantity to string (SAP expects string for ENTRY_QTY_CHAR)
                     quantity_str = f"{quantity:.3f}".rstrip('0').rstrip('.')
@@ -849,10 +894,10 @@ def create_sap_transfer():
                     sap_item = {
                         'MANDT': sap_conn.params.get('client', '300'),
                         'MATERIAL': material_code,
-                        'PLANT': plant_supply,
+                        'PLANT': plant_supply_item,
                         'STGE_LOC': batch_sloc if batch_sloc else '',
                         'BATCH': batch if batch else '',
-                        'MOVE_TYPE': '311',
+                        'MOVE_TYPE': move_type,
                         'ENTRY_QTY_CHAR': quantity_str,
                         'ENTRY_UOM': sap_unit,
                         'MOVE_PLANT': plant_tujuan,
@@ -872,8 +917,12 @@ def create_sap_transfer():
                         'item_number': idx,
                         'material_code': material_code,
                         'material_code_raw': material_code_raw,
+                        'plant_supply': plant_supply_item,
+                        'plant_destination': plant_tujuan,
+                        'move_type': move_type,
+                        'move_type_note': move_type_note,
                         'status': 'PREPARED',
-                        'message': f'Item prepared for transfer{material_code_note}{unit_conversion_note}',
+                        'message': f'Item prepared for transfer{material_code_note}{unit_conversion_note}{move_type_note}',
                         'unit_frontend': unit_from_frontend,
                         'unit_sap': sap_unit,
                         'material_formatted': material_code_raw.isdigit()
@@ -885,6 +934,10 @@ def create_sap_transfer():
                         'item_number': idx,
                         'material_code': item.get('material_code', ''),
                         'material_code_raw': item.get('material_code', ''),
+                        'plant_supply': item.get('plant_supply', ''),
+                        'plant_destination': item.get('plant_tujuan', ''),
+                        'move_type': 'ERROR',
+                        'move_type_note': f" (Error: {e})",
                         'status': 'ERROR',
                         'message': f'Error: {e}',
                         'unit_frontend': item.get('unit', ''),
@@ -907,6 +960,9 @@ def create_sap_transfer():
 
             logger.info(f"Calling RFC Z_RFC_GOODSMVT_PYCHAR4 with {len(it_items)} items")
 
+            # Log detail items untuk debugging
+            logger.info(f"Items detail to SAP: {json.dumps(it_items, indent=2, default=str)}")
+
             # Log konversi unit jika ada
             pc_to_st_items = [item for item in item_results if item.get('unit_frontend', '').upper() == 'PC' and item.get('unit_sap', '') == 'ST']
             if pc_to_st_items:
@@ -917,8 +973,16 @@ def create_sap_transfer():
             if formatted_materials:
                 logger.info(f"Formatted {len(formatted_materials)} numeric material codes to 18 digits with leading zeros")
 
+            # Log move_type distribution
+            move_type_301 = [item for item in item_results if item.get('move_type') == '301']
+            move_type_311 = [item for item in item_results if item.get('move_type') == '311']
+            logger.info(f"Move Type distribution: 301 (antar plant) = {len(move_type_301)} items, 311 (dalam plant) = {len(move_type_311)} items")
+
             # Call SAP RFC
             result = sap_conn.conn.call('Z_RFC_GOODSMVT_PYCHAR4', **rfc_params)
+
+            # Log respons SAP untuk debugging
+            logger.info(f"SAP RFC response: {json.dumps(result, indent=2, default=str)}")
 
             # Check result
             if result is None:
@@ -931,12 +995,19 @@ def create_sap_transfer():
 
             # Check for errors in RETURN table
             errors = []
+            warnings = []
             if 'RETURN' in result:
                 for msg in result['RETURN']:
                     msg_type = msg.get('TYPE', '')
                     msg_text = msg.get('MESSAGE', '')
+                    msg_number = msg.get('MESSAGE_V2', '')
+
                     if msg_type in ['E', 'A', 'X']:
-                        errors.append(f"{msg_type}: {msg_text}")
+                        errors.append(f"{msg_type}: {msg_text} (Message: {msg_number})")
+                    elif msg_type in ['W', 'I']:
+                        warnings.append(f"{msg_type}: {msg_text}")
+
+                    logger.info(f"SAP Message - Type: {msg_type}, Text: {msg_text}, Number: {msg_number}")
 
             # Get material document from SAP response
             material_doc = (
@@ -1079,4 +1150,3 @@ if __name__ == '__main__':
     print(f"Environment: SAP_CLIENT={os.getenv('SAP_CLIENT', 'Not Set')}")
     print("=" * 50)
     app.run(host='0.0.0.0', port=5000, debug=True)
-

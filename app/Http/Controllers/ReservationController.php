@@ -227,7 +227,7 @@ class ReservationController extends Controller
         if (!$dispo) return true;
 
         // MRP yang diperbolehkan untuk edit quantity
-        $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
+        $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21'];
 
         return in_array($dispo, $allowedMRP);
     }
@@ -1608,251 +1608,258 @@ class ReservationController extends Controller
         }
     }
 
-    /**
-     * Create document dengan CSRF protection dan chunk processing untuk banyak data
-     */
-    public function createDocument(Request $request)
-    {
-        ini_set('max_execution_time', 300);
-        ini_set('memory_limit', '1024M');
+                /**
+             * Create document dengan CSRF protection dan chunk processing untuk banyak data
+             */
+            public function createDocument(Request $request)
+            {
+                ini_set('max_execution_time', 300);
+                ini_set('memory_limit', '1024M');
 
-        Log::info('📝 CREATE DOCUMENT REQUEST RECEIVED', [
-            'timestamp' => now()->toISOString(),
-            'user_id' => auth()->id(),
-            'user_name' => auth()->user()->name,
-            'request_method' => $request->method(),
-            'content_type' => $request->header('Content-Type'),
-            'is_json' => $request->isJson(),
-            'input_data' => $request->all()
-        ]);
+                Log::info('📝 CREATE DOCUMENT REQUEST RECEIVED', [
+                    'timestamp' => now()->toISOString(),
+                    'user_id' => auth()->id(),
+                    'user_name' => auth()->user()->name,
+                    'request_method' => $request->method(),
+                    'content_type' => $request->header('Content-Type'),
+                    'is_json' => $request->isJson(),
+                    'input_data' => $request->all()
+                ]);
 
-        // Check if request is JSON
-        if ($request->isJson()) {
-            $data = $request->json()->all();
-        } else {
-            $data = $request->all();
-        }
-
-        Log::info('📝 CREATE DOCUMENT DATA PARSED', [
-            'data_keys' => array_keys($data),
-            'materials_count' => isset($data['materials']) ? count($data['materials']) : 0,
-            'pro_numbers_count' => isset($data['pro_numbers']) ? count($data['pro_numbers']) : 0
-        ]);
-
-        // Validate CSRF token
-        $token = $data['_token'] ?? $request->input('_token');
-        if (!hash_equals($request->session()->token(), $token)) {
-            Log::error('❌ CSRF token mismatch', [
-                'session_token' => $request->session()->token(),
-                'provided_token' => $token
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'CSRF token mismatch. Please refresh the page and try again.'
-            ], 419);
-        }
-
-        DB::beginTransaction();
-
-        try {
-            $plant = $data['plant'] ?? $request->input('plant');
-            $materials = $data['materials'] ?? $request->input('materials', []);
-            $proNumbers = $data['pro_numbers'] ?? $request->input('pro_numbers', []);
-            $materialTypes = $data['material_types'] ?? $request->input('material_types', []);
-
-            Log::info('🔧 Processing createDocument', [
-                'plant' => $plant,
-                'materials_count' => is_array($materials) ? count($materials) : 0,
-                'pro_numbers_count' => is_array($proNumbers) ? count($proNumbers) : 0,
-                'materials_sample' => is_array($materials) && count($materials) > 0 ? $materials[0] : 'No materials'
-            ]);
-
-            // Validasi data yang diperlukan
-            if (empty($plant)) {
-                throw new \Exception('Plant is required');
-            }
-
-            if (empty($materials) || !is_array($materials)) {
-                throw new \Exception('No materials selected or invalid materials data');
-            }
-
-            // Validate materials data structure
-            foreach ($materials as $index => $material) {
-                if (!is_array($material)) {
-                    throw new \Exception("Material data at index {$index} is not an array");
+                // Check if request is JSON
+                if ($request->isJson()) {
+                    $data = $request->json()->all();
+                } else {
+                    $data = $request->all();
                 }
 
-                if (!isset($material['material_code']) || empty($material['material_code'])) {
-                    throw new \Exception("Material code is required at index {$index}");
+                Log::info('📝 CREATE DOCUMENT DATA PARSED', [
+                    'data_keys' => array_keys($data),
+                    'materials_count' => isset($data['materials']) ? count($data['materials']) : 0,
+                    'pro_numbers_count' => isset($data['pro_numbers']) ? count($data['pro_numbers']) : 0
+                ]);
+
+                // Validate CSRF token
+                $token = $data['_token'] ?? $request->input('_token');
+                if (!hash_equals($request->session()->token(), $token)) {
+                    Log::error('❌ CSRF token mismatch', [
+                        'session_token' => $request->session()->token(),
+                        'provided_token' => $token
+                    ]);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'CSRF token mismatch. Please refresh the page and try again.'
+                    ], 419);
                 }
 
-                if (!isset($material['requested_qty'])) {
-                    throw new \Exception("Requested quantity is required at index {$index}");
-                }
+                DB::beginTransaction();
 
-                $requestedQty = floatval($material['requested_qty']);
-                if ($requestedQty <= 0) {
-                    $materialDisplay = $material['material_code_display'] ?? $material['material_code'];
-                    throw new \Exception("Requested quantity must be greater than 0 for material: {$materialDisplay}");
-                }
-            }
+                try {
+                    $plant = $data['plant'] ?? $request->input('plant');
+                    $materials = $data['materials'] ?? $request->input('materials', []);
+                    $proNumbers = $data['pro_numbers'] ?? $request->input('pro_numbers', []);
+                    $materialTypes = $data['material_types'] ?? $request->input('material_types', []);
 
-            // Generate document number
-            $documentNo = $this->generateGlobalDocumentNumberWithPlantPrefix($plant);
+                    Log::info('🔧 Processing createDocument', [
+                        'plant' => $plant,
+                        'materials_count' => is_array($materials) ? count($materials) : 0,
+                        'pro_numbers_count' => is_array($proNumbers) ? count($proNumbers) : 0,
+                        'materials_sample' => is_array($materials) && count($materials) > 0 ? $materials[0] : 'No materials'
+                    ]);
 
-            Log::info('📄 Generated document number', [
-                'document_no' => $documentNo,
-                'plant' => $plant
-            ]);
+                    // Validasi data yang diperlukan
+                    if (empty($plant)) {
+                        throw new \Exception('Plant is required');
+                    }
 
-            // Calculate totals
-            $totalItems = count($materials);
-            $totalQty = 0;
+                    if (empty($materials) || !is_array($materials)) {
+                        throw new \Exception('No materials selected or invalid materials data');
+                    }
 
-            foreach ($materials as $material) {
-                $totalQty += floatval($material['requested_qty'] ?? 0);
-            }
+                    // Validate materials data structure
+                    foreach ($materials as $index => $material) {
+                        if (!is_array($material)) {
+                            throw new \Exception("Material data at index {$index} is not an array");
+                        }
 
-            if ($totalQty <= 0) {
-                throw new \Exception('Total requested quantity must be greater than 0');
-            }
+                        if (!isset($material['material_code']) || empty($material['material_code'])) {
+                            throw new \Exception("Material code is required at index {$index}");
+                        }
 
-            // Create document
-            $document = ReservationDocument::create([
-                'document_no' => $documentNo,
-                'plant' => $plant,
-                'status' => 'created',
-                'total_items' => $totalItems,
-                'total_qty' => $totalQty,
-                'created_by' => Auth::id(),
-                'created_by_name' => Auth::user()->name,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+                        if (!isset($material['requested_qty'])) {
+                            throw new \Exception("Requested quantity is required at index {$index}");
+                        }
 
-            Log::info('✅ Document created successfully', [
-                'document_id' => $document->id,
-                'document_no' => $documentNo,
-                'plant' => $plant,
-                'total_items' => $totalItems,
-                'total_qty' => $totalQty
-            ]);
-
-            // Insert items in chunks to avoid memory issues
-            $itemsToCreate = [];
-            $chunkSize = 100;
-            $insertedItems = 0;
-
-            foreach ($materials as $index => $material) {
-                // Check if quantity is editable for MRP
-                $isQtyEditable = true;
-                $dispo = $material['dispo'] ?? null;
-
-                // If dispo not provided in material, check pro_details
-                if (!$dispo && isset($material['pro_details']) && is_array($material['pro_details']) && count($material['pro_details']) > 0) {
-                    foreach ($material['pro_details'] as $proDetail) {
-                        if (isset($proDetail['dispo']) && $proDetail['dispo']) {
-                            $dispo = $proDetail['dispo'];
-                            break;
+                        $requestedQty = floatval($material['requested_qty']);
+                        if ($requestedQty <= 0) {
+                            $materialDisplay = $material['material_code_display'] ?? $material['material_code'];
+                            throw new \Exception("Requested quantity must be greater than 0 for material: {$materialDisplay}");
                         }
                     }
-                }
 
-                $isQtyEditable = $this->isQtyEditableForMRP($dispo);
+                    // Generate document number
+                    $documentNo = $this->generateGlobalDocumentNumberWithPlantPrefix($plant);
 
-                // Ensure arrays are properly formatted
-                $sources = isset($material['sources']) && is_array($material['sources']) ? $material['sources'] : [];
-                $salesOrders = isset($material['sales_orders']) && is_array($material['sales_orders']) ? $material['sales_orders'] : [];
-                $proDetails = isset($material['pro_details']) && is_array($material['pro_details']) ? $material['pro_details'] : [];
+                    Log::info('📄 Generated document number', [
+                        'document_no' => $documentNo,
+                        'plant' => $plant
+                    ]);
 
-                // Prepare item data
-                $itemData = [
-                    'document_id' => $document->id,
-                    'material_code' => $material['material_code'],
-                    'material_description' => $material['material_description'] ?? 'No Description',
-                    'unit' => $material['unit'] ?? 'PC',
-                    'sortf' => $material['sortf'] ?? null,
-                    'dispo' => $dispo,
-                    'is_qty_editable' => $isQtyEditable,
-                    'requested_qty' => floatval($material['requested_qty']),
-                    'sources' => json_encode($sources),
-                    'sales_orders' => json_encode($salesOrders),
-                    'pro_details' => json_encode($proDetails),
-                    'mathd' => $material['mathd'] ?? null,
-                    'makhd' => $material['makhd'] ?? null,
-                    'groes' => $material['groes'] ?? null,
-                    'ferth' => $material['ferth'] ?? null,
-                    'zeinr' => $material['zeinr'] ?? null,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
+                    // Calculate totals
+                    $totalItems = count($materials);
+                    $totalQty = 0;
 
-                $itemsToCreate[] = $itemData;
+                    foreach ($materials as $material) {
+                        $totalQty += floatval($material['requested_qty'] ?? 0);
+                    }
 
-                // Insert in chunks to avoid memory issues
-                if (count($itemsToCreate) >= $chunkSize) {
-                    DB::table('reservation_document_items')->insert($itemsToCreate);
-                    $insertedItems += count($itemsToCreate);
+                    if ($totalQty <= 0) {
+                        throw new \Exception('Total requested quantity must be greater than 0');
+                    }
+
+                    // Create document dengan status 'booked'
+                    $document = ReservationDocument::create([
+                        'document_no' => $documentNo,
+                        'plant' => $plant,
+                        'status' => 'booked', // Status awal diubah dari 'created' menjadi 'booked'
+                        'total_items' => $totalItems,
+                        'total_qty' => $totalQty,
+                        'total_transferred' => 0,
+                        'completion_rate' => 0,
+                        'created_by' => Auth::id(),
+                        'created_by_name' => Auth::user()->name,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    Log::info('✅ Document created successfully', [
+                        'document_id' => $document->id,
+                        'document_no' => $documentNo,
+                        'plant' => $plant,
+                        'total_items' => $totalItems,
+                        'total_qty' => $totalQty,
+                        'status' => 'booked'
+                    ]);
+
+                    // Insert items in chunks to avoid memory issues
                     $itemsToCreate = [];
+                    $chunkSize = 100;
+                    $insertedItems = 0;
 
-                    Log::info("📝 Inserted {$chunkSize} items chunk for document {$documentNo}");
+                    foreach ($materials as $index => $material) {
+                        // Check if quantity is editable for MRP
+                        $isQtyEditable = true;
+                        $dispo = $material['dispo'] ?? null;
+
+                        // If dispo not provided in material, check pro_details
+                        if (!$dispo && isset($material['pro_details']) && is_array($material['pro_details']) && count($material['pro_details']) > 0) {
+                            foreach ($material['pro_details'] as $proDetail) {
+                                if (isset($proDetail['dispo']) && $proDetail['dispo']) {
+                                    $dispo = $proDetail['dispo'];
+                                    break;
+                                }
+                            }
+                        }
+
+                        $isQtyEditable = $this->isQtyEditableForMRP($dispo);
+
+                        // Ensure arrays are properly formatted
+                        $sources = isset($material['sources']) && is_array($material['sources']) ? $material['sources'] : [];
+                        $salesOrders = isset($material['sales_orders']) && is_array($material['sales_orders']) ? $material['sales_orders'] : [];
+                        $proDetails = isset($material['pro_details']) && is_array($material['pro_details']) ? $material['pro_details'] : [];
+
+                        // Prepare item data
+                        $itemData = [
+                            'document_id' => $document->id,
+                            'material_code' => $material['material_code'],
+                            'material_description' => $material['material_description'] ?? 'No Description',
+                            'unit' => $material['unit'] ?? 'PC',
+                            'sortf' => $material['sortf'] ?? null,
+                            'dispo' => $dispo,
+                            'is_qty_editable' => $isQtyEditable,
+                            'requested_qty' => floatval($material['requested_qty']),
+                            'transferred_qty' => 0, // Default 0 untuk transferred quantity
+                            'remaining_qty' => floatval($material['requested_qty']), // Sama dengan requested qty awal
+                            'sources' => json_encode($sources),
+                            'sales_orders' => json_encode($salesOrders),
+                            'pro_details' => json_encode($proDetails),
+                            'mathd' => $material['mathd'] ?? null,
+                            'makhd' => $material['makhd'] ?? null,
+                            'groes' => $material['groes'] ?? null,
+                            'ferth' => $material['ferth'] ?? null,
+                            'zeinr' => $material['zeinr'] ?? null,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+
+                        $itemsToCreate[] = $itemData;
+
+                        // Insert in chunks to avoid memory issues
+                        if (count($itemsToCreate) >= $chunkSize) {
+                            DB::table('reservation_document_items')->insert($itemsToCreate);
+                            $insertedItems += count($itemsToCreate);
+                            $itemsToCreate = [];
+
+                            Log::info("📝 Inserted {$chunkSize} items chunk for document {$documentNo}");
+                        }
+                    }
+
+                    // Insert remaining items
+                    if (!empty($itemsToCreate)) {
+                        DB::table('reservation_document_items')->insert($itemsToCreate);
+                        $insertedItems += count($itemsToCreate);
+                        Log::info("📝 Inserted final chunk of " . count($itemsToCreate) . " items");
+                    }
+
+                    Log::info("✅ Total {$insertedItems} items inserted for document {$documentNo}");
+
+                    // Delete used sync data in smaller chunks
+                    $deletedCount = $this->deleteUsedSyncDataInChunks($plant, $materials, $proNumbers);
+
+                    DB::commit();
+
+                    Log::info('🎉 Reservation document created successfully', [
+                        'document_no' => $documentNo,
+                        'document_id' => $document->id,
+                        'total_items' => $totalItems,
+                        'total_qty' => $totalQty,
+                        'status' => 'booked',
+                        'deleted_sync_data_count' => $deletedCount
+                    ]);
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Reservation document created successfully',
+                        'document_no' => $documentNo,
+                        'document_id' => $document->id,
+                        'total_items' => $totalItems,
+                        'total_qty' => $totalQty,
+                        'status' => 'booked',
+                        'deleted_sync_data_count' => $deletedCount,
+                        'redirect_url' => route('documents.show', $document->id)
+                    ]);
+
+                } catch (\Exception $e) {
+                    DB::rollBack();
+                    Log::error('🔥 Failed to create document: ' . $e->getMessage(), [
+                        'trace' => $e->getTraceAsString(),
+                        'request_data' => $request->all(),
+                        'json_data' => $data ?? []
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Failed to create document: ' . $e->getMessage()
+                    ], 500);
                 }
             }
-
-            // Insert remaining items
-            if (!empty($itemsToCreate)) {
-                DB::table('reservation_document_items')->insert($itemsToCreate);
-                $insertedItems += count($itemsToCreate);
-                Log::info("📝 Inserted final chunk of " . count($itemsToCreate) . " items");
-            }
-
-            Log::info("✅ Total {$insertedItems} items inserted for document {$documentNo}");
-
-            // Delete used sync data in smaller chunks
-            $deletedCount = $this->deleteUsedSyncDataInChunks($plant, $materials, $proNumbers);
-
-            DB::commit();
-
-            Log::info('🎉 Reservation document created successfully', [
-                'document_no' => $documentNo,
-                'document_id' => $document->id,
-                'total_items' => $totalItems,
-                'total_qty' => $totalQty,
-                'deleted_sync_data_count' => $deletedCount
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Reservation document created successfully',
-                'document_no' => $documentNo,
-                'document_id' => $document->id,
-                'total_items' => $totalItems,
-                'total_qty' => $totalQty,
-                'deleted_sync_data_count' => $deletedCount,
-                'redirect_url' => route('documents.show', $document->id)
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('🔥 Failed to create document: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-                'request_data' => $request->all(),
-                'json_data' => $data ?? []
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create document: ' . $e->getMessage()
-            ], 500);
-        }
-    }
 
     /**
      * Helper function to get allowed MRP list
      */
     private function getAllowedMRP()
     {
-        return ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1'];
+        return ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21'];
     }
 
     /**
