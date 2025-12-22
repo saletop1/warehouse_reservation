@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Print Document - {{ $document->document_no }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @media print {
             body {
@@ -51,11 +52,15 @@
             * {
                 color: #000 !important;
             }
+            .btn-group {
+                display: none !important;
+            }
         }
 
         body {
             font-family: Arial, Helvetica, sans-serif;
             color: #000;
+            padding: 10px;
         }
 
         .print-header {
@@ -108,7 +113,7 @@
         .signature-line {
             border-top: 1px solid #000;
             width: 180px;
-            margin: 60px auto 0 auto; /* Center the line and add margin on top */
+            margin: 60px auto 0 auto;
         }
 
         .signature-text {
@@ -184,19 +189,18 @@
             background-color: transparent !important;
         }
 
-        /* Table column widths - adjusted for new columns */
-        .col-no { width: 3%; }
-        .col-matcode { width: 10%; }
-        .col-desc { width: 20%; }
-        .col-addinfo { width: 8%; }
-        .col-qty { width: 5%; }
-        .col-uom { width: 4%; }
-        .col-so { width: 8%; }
-        .col-pro { width: 15%; }
-        .col-mrp { width: 4%; }
-        .col-groes { width: 8%; }
-        .col-ferth { width: 8%; }
-        .col-zeinr { width: 7%; }
+        /* Button styling for non-print view */
+        .btn-group {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+
+        .btn-group .btn {
+            margin-right: 5px;
+        }
 
         /* Debug info */
         .debug-info {
@@ -212,7 +216,7 @@
         <!-- Print Header (Visible only in browser) -->
         <div class="row mb-2 no-print">
             <div class="col-12">
-                <div class="alert alert-info d-flex justify-content-between align-items-center py-2 compact-padding">
+                <div class="btn-group d-flex justify-content-between align-items-center py-2 compact-padding">
                     <div class="compact-text">
                         <i class="fas fa-print"></i> Print Preview - {{ $document->document_no }}
                     </div>
@@ -223,7 +227,7 @@
                         <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-danger btn-sm" target="_blank">
                             <i class="fas fa-file-pdf"></i> Export PDF
                         </a>
-                        <button onclick="window.close()" class="btn btn-secondary btn-sm">
+                        <button onclick="closeWindow()" class="btn btn-secondary btn-sm">
                             <i class="fas fa-times"></i> Close
                         </button>
                     </div>
@@ -263,7 +267,7 @@
                                             @if(!empty($document->sloc_supply) && $document->sloc_supply !== '-' && $document->sloc_supply !== 'null' && $document->sloc_supply !== 'NULL')
                                                 {{ strtoupper($document->sloc_supply) }}
                                             @else
-                                                <span class="text-muted" style="font-style: italic;">Not set</span>
+                                                <span style="font-style: italic; color: #6c757d;">Not set</span>
                                             @endif
                                         </td>
                                     </tr>
@@ -274,12 +278,16 @@
                                     <tr>
                                         <td style="padding: 1px; text-align: right;"><strong>Status:</strong></td>
                                         <td style="padding: 1px;">
-                                            @if($document->status == 'created')
-                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #ffc107; color: #000;">Created</span>
-                                            @elseif($document->status == 'posted')
-                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #198754; color: #fff;">Posted</span>
-                                            @else
+                                            @if($document->status == 'booked')
+                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #ffc107; color: #000;">Booked</span>
+                                            @elseif($document->status == 'partial')
+                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #0dcaf0; color: #000;">Partial</span>
+                                            @elseif($document->status == 'closed')
+                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #198754; color: #fff;">Closed</span>
+                                            @elseif($document->status == 'cancelled')
                                                 <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #dc3545; color: #fff;">Cancelled</span>
+                                            @else
+                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #6c757d; color: #fff;">{{ $document->status }}</span>
                                             @endif
                                         </td>
                                     </tr>
@@ -329,13 +337,6 @@
                                 }
                             }
                         }
-
-                        // Calculate column widths based on visible columns
-                        $columnCount = 8; // No, Mat Code, Desc, Req Qty, Uom, Sales Order, PRO Numbers, MRP
-                        if ($hasAddInfo) $columnCount++;
-                        if ($hasGroes) $columnCount++;
-                        if ($hasFerth) $columnCount++;
-                        if ($hasZeinr) $columnCount++;
                     @endphp
 
                     <table class="table table-bordered table-print compact-table">
@@ -375,7 +376,7 @@
                                     // Convert unit: if ST then PC
                                     $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
 
-                                    // PERBAIKAN: Ambil sales orders dengan cara yang aman
+                                    // Ambil sales orders dengan cara yang aman
                                     $salesOrders = [];
                                     if (is_string($item->sales_orders)) {
                                         $salesOrders = json_decode($item->sales_orders, true) ?? [];
@@ -383,7 +384,7 @@
                                         $salesOrders = $item->sales_orders;
                                     }
 
-                                    // PERBAIKAN: Ambil data dari pro_details jika ada
+                                    // Ambil data dari pro_details jika ada
                                     $addInfo = '-';
                                     $groes = '-';
                                     $ferth = '-';
@@ -429,7 +430,7 @@
                                 <tr>
                                     <td style="font-size: 8pt;">{{ $index + 1 }}</td>
                                     <td style="font-size: 8pt;"><code style="font-size: 8pt;">{{ $materialCode }}</code></td>
-                                    <td style="font-size: 8pt;">{{ \Illuminate\Support\Str::limit($item->material_description, 40) }}</td>
+                                    <td style="font-size: 8pt; text-align: left;">{{ \Illuminate\Support\Str::limit($item->material_description, 40) }}</td>
                                     @if($hasAddInfo)
                                     <td style="font-size: 8pt;">{{ $addInfo }}</td>
                                     @endif
@@ -441,7 +442,7 @@
                                                 <span class="badge bg-light text-dark border compact-badge">{{ $so }}</span>
                                             @endforeach
                                         @else
-                                            <span class="text-muted" style="font-size: 8pt;">-</span>
+                                            <span style="font-size: 8pt; color: #6c757d;">-</span>
                                         @endif
                                     </td>
                                     <td style="font-size: 8pt;">
@@ -450,14 +451,14 @@
                                                 <span class="badge bg-light text-dark border compact-badge">{{ $source }}</span>
                                             @endforeach
                                         @else
-                                            <span class="text-muted" style="font-size: 8pt;">No sources</span>
+                                            <span style="font-size: 8pt; color: #6c757d;">No sources</span>
                                         @endif
                                     </td>
                                     <td style="font-size: 8pt;">
                                         @if($item->dispo)
                                             <span class="badge bg-light text-dark border compact-badge">{{ $item->dispo }}</span>
                                         @else
-                                            <span class="text-muted" style="font-size: 8pt;">-</span>
+                                            <span style="font-size: 8pt; color: #6c757d;">-</span>
                                         @endif
                                     </td>
                                     @if($hasGroes)
@@ -475,7 +476,7 @@
                     </table>
                 </div>
 
-                <!-- Remarks (dipindah ke kiri bawah tabel) -->
+                <!-- Remarks -->
                 @if($document->remarks)
                 <div class="mb-3 compact-margin">
                     <div class="remarks-container">
@@ -485,7 +486,7 @@
                 </div>
                 @endif
 
-                <!-- Signatures - Diperbaiki alignment -->
+                <!-- Signatures -->
                 <div class="signature-section">
                     <div class="row">
                         <div class="col-4">
@@ -509,9 +510,9 @@
                     </div>
                 </div>
 
-                <!-- Footer dengan informasi created by dan created at -->
+                <!-- Footer -->
                 <div class="mt-3 pt-2 border-top" style="font-size: 7pt; line-height: 1.1;">
-                    <div class="text-center text-muted text-black">
+                    <div class="text-center">
                         Document generated on {{ now()->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB |
                         Created by {{ $document->created_by_name }} on {{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB |
                         {{ $document->document_no }}
@@ -522,6 +523,21 @@
     </div>
 
     <script>
+        // Fungsi untuk menutup window dengan cara yang lebih reliable
+        function closeWindow() {
+            // Coba beberapa metode untuk menutup window
+            if (window.history.length > 1) {
+                // Jika ada history, gunakan back
+                window.history.back();
+            } else if (window.opener) {
+                // Jika window dibuka oleh window lain, tutup saja
+                window.close();
+            } else {
+                // Jika tidak ada history dan bukan window popup, redirect ke halaman sebelumnya
+                window.location.href = "{{ route('documents.index') }}";
+            }
+        }
+
         window.onload = function() {
             // Auto print jika parameter autoPrint=true
             const urlParams = new URLSearchParams(window.location.search);
@@ -536,10 +552,13 @@
                 // Jika autoPrint, tutup window setelah print
                 if (urlParams.get('autoPrint') === 'true') {
                     setTimeout(function() {
-                        window.close();
+                        closeWindow();
                     }, 300);
                 }
             };
+
+            // Tambahkan event listener untuk tombol close
+            document.querySelector('.btn-secondary').addEventListener('click', closeWindow);
         };
     </script>
 </body>

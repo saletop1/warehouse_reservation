@@ -21,42 +21,60 @@ class ReservationDocumentController extends Controller
         $this->middleware('auth');
     }
 
-    public function index(Request $request)
-    {
-        $query = ReservationDocument::withCount(['transfers', 'items']);
+            public function index(Request $request)
+        {
+            $query = ReservationDocument::withCount(['transfers', 'items']);
 
-        // Apply filters
-        if ($request->filled('document_no')) {
-            $query->where('document_no', 'like', '%' . $request->document_no . '%');
+            // Apply filters
+            if ($request->filled('document_no')) {
+                $query->where('document_no', 'like', '%' . $request->document_no . '%');
+            }
+
+            if ($request->filled('plant')) {
+                $query->where('plant', $request->plant);
+            }
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->filled('date_from')) {
+                $query->whereDate('created_at', '>=', $request->date_from);
+            }
+
+            if ($request->filled('date_to')) {
+                $query->whereDate('created_at', '<=', $request->date_to);
+            }
+
+            // Get total count
+            $totalCount = $query->count();
+
+            // Paginate results
+            $perPage = $request->get('per_page', 20);
+            $documents = $query->orderBy('created_at', 'desc')
+                ->paginate($perPage)
+                ->appends($request->except('page'));
+
+            // Calculate transferred and completion for each document
+            foreach ($documents as $document) {
+                $totalRequested = $document->items()->sum('requested_qty');
+                $totalTransferred = $document->items()->sum('transferred_qty') ?? 0;
+
+                $document->total_transferred = $totalTransferred;
+                $document->completion_rate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
+
+                // Also update document status if needed
+                if ($totalTransferred >= $totalRequested && $document->status != 'closed') {
+                    $document->status = 'closed';
+                    $document->save();
+                } elseif ($totalTransferred > 0 && $document->status == 'booked') {
+                    $document->status = 'partial';
+                    $document->save();
+                }
+            }
+
+            return view('documents.index', compact('documents', 'totalCount'));
         }
-
-        if ($request->filled('plant')) {
-            $query->where('plant', $request->plant);
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
-        }
-
-        if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
-        }
-
-        // Get total count
-        $totalCount = $query->count();
-
-        // Paginate results
-        $perPage = $request->get('per_page', 20);
-        $documents = $query->orderBy('created_at', 'desc')
-            ->paginate($perPage)
-            ->appends($request->except('page'));
-
-        return view('documents.index', compact('documents', 'totalCount'));
-    }
 
     public function show($id)
     {
