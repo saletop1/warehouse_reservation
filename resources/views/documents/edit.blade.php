@@ -38,7 +38,14 @@
                 </div>
             @endif
 
-            <form action="{{ route('documents.update', $document->id) }}" method="POST">
+            <!-- Delete Selected Items Form -->
+            <form id="deleteItemsForm" action="{{ route('documents.items.delete-selected', $document->id) }}" method="POST" style="display: none;">
+                @csrf
+                @method('DELETE')
+                <input type="hidden" name="selected_items" id="selectedItemsInput">
+            </form>
+
+            <form action="{{ route('documents.update', $document->id) }}" method="POST" id="editDocumentForm">
                 @csrf
                 @method('PUT')
                 <div class="card mb-4">
@@ -87,13 +94,34 @@
 
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">Document Items</h5>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Document Items</h5>
+                            <div>
+                                <button type="button" id="deleteSelectedItemsBtn" class="btn btn-danger btn-sm" disabled>
+                                    <i class="fas fa-trash"></i> Delete Selected
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <div class="card-body">
+                        <!-- Selection Info -->
+                        <div class="alert alert-info d-flex justify-content-between align-items-center mb-3" id="selectionInfo" style="display: none;">
+                            <div>
+                                <i class="fas fa-check-circle"></i>
+                                <span id="selectedCount">0</span> items selected
+                            </div>
+                            <button type="button" id="clearSelectionBtn" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-times"></i> Clear Selection
+                            </button>
+                        </div>
+
                         <div class="table-responsive">
                             <table class="table table-bordered">
                                 <thead class="table-dark">
                                     <tr>
+                                        <th style="width: 40px;">
+                                            <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
+                                        </th>
                                         <th>No</th>
                                         <th>Material Code</th>
                                         <th>Description</th>
@@ -114,7 +142,7 @@
 
                                             // Check if quantity is editable based on MRP
                                             $isQtyEditable = $item->is_qty_editable ?? true;
-                                            $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21'];
+                                            $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23'];
 
                                             // Pastikan dispo ada di item
                                             $dispo = $item->dispo ?? null;
@@ -154,7 +182,10 @@
                                             // Ambil sortf dari item
                                             $addInfo = $item->sortf ?? '-';
                                         @endphp
-                                        <tr>
+                                        <tr data-item-id="{{ $item->id }}">
+                                            <td class="text-center">
+                                                <input type="checkbox" class="item-checkbox form-check-input" value="{{ $item->id }}">
+                                            </td>
                                             <td>{{ $index + 1 }}</td>
                                             <td><code>{{ $materialCode }}</code></td>
                                             <td style="white-space: normal; word-wrap: break-word; max-width: 300px;">{{ $item->material_description }}</td>
@@ -226,6 +257,32 @@
     </div>
 </div>
 
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmationModal" tabindex="-1" aria-labelledby="deleteConfirmationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteConfirmationModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirm Deletion
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <span id="deleteItemCount">0</span> selected item(s)?</p>
+                <p class="text-danger"><strong>This action cannot be undone.</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
 /* Hilangkan spinner tombol naik turun di semua browser */
 .qty-input::-webkit-outer-spin-button,
@@ -254,12 +311,122 @@ input[readonly][type=number] {
     background-color: #f8f9fa !important;
     cursor: not-allowed;
 }
+
+/* Checkbox styling */
+.item-checkbox {
+    cursor: pointer;
+}
+
+/* Selected row styling */
+tr.selected-row {
+    background-color: rgba(13, 110, 253, 0.1) !important;
+}
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Variables for item selection
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+    const deleteSelectedItemsBtn = document.getElementById('deleteSelectedItemsBtn');
+    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+    const selectionInfo = document.getElementById('selectionInfo');
+    const selectedCount = document.getElementById('selectedCount');
+    const selectedItemsInput = document.getElementById('selectedItemsInput');
+    const deleteItemsForm = document.getElementById('deleteItemsForm');
+    const deleteConfirmationModal = new bootstrap.Modal(document.getElementById('deleteConfirmationModal'));
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    const deleteItemCount = document.getElementById('deleteItemCount');
+
+    // Update selection count and button states
+    function updateSelection() {
+        const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
+        const count = selectedItems.length;
+
+        selectedCount.textContent = count;
+
+        if (count > 0) {
+            selectionInfo.style.display = 'flex';
+            deleteSelectedItemsBtn.disabled = false;
+
+            // Update select all checkbox state
+            selectAllCheckbox.checked = count === itemCheckboxes.length;
+            selectAllCheckbox.indeterminate = count > 0 && count < itemCheckboxes.length;
+
+            // Highlight selected rows
+            document.querySelectorAll('tbody tr').forEach(row => {
+                const checkbox = row.querySelector('.item-checkbox');
+                if (checkbox && checkbox.checked) {
+                    row.classList.add('selected-row');
+                } else {
+                    row.classList.remove('selected-row');
+                }
+            });
+
+            // Update selected items for form submission
+            const selectedIds = selectedItems.map(cb => cb.value);
+            selectedItemsInput.value = JSON.stringify(selectedIds);
+        } else {
+            selectionInfo.style.display = 'none';
+            deleteSelectedItemsBtn.disabled = true;
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+
+            // Remove highlight from all rows
+            document.querySelectorAll('tbody tr').forEach(row => {
+                row.classList.remove('selected-row');
+            });
+
+            // Clear selected items for form submission
+            selectedItemsInput.value = '[]';
+        }
+    }
+
+    // Select all checkbox handler
+    selectAllCheckbox.addEventListener('change', function() {
+        itemCheckboxes.forEach(cb => {
+            cb.checked = this.checked;
+        });
+        updateSelection();
+    });
+
+    // Individual checkbox handlers
+    itemCheckboxes.forEach(cb => {
+        cb.addEventListener('change', updateSelection);
+    });
+
+    // Clear selection button
+    clearSelectionBtn.addEventListener('click', function() {
+        itemCheckboxes.forEach(cb => {
+            cb.checked = false;
+        });
+        updateSelection();
+    });
+
+    // Delete selected items button
+    deleteSelectedItemsBtn.addEventListener('click', function() {
+        const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
+
+        if (selectedItems.length === 0) {
+            alert('Please select items to delete.');
+            return;
+        }
+
+        // Update modal message
+        deleteItemCount.textContent = selectedItems.length;
+
+        // Show confirmation modal
+        deleteConfirmationModal.show();
+    });
+
+    // Confirm delete button in modal
+    confirmDeleteBtn.addEventListener('click', function() {
+        // Submit the delete form
+        deleteItemsForm.submit();
+    });
+
     // Validasi form sebelum submit
-    const form = document.querySelector('form');
+    const form = document.getElementById('editDocumentForm');
     form.addEventListener('submit', function(e) {
         let isValid = true;
         let errorMessages = [];

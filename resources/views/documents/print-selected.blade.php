@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Print Document - {{ $document->document_no }}</title>
+    <title>Print Selected Items - {{ $document->document_no }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -206,19 +206,6 @@
             margin-right: 5px;
         }
 
-        /* Checkbox styling */
-        .item-checkbox {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-        }
-
-        .select-all-checkbox {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-        }
-
         /* Selection info */
         .selection-info {
             background-color: #e7f3ff;
@@ -250,21 +237,12 @@
             <div class="col-12">
                 <div class="btn-group d-flex justify-content-between align-items-center py-2 compact-padding">
                     <div class="compact-text">
-                        <i class="fas fa-print"></i> Print Preview - {{ $document->document_no }}
+                        <i class="fas fa-print"></i> Print Selected Items - {{ $document->document_no }}
                     </div>
                     <div>
                         <button onclick="window.print()" class="btn btn-primary btn-sm">
-                            <i class="fas fa-print"></i> Print All
+                            <i class="fas fa-print"></i> Print
                         </button>
-                        <button id="printSelectedBtn" class="btn btn-info btn-sm" disabled>
-                            <i class="fas fa-print"></i> Print Selected
-                        </button>
-                        <button id="exportExcelBtn" class="btn btn-success btn-sm" disabled>
-                            <i class="fas fa-file-excel"></i> Export Excel
-                        </button>
-                        <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-danger btn-sm" target="_blank">
-                            <i class="fas fa-file-pdf"></i> Export PDF
-                        </a>
                         <button onclick="closeWindow()" class="btn btn-secondary btn-sm">
                             <i class="fas fa-times"></i> Close
                         </button>
@@ -272,27 +250,12 @@
                 </div>
 
                 <!-- Selection Info -->
-                <div class="selection-info no-print" id="selectionInfo" style="display: none;">
+                <div class="selection-info no-print">
                     <i class="fas fa-check-circle"></i>
-                    <span id="selectedCount">0</span> items selected
-                    <button id="clearSelectionBtn" class="btn btn-sm btn-outline-secondary ms-3">
-                        <i class="fas fa-times"></i> Clear Selection
-                    </button>
+                    Showing {{ count($items) }} selected item(s)
                 </div>
             </div>
         </div>
-
-        <!-- Print Selected Form (hidden) -->
-        <form id="printSelectedForm" action="{{ route('documents.print-selected', $document->id) }}" method="POST" target="_blank" class="no-print">
-            @csrf
-            <input type="hidden" name="selected_items" id="selectedItemsInputPrint">
-        </form>
-
-        <!-- Export Excel Form (hidden) -->
-        <form id="exportExcelForm" action="{{ route('documents.export-excel', $document->id) }}" method="POST" class="no-print">
-            @csrf
-            <input type="hidden" name="selected_items" id="selectedItemsInputExcel">
-        </form>
 
         <!-- Document Content -->
         <div class="row">
@@ -301,7 +264,7 @@
                 <div class="print-header compact-margin">
                     <div class="row">
                         <div class="col-7">
-                            <div class="document-title text-black">RESERVATION DOCUMENT</div>
+                            <div class="document-title text-black">RESERVATION DOCUMENT (SELECTED ITEMS)</div>
                             <div class="company-info text-black">
                                 <strong>PT. Kayu Mebel Indonesia</strong><br>
                                 Jl. Manunggaljati KM No, 23, Jatikalang,
@@ -350,6 +313,10 @@
                                             @endif
                                         </td>
                                     </tr>
+                                    <tr>
+                                        <td style="padding: 1px; text-align: right;"><strong>Selected Items:</strong></td>
+                                        <td style="padding: 1px;">{{ count($items) }} items</td>
+                                    </tr>
                                 </table>
                             </div>
                         </div>
@@ -358,7 +325,7 @@
 
                 <!-- Section Title -->
                 <div class="compact-margin">
-                    <div class="section-title text-black">RESERVATION ITEMS</div>
+                    <div class="section-title text-black">SELECTED RESERVATION ITEMS</div>
                 </div>
 
                 <!-- Items Table -->
@@ -371,7 +338,7 @@
                         $hasZeinr = false;
 
                         // Check each item for data
-                        foreach ($document->items as $item) {
+                        foreach ($items as $item) {
                             // Decode pro_details to check for data
                             $proDetails = [];
                             if (is_string($item->pro_details)) {
@@ -401,9 +368,6 @@
                     <table class="table table-bordered table-print compact-table">
                         <thead>
                             <tr>
-                                <th style="width: 3%; font-size: 8pt;" class="no-print">
-                                    <input type="checkbox" class="select-all-checkbox" id="selectAllCheckbox">
-                                </th>
                                 <th style="width: 3%; font-size: 8pt;">No</th>
                                 <th style="width: {{ $hasAddInfo ? '10%' : '12%' }}; font-size: 8pt;">Material Code</th>
                                 <th style="width: {{ $hasAddInfo ? '20%' : '22%' }}; font-size: 8pt;">Description</th>
@@ -427,7 +391,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($document->items as $index => $item)
+                            @foreach($items as $index => $item)
                                 @php
                                     // Format material code: hilangkan leading zero jika numeric saja
                                     $materialCode = $item->material_code;
@@ -489,10 +453,7 @@
                                         }
                                     }
                                 @endphp
-                                <tr data-item-id="{{ $item->id }}">
-                                    <td class="no-print" style="font-size: 8pt;">
-                                        <input type="checkbox" class="item-checkbox" value="{{ $item->id }}">
-                                    </td>
+                                <tr>
                                     <td style="font-size: 8pt;">{{ $index + 1 }}</td>
                                     <td style="font-size: 8pt;"><code style="font-size: 8pt;">{{ $materialCode }}</code></td>
                                     <td style="font-size: 8pt; text-align: left;">{{ \Illuminate\Support\Str::limit($item->material_description, 40) }}</td>
@@ -580,7 +541,8 @@
                     <div class="text-center">
                         Document generated on {{ now()->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB |
                         Created by {{ $document->created_by_name }} on {{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB |
-                        {{ $document->document_no }}
+                        {{ $document->document_no }} |
+                        Showing {{ count($items) }} selected items
                     </div>
                 </div>
             </div>
@@ -604,112 +566,6 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Variables
-            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-            const itemCheckboxes = document.querySelectorAll('.item-checkbox');
-            const printSelectedBtn = document.getElementById('printSelectedBtn');
-            const exportExcelBtn = document.getElementById('exportExcelBtn');
-            const clearSelectionBtn = document.getElementById('clearSelectionBtn');
-            const selectionInfo = document.getElementById('selectionInfo');
-            const selectedCount = document.getElementById('selectedCount');
-            const selectedItemsInputPrint = document.getElementById('selectedItemsInputPrint');
-            const selectedItemsInputExcel = document.getElementById('selectedItemsInputExcel');
-            const printSelectedForm = document.getElementById('printSelectedForm');
-            const exportExcelForm = document.getElementById('exportExcelForm');
-
-            // CSRF Token untuk fetch request
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-            // Update selection count and button states
-            function updateSelection() {
-                const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
-                const count = selectedItems.length;
-
-                selectedCount.textContent = count;
-
-                if (count > 0) {
-                    selectionInfo.style.display = 'block';
-                    printSelectedBtn.disabled = false;
-                    exportExcelBtn.disabled = false;
-
-                    // Update select all checkbox state
-                    selectAllCheckbox.checked = count === itemCheckboxes.length;
-                    selectAllCheckbox.indeterminate = count > 0 && count < itemCheckboxes.length;
-
-                    // Update selected items for form submission
-                    const selectedIds = selectedItems.map(cb => cb.value);
-                    selectedItemsInputPrint.value = JSON.stringify(selectedIds);
-                    selectedItemsInputExcel.value = JSON.stringify(selectedIds);
-                } else {
-                    selectionInfo.style.display = 'none';
-                    printSelectedBtn.disabled = true;
-                    exportExcelBtn.disabled = true;
-                    selectAllCheckbox.checked = false;
-                    selectAllCheckbox.indeterminate = false;
-
-                    // Clear selected items for form submission
-                    selectedItemsInputPrint.value = '[]';
-                    selectedItemsInputExcel.value = '[]';
-                }
-            }
-
-            // Select all checkbox handler
-            selectAllCheckbox.addEventListener('change', function() {
-                itemCheckboxes.forEach(cb => {
-                    cb.checked = this.checked;
-                });
-                updateSelection();
-            });
-
-            // Individual checkbox handlers
-            itemCheckboxes.forEach(cb => {
-                cb.addEventListener('change', updateSelection);
-            });
-
-            // Clear selection button
-            clearSelectionBtn.addEventListener('click', function() {
-                itemCheckboxes.forEach(cb => {
-                    cb.checked = false;
-                });
-                updateSelection();
-            });
-
-            // Print selected button
-            printSelectedBtn.addEventListener('click', function() {
-                const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
-
-                if (selectedItems.length === 0) {
-                    alert('Please select items to print.');
-                    return;
-                }
-
-                // Submit form to print selected items
-                printSelectedForm.submit();
-            });
-
-            // Export Excel button
-            exportExcelBtn.addEventListener('click', function() {
-                const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
-
-                if (selectedItems.length === 0) {
-                    alert('Please select items to export.');
-                    return;
-                }
-
-                // Show loading
-                exportExcelBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
-                exportExcelBtn.disabled = true;
-
-                // Submit form
-                exportExcelForm.submit();
-
-                // Reset button after 2 seconds
-                setTimeout(() => {
-                    exportExcelBtn.innerHTML = '<i class="fas fa-file-excel"></i> Export Excel';
-                    exportExcelBtn.disabled = false;
-                }, 2000);
-            });
-
             // Auto print jika parameter autoPrint=true
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('autoPrint') === 'true') {

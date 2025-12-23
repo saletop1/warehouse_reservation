@@ -5,14 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\ReservationDocument;
 use App\Models\ReservationDocumentItem;
 use App\Models\ReservationStock;
-use App\Models\ReservationTransfer; // Model untuk reservation_transfers
+use App\Models\ReservationTransfer;
 use Illuminate\Http\Request;
 use App\Exports\ReservationDocumentsSelectedExport;
+use App\Exports\DocumentItemsExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Barryvdh\DomPDF\Facade\Pdf;
+
 
 class ReservationDocumentController extends Controller
 {
@@ -21,60 +24,60 @@ class ReservationDocumentController extends Controller
         $this->middleware('auth');
     }
 
-            public function index(Request $request)
-        {
-            $query = ReservationDocument::withCount(['transfers', 'items']);
+    public function index(Request $request)
+    {
+        $query = ReservationDocument::withCount(['transfers', 'items']);
 
-            // Apply filters
-            if ($request->filled('document_no')) {
-                $query->where('document_no', 'like', '%' . $request->document_no . '%');
-            }
-
-            if ($request->filled('plant')) {
-                $query->where('plant', $request->plant);
-            }
-
-            if ($request->filled('status')) {
-                $query->where('status', $request->status);
-            }
-
-            if ($request->filled('date_from')) {
-                $query->whereDate('created_at', '>=', $request->date_from);
-            }
-
-            if ($request->filled('date_to')) {
-                $query->whereDate('created_at', '<=', $request->date_to);
-            }
-
-            // Get total count
-            $totalCount = $query->count();
-
-            // Paginate results
-            $perPage = $request->get('per_page', 20);
-            $documents = $query->orderBy('created_at', 'desc')
-                ->paginate($perPage)
-                ->appends($request->except('page'));
-
-            // Calculate transferred and completion for each document
-            foreach ($documents as $document) {
-                $totalRequested = $document->items()->sum('requested_qty');
-                $totalTransferred = $document->items()->sum('transferred_qty') ?? 0;
-
-                $document->total_transferred = $totalTransferred;
-                $document->completion_rate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
-
-                // Also update document status if needed
-                if ($totalTransferred >= $totalRequested && $document->status != 'closed') {
-                    $document->status = 'closed';
-                    $document->save();
-                } elseif ($totalTransferred > 0 && $document->status == 'booked') {
-                    $document->status = 'partial';
-                    $document->save();
-                }
-            }
-
-            return view('documents.index', compact('documents', 'totalCount'));
+        // Apply filters
+        if ($request->filled('document_no')) {
+            $query->where('document_no', 'like', '%' . $request->document_no . '%');
         }
+
+        if ($request->filled('plant')) {
+            $query->where('plant', $request->plant);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        // Get total count
+        $totalCount = $query->count();
+
+        // Paginate results
+        $perPage = $request->get('per_page', 20);
+        $documents = $query->orderBy('created_at', 'desc')
+            ->paginate($perPage)
+            ->appends($request->except('page'));
+
+        // Calculate transferred and completion for each document
+        foreach ($documents as $document) {
+            $totalRequested = $document->items()->sum('requested_qty');
+            $totalTransferred = $document->items()->sum('transferred_qty') ?? 0;
+
+            $document->total_transferred = $totalTransferred;
+            $document->completion_rate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
+
+            // Also update document status if needed
+            if ($totalTransferred >= $totalRequested && $document->status != 'closed') {
+                $document->status = 'closed';
+                $document->save();
+            } elseif ($totalTransferred > 0 && $document->status == 'booked') {
+                $document->status = 'partial';
+                $document->save();
+            }
+        }
+
+        return view('documents.index', compact('documents', 'totalCount'));
+    }
 
     public function show($id)
     {
@@ -608,7 +611,7 @@ class ReservationDocumentController extends Controller
             if ($item && $item->document_id == $document->id) {
                 // Cek apakah quantity editable berdasarkan MRP
                 $isQtyEditable = true;
-                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21'];
+                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23'];
 
                 if ($item->dispo && !in_array($item->dispo, $allowedMRP)) {
                     $isQtyEditable = false;
@@ -767,12 +770,94 @@ class ReservationDocumentController extends Controller
     }
 
     /**
+     * Print selected items from a document
+     */
+    public function printSelected(Request $request, $id)
+    {
+        $document = ReservationDocument::with('items')->findOrFail($id);
+
+        // Decode selected items
+        $selectedItems = json_decode($request->input('selected_items', '[]'), true);
+
+        if (empty($selectedItems)) {
+            return redirect()->route('documents.print', $document->id)
+                ->with('error', 'No items selected for printing.');
+        }
+
+        // Get selected items
+        $items = $document->items()->whereIn('id', $selectedItems)->get();
+
+        // Process items data untuk print - ambil sortf dari pro_details
+        $items->transform(function ($item) {
+            // Pastikan data konsisten
+            $sources = [];
+            $proDetails = [];
+
+            if (is_string($item->sources)) {
+                $sources = json_decode($item->sources, true) ?? [];
+            } elseif (is_array($item->sources)) {
+                $sources = $item->sources;
+            }
+
+            if (is_string($item->pro_details)) {
+                $proDetails = json_decode($item->pro_details, true) ?? [];
+            } elseif (is_array($item->pro_details)) {
+                $proDetails = $item->pro_details;
+            }
+
+            // Process sources untuk print
+            $processedSources = [];
+            foreach ($sources as $source) {
+                $processedSources[] = \App\Helpers\NumberHelper::removeLeadingZeros($source);
+            }
+
+            // Ambil sortf dari pro_details pertama
+            $sortf = null;
+            if (!empty($proDetails) && isset($proDetails[0]['sortf'])) {
+                $sortf = $proDetails[0]['sortf'];
+            }
+
+            // Add processed data
+            $item->processed_sources = $processedSources;
+            $item->sortf = $sortf ?? $item->sortf ?? '-';
+
+            return $item;
+        });
+
+        return view('documents.print-selected', compact('document', 'items'));
+    }
+
+    /**
      * PDF Export - redirect to print page with auto-print
      */
     public function pdf($id)
     {
         // Redirect to print page with auto-print parameter
         return redirect()->route('documents.print', ['id' => $id, 'autoPrint' => 'true']);
+    }
+
+    /**
+     * Export selected items to Excel
+     */
+    public function exportExcel(Request $request, $id)
+    {
+        $document = ReservationDocument::with('items')->findOrFail($id);
+
+        // Decode selected items
+        $selectedItems = json_decode($request->input('selected_items', '[]'), true);
+
+        if (empty($selectedItems)) {
+            return redirect()->route('documents.print', $document->id)
+                ->with('error', 'No items selected for export.');
+        }
+
+        // Get selected items
+        $items = $document->items()->whereIn('id', $selectedItems)->get();
+
+        // Create export
+        $filename = 'document_' . $document->document_no . '_selected_items_' . date('Ymd_His') . '.xlsx';
+
+        return Excel::download(new DocumentItemsExport($items, $document), $filename);
     }
 
     /**
@@ -830,6 +915,49 @@ class ReservationDocumentController extends Controller
         });
 
         return view('documents.export-pdf', compact('documents'));
+    }
+
+    /**
+     * Delete selected items from document
+     */
+    public function deleteSelectedItems(Request $request, $id)
+    {
+        $document = ReservationDocument::findOrFail($id);
+
+        // Hanya dokumen dengan status 'booked' yang bisa dihapus itemnya
+        if ($document->status != 'booked') {
+            return redirect()->route('documents.edit', $document->id)
+                ->with('error', 'Only documents with status "Booked" can have items deleted.');
+        }
+
+        // Decode selected items
+        $selectedItems = json_decode($request->input('selected_items', '[]'), true);
+
+        if (empty($selectedItems)) {
+            return redirect()->route('documents.edit', $document->id)
+                ->with('error', 'No items selected for deletion.');
+        }
+
+        // Delete selected items
+        $deletedCount = ReservationDocumentItem::where('document_id', $document->id)
+            ->whereIn('id', $selectedItems)
+            ->delete();
+
+        // Update document totals
+        $document->total_items = $document->items()->count();
+        $document->total_qty = $document->items()->sum('requested_qty');
+        $document->save();
+
+        Log::info('Selected items deleted from document', [
+            'document_id' => $document->id,
+            'document_no' => $document->document_no,
+            'deleted_items_count' => $deletedCount,
+            'user_id' => Auth::id(),
+            'user_name' => Auth::user()->name
+        ]);
+
+        return redirect()->route('documents.edit', $document->id)
+            ->with('success', $deletedCount . ' items deleted successfully.');
     }
 
     /**
@@ -916,3 +1044,4 @@ class ReservationDocumentController extends Controller
         }
     }
 }
+

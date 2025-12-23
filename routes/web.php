@@ -47,7 +47,7 @@ Route::middleware(['auth'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Profile Routes - Fixed: Support both 'profile' and 'profile.index'
+    // Profile Routes
     Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
     Route::get('/profile/index', [ProfileController::class, 'index'])->name('profile.index');
     Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -100,6 +100,15 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{id}', [ReservationDocumentController::class, 'update'])->name('update');
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
+
+        // Print selected items - DIPERBAIKI: POST bukan GET
+        Route::post('/{id}/print-selected', [ReservationDocumentController::class, 'printSelected'])->name('print-selected');
+
+        // Export Excel
+        Route::post('/{id}/export-excel', [ReservationDocumentController::class, 'exportExcel'])->name('export-excel');
+
+        // Delete selected items
+        Route::delete('/{id}/items/delete-selected', [ReservationDocumentController::class, 'deleteSelectedItems'])->name('items.delete-selected');
 
         // Transfer from document
         Route::post('/{id}/create-transfer', [TransferController::class, 'createTransfer'])->name('create-transfer');

@@ -6,11 +6,10 @@ use App\Models\ReservationDocument;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ReservationDocumentsSelectedExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles
+class ReservationDocumentsSelectedExport implements FromCollection, WithHeadings, WithMapping, WithStyles
 {
     protected $documentIds;
 
@@ -31,17 +30,25 @@ class ReservationDocumentsSelectedExport implements FromCollection, WithHeadings
     {
         return [
             'Document No',
-            'Plant',
+            'Plant Request',
+            'Plant Supply',
             'Status',
             'Total Items',
-            'Total Quantity',
+            'Total Qty',
+            'Total Transferred',
+            'Completion Rate (%)',
             'Created By',
             'Created At',
             'Material Code',
-            'Description',
+            'Material Description',
             'Unit',
             'Requested Qty',
-            'Source PRO Numbers'
+            'Transferred Qty',
+            'Remaining Qty',
+            'Source PRO Numbers',
+            'Add Info',
+            'MRP',
+            'Sales Orders'
         ];
     }
 
@@ -50,42 +57,56 @@ class ReservationDocumentsSelectedExport implements FromCollection, WithHeadings
         $rows = [];
 
         foreach ($document->items as $item) {
-            $sources = json_decode($item->sources, true) ?? [];
+            // Process sources
+            $sources = [];
+            if (is_string($item->sources)) {
+                $sources = json_decode($item->sources, true) ?? [];
+            } elseif (is_array($item->sources)) {
+                $sources = $item->sources;
+            }
+
             $processedSources = array_map(function($source) {
                 return \App\Helpers\NumberHelper::removeLeadingZeros($source);
             }, $sources);
 
+            // Process sales orders
+            $salesOrders = [];
+            if (is_string($item->sales_orders)) {
+                $salesOrders = json_decode($item->sales_orders, true) ?? [];
+            } elseif (is_array($item->sales_orders)) {
+                $salesOrders = $item->sales_orders;
+            }
+
+            // Get sortf from item
+            $sortf = $item->sortf;
+            if (empty($sortf) && is_string($item->pro_details)) {
+                $proDetails = json_decode($item->pro_details, true) ?? [];
+                if (!empty($proDetails) && isset($proDetails[0]['sortf'])) {
+                    $sortf = $proDetails[0]['sortf'];
+                }
+            }
+
             $rows[] = [
                 $document->document_no,
                 $document->plant,
+                $document->sloc_supply ?? '',
                 $document->status,
                 $document->total_items,
                 \App\Helpers\NumberHelper::formatQuantity($document->total_qty),
+                \App\Helpers\NumberHelper::formatQuantity($document->total_transferred ?? 0),
+                round($document->completion_rate ?? 0, 2),
                 $document->created_by_name,
                 \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('Y-m-d H:i:s'),
                 $item->material_code,
                 $item->material_description,
                 $item->unit,
                 \App\Helpers\NumberHelper::formatQuantity($item->requested_qty),
-                implode(', ', $processedSources)
-            ];
-        }
-
-        // Jika document tidak memiliki items, tetap tampilkan data document
-        if (empty($rows)) {
-            $rows[] = [
-                $document->document_no,
-                $document->plant,
-                $document->status,
-                $document->total_items,
-                \App\Helpers\NumberHelper::formatQuantity($document->total_qty),
-                $document->created_by_name,
-                \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('Y-m-d H:i:s'),
-                '',
-                '',
-                '',
-                '',
-                ''
+                \App\Helpers\NumberHelper::formatQuantity($item->transferred_qty ?? 0),
+                \App\Helpers\NumberHelper::formatQuantity(($item->requested_qty - ($item->transferred_qty ?? 0))),
+                implode(', ', $processedSources),
+                $sortf ?? '',
+                $item->dispo ?? '',
+                implode(', ', $salesOrders)
             ];
         }
 
@@ -96,7 +117,7 @@ class ReservationDocumentsSelectedExport implements FromCollection, WithHeadings
     {
         return [
             1 => ['font' => ['bold' => true]],
-            'A:L' => ['alignment' => ['wrapText' => true]],
         ];
     }
 }
+
