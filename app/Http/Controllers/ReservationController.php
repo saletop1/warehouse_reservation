@@ -227,7 +227,7 @@ class ReservationController extends Controller
         if (!$dispo) return true;
 
         // MRP yang diperbolehkan untuk edit quantity
-        $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23'];
+        $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2', 'WE2'];
 
         return in_array($dispo, $allowedMRP);
     }
@@ -1859,7 +1859,7 @@ class ReservationController extends Controller
      */
     private function getAllowedMRP()
     {
-        return ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23'];
+        return ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2'];
     }
 
     /**

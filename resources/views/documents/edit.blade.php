@@ -142,7 +142,7 @@
 
                                             // Check if quantity is editable based on MRP
                                             $isQtyEditable = $item->is_qty_editable ?? true;
-                                            $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23'];
+                                            $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2'];
 
                                             // Pastikan dispo ada di item
                                             $dispo = $item->dispo ?? null;

@@ -611,7 +611,7 @@ class ReservationDocumentController extends Controller
             if ($item && $item->document_id == $document->id) {
                 // Cek apakah quantity editable berdasarkan MRP
                 $isQtyEditable = true;
-                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23'];
+                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2'];
 
                 if ($item->dispo && !in_array($item->dispo, $allowedMRP)) {
                     $isQtyEditable = false;
