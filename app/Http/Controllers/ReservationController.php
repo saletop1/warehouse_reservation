@@ -1324,289 +1324,255 @@ class ReservationController extends Controller
         }
     }
 
-    /**
-     * AJAX: Load multiple PRO - DIPERBAIKI untuk include data tambahan dan konsolidasi material
-     */
-    public function loadMultiplePro(Request $request)
-    {
-        try {
-            $plant = $request->input('plant');
-            $materialTypes = $request->input('material_types', []);
-            $materials = $request->input('materials', []);
-            $proNumbers = $request->input('pro_numbers', []);
+                /**
+             * AJAX: Load multiple PRO - DIPERBAIKI untuk include data tambahan dan konsolidasi material
+             */
+            public function loadMultiplePro(Request $request)
+            {
+                try {
+                    $plant = $request->input('plant');
+                    $materialTypes = $request->input('material_types', []);
+                    $materials = $request->input('materials', []);
+                    $proNumbers = $request->input('pro_numbers', []);
 
-            Log::info('🔍 DEBUG - Starting loadMultiplePro', [
-                'plant' => $plant,
-                'materials_raw' => $materials,
-                'pro_numbers_raw' => $proNumbers,
-                'material_types' => $materialTypes
-            ]);
+                    \Log::info('🔍 DEBUG - Starting loadMultiplePro', [
+                        'plant' => $plant,
+                        'materials_count' => count($materials),
+                        'pro_numbers_count' => count($proNumbers),
+                        'materials_sample' => array_slice($materials, 0, 3),
+                        'pro_numbers_sample' => array_slice($proNumbers, 0, 3)
+                    ]);
 
-            if (empty($proNumbers) || empty($materials)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No PRO numbers or materials selected'
-                ], 400);
-            }
+                    if (empty($proNumbers) || empty($materials)) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'No PRO numbers or materials selected',
+                            'debug' => [
+                                'pro_numbers_empty' => empty($proNumbers),
+                                'materials_empty' => empty($materials),
+                                'pro_numbers_count' => count($proNumbers),
+                                'materials_count' => count($materials)
+                            ]
+                        ], 400);
+                    }
 
-            // Format material codes to 18-digit
-            $formattedMaterials = array_map(function($material) {
-                if (ctype_digit($material)) {
-                    return str_pad($material, 18, '0', STR_PAD_LEFT);
-                }
-                return $material;
-            }, $materials);
+                    // Format material codes to 18-digit
+                    $formattedMaterials = array_map(function($material) {
+                        if (ctype_digit($material)) {
+                            return str_pad($material, 18, '0', STR_PAD_LEFT);
+                        }
+                        return $material;
+                    }, $materials);
 
-            // Format PRO numbers to 12-digit
-            $formattedProNumbers = array_map(function($pro) {
-                $pro = trim($pro);
-                if (ctype_digit($pro)) {
-                    return str_pad($pro, 12, '0', STR_PAD_LEFT);
-                }
-                return $pro;
-            }, $proNumbers);
+                    // Format PRO numbers to 12-digit
+                    $formattedProNumbers = array_map(function($pro) {
+                        $pro = trim($pro);
+                        if (ctype_digit($pro)) {
+                            return str_pad($pro, 12, '0', STR_PAD_LEFT);
+                        }
+                        return $pro;
+                    }, $proNumbers);
 
-            // PERUBAHAN: Set group_concat_max_len untuk menangani banyak data
-            DB::statement("SET SESSION group_concat_max_len = 1000000;");
+                    \Log::info('🔧 Formatted data for query', [
+                        'formatted_materials_sample' => array_slice($formattedMaterials, 0, 3),
+                        'formatted_pro_numbers_sample' => array_slice($formattedProNumbers, 0, 3)
+                    ]);
 
-            // PERUBAHAN: Query utama dengan GROUP BY matnr untuk konsolidasi
-            $materialData = DB::table('sap_reservations')
-                ->select(
-                    'matnr as material_code',
-                    DB::raw('MAX(maktx) as material_description'),
-                    DB::raw('MAX(meins) as unit'),
-                    DB::raw('MAX(sortf) as sortf'), // Ambil salah satu sortf
-                    DB::raw('MAX(dispo) as dispo'), // Ambil salah satu dispo
-                    // Tambahan field baru
-                    DB::raw('MAX(mathd) as mathd'),
-                    DB::raw('MAX(makhd) as makhd'),
-                    DB::raw('MAX(groes) as groes'),
-                    DB::raw('MAX(ferth) as ferth'),
-                    DB::raw('MAX(zeinr) as zeinr'),
-                    DB::raw('SUM(psmng) as total_qty'), // Jumlahkan semua qty
-                    DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'), // Gabungkan semua PRO
-                    DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
-                    DB::raw('COUNT(DISTINCT sap_order) as pro_count')
-                )
-                ->where('sap_plant', $plant)
-                ->whereIn('matnr', $formattedMaterials)
-                ->where(function($query) use ($formattedProNumbers) {
-                    $query->whereIn('sap_order', $formattedProNumbers)
-                        ->orWhereIn('aufnr', $formattedProNumbers);
-                })
-                ->groupBy('matnr') // PERUBAHAN: Hanya group by matnr untuk konsolidasi
-                ->orderBy('matnr')
-                ->get();
+                    // PERUBAHAN: Set group_concat_max_len untuk menangani banyak data
+                    DB::statement("SET SESSION group_concat_max_len = 1000000;");
 
-            // Debug: Log semua data yang diambil
-            Log::info('Step 5 - Loaded consolidated material data', [
-                'count' => $materialData->count(),
-                'sample_data' => $materialData->take(2)->map(function($item) {
-                    return [
-                        'matnr' => $item->material_code,
-                        'sortf' => $item->sortf,
-                        'mathd' => $item->mathd,
-                        'makhd' => $item->makhd,
-                        'total_qty' => $item->total_qty,
-                        'pro_count' => $item->pro_count
-                    ];
-                })
-            ]);
+                    // Query untuk mengambil data
+                    $query = DB::table('sap_reservations')
+                        ->select(
+                            'matnr as material_code',
+                            DB::raw('MAX(maktx) as material_description'),
+                            DB::raw('MAX(meins) as unit'),
+                            DB::raw('MAX(sortf) as sortf'),
+                            DB::raw('MAX(dispo) as dispo'),
+                            DB::raw('MAX(dispc) as dispc'),
+                            DB::raw('MAX(mathd) as mathd'),
+                            DB::raw('MAX(makhd) as makhd'),
+                            DB::raw('MAX(groes) as groes'),
+                            DB::raw('MAX(ferth) as ferth'),
+                            DB::raw('MAX(zeinr) as zeinr'),
+                            DB::raw('SUM(psmng) as total_qty'),
+                            DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'),
+                            DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
+                            DB::raw('COUNT(DISTINCT sap_order) as pro_count')
+                        )
+                        ->where('sap_plant', $plant)
+                        ->whereIn('matnr', $formattedMaterials)
+                        ->where(function($query) use ($formattedProNumbers) {
+                            $query->whereIn('sap_order', $formattedProNumbers)
+                                ->orWhereIn('aufnr', $formattedProNumbers);
+                        })
+                        ->groupBy('matnr')
+                        ->orderBy('matnr');
 
-            if ($materialData->isEmpty()) {
-                // Try alternative format
-                $altFormattedMaterials = array_map(function($material) {
-                    return ltrim($material, '0');
-                }, $formattedMaterials);
+                    \Log::info('📝 SQL Query being executed:', [
+                        'sql' => $query->toSql(),
+                        'bindings' => $query->getBindings()
+                    ]);
 
-                $altFormattedProNumbers = array_map(function($pro) {
-                    return ltrim($pro, '0');
-                }, $formattedProNumbers);
+                    $materialData = $query->get();
 
-                $alternativeData = DB::table('sap_reservations')
-                    ->select(
-                        'matnr as material_code',
-                        DB::raw('MAX(maktx) as material_description'),
-                        DB::raw('MAX(meins) as unit'),
-                        DB::raw('MAX(sortf) as sortf'),
-                        DB::raw('MAX(dispo) as dispo'),
-                        // Tambahan field baru
-                        DB::raw('MAX(mathd) as mathd'),
-                        DB::raw('MAX(makhd) as makhd'),
-                        DB::raw('MAX(groes) as groes'),
-                        DB::raw('MAX(ferth) as ferth'),
-                        DB::raw('MAX(zeinr) as zeinr'),
-                        DB::raw('SUM(psmng) as total_qty'),
-                        DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'),
-                        DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
-                        DB::raw('COUNT(DISTINCT sap_order) as pro_count')
-                    )
-                    ->where('sap_plant', $plant)
-                    ->where(function($query) use ($altFormattedMaterials, $formattedMaterials) {
-                        $query->whereIn('matnr', $formattedMaterials)
-                            ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM matnr)'), $altFormattedMaterials);
-                    })
-                    ->where(function($query) use ($altFormattedProNumbers, $formattedProNumbers) {
-                        $query->whereIn('sap_order', $formattedProNumbers)
-                            ->orWhereIn('aufnr', $formattedProNumbers)
-                            ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM sap_order)'), $altFormattedProNumbers)
-                            ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM aufnr)'), $altFormattedProNumbers);
-                    })
-                    ->groupBy('matnr')
-                    ->orderBy('matnr')
-                    ->get();
+                    \Log::info('📊 Query results', [
+                        'count' => $materialData->count(),
+                        'sample' => $materialData->take(2)->map(function($item) {
+                            return [
+                                'material_code' => $item->material_code,
+                                'dispo' => $item->dispo,
+                                'dispc' => $item->dispc,
+                                'total_qty' => $item->total_qty,
+                                'source_pro_numbers' => $item->source_pro_numbers
+                            ];
+                        })
+                    ]);
 
-                if ($alternativeData->isEmpty()) {
+                    if ($materialData->isEmpty()) {
+                        \Log::warning('⚠️ No data found with formatted values, trying alternative format');
+
+                        // Try alternative format (without leading zeros)
+                        $altFormattedMaterials = array_map(function($material) {
+                            return ltrim($material, '0');
+                        }, $formattedMaterials);
+
+                        $altFormattedProNumbers = array_map(function($pro) {
+                            return ltrim($pro, '0');
+                        }, $formattedProNumbers);
+
+                        $alternativeQuery = DB::table('sap_reservations')
+                            ->select(
+                                'matnr as material_code',
+                                DB::raw('MAX(maktx) as material_description'),
+                                DB::raw('MAX(meins) as unit'),
+                                DB::raw('MAX(sortf) as sortf'),
+                                DB::raw('MAX(dispo) as dispo'),
+                                DB::raw('MAX(dispc) as dispc'),
+                                DB::raw('MAX(mathd) as mathd'),
+                                DB::raw('MAX(makhd) as makhd'),
+                                DB::raw('MAX(groes) as groes'),
+                                DB::raw('MAX(ferth) as ferth'),
+                                DB::raw('MAX(zeinr) as zeinr'),
+                                DB::raw('SUM(psmng) as total_qty'),
+                                DB::raw('GROUP_CONCAT(DISTINCT sap_order) as source_pro_numbers'),
+                                DB::raw('GROUP_CONCAT(DISTINCT CONCAT(kdauf, "-", kdpos)) as sales_orders'),
+                                DB::raw('COUNT(DISTINCT sap_order) as pro_count')
+                            )
+                            ->where('sap_plant', $plant)
+                            ->where(function($query) use ($altFormattedMaterials, $formattedMaterials) {
+                                $query->whereIn('matnr', $formattedMaterials)
+                                    ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM matnr)'), $altFormattedMaterials);
+                            })
+                            ->where(function($query) use ($altFormattedProNumbers, $formattedProNumbers) {
+                                $query->whereIn('sap_order', $formattedProNumbers)
+                                    ->orWhereIn('aufnr', $formattedProNumbers)
+                                    ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM sap_order)'), $altFormattedProNumbers)
+                                    ->orWhereIn(DB::raw('TRIM(LEADING "0" FROM aufnr)'), $altFormattedProNumbers);
+                            })
+                            ->groupBy('matnr')
+                            ->orderBy('matnr');
+
+                        $alternativeData = $alternativeQuery->get();
+
+                        \Log::info('🔍 Alternative query results', [
+                            'count' => $alternativeData->count(),
+                            'sample' => $alternativeData->take(2)
+                        ]);
+
+                        if ($alternativeData->isEmpty()) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'The selected materials do not exist in the chosen PRO numbers',
+                                'debug_info' => [
+                                    'plant' => $plant,
+                                    'materials_selected' => $materials,
+                                    'pro_numbers_selected' => $proNumbers,
+                                    'formatted_materials' => $formattedMaterials,
+                                    'formatted_pro_numbers' => $formattedProNumbers,
+                                    'database_check' => 'No matching records found in sap_reservations'
+                                ]
+                            ], 404);
+                        }
+
+                        $materialData = $alternativeData;
+                    }
+
+                    // Transform data
+                    $transformedData = [];
+                    foreach ($materialData as $item) {
+                        $sources = $item->source_pro_numbers ? explode(',', $item->source_pro_numbers) : [];
+                        $salesOrders = $item->sales_orders ? explode(',', $item->sales_orders) : [];
+
+                        // Format material code untuk display
+                        $displayMaterialCode = $item->material_code;
+                        if (ctype_digit($displayMaterialCode)) {
+                            $displayMaterialCode = ltrim($displayMaterialCode, '0');
+                        }
+
+                        // Format sources untuk display
+                        $displaySources = array_map(function($source) {
+                            if (ctype_digit($source)) {
+                                return ltrim($source, '0');
+                            }
+                            return $source;
+                        }, $sources);
+
+                        $transformedData[] = [
+                            'material_code' => $item->material_code,
+                            'material_code_display' => $displayMaterialCode,
+                            'material_description' => $item->material_description,
+                            'unit' => $item->unit,
+                            'sortf' => $item->sortf,
+                            'dispo' => $item->dispo,
+                            'dispc' => $item->dispc,
+                            'total_qty' => $item->total_qty,
+                            'sources' => $displaySources,
+                            'sources_raw' => $sources,
+                            'sales_orders' => $salesOrders,
+                            'sales_orders_raw' => $salesOrders,
+                            'source_count' => $item->pro_count,
+                            'mathd' => $item->mathd,
+                            'makhd' => $item->makhd,
+                            'groes' => $item->groes,
+                            'ferth' => $item->ferth,
+                            'zeinr' => $item->zeinr,
+                            'is_consolidated' => count($sources) > 1
+                        ];
+                    }
+
+                    \Log::info('✅ Successfully transformed data', [
+                        'transformed_count' => count($transformedData),
+                        'first_item' => $transformedData[0] ?? 'No data'
+                    ]);
+
+                    return response()->json([
+                        'success' => true,
+                        'data' => $transformedData,
+                        'count' => count($transformedData),
+                        'debug' => [
+                            'query_matched' => $materialData->count(),
+                            'transformed' => count($transformedData)
+                        ]
+                    ]);
+
+                } catch (\Exception $e) {
+                    \Log::error('🔥 Failed to load PRO data: ' . $e->getMessage(), [
+                        'trace' => $e->getTraceAsString(),
+                        'request_data' => $request->all()
+                    ]);
+
                     return response()->json([
                         'success' => false,
-                        'message' => 'The selected materials do not exist in the chosen PRO numbers',
-                        'details' => [
-                            'Plant: ' . $plant,
-                            'Materials selected (UI format): ' . implode(', ', $materials),
-                            'PRO numbers selected (UI format): ' . implode(', ', $proNumbers)
+                        'message' => 'System error: ' . $e->getMessage(),
+                        'error_details' => [
+                            'message' => $e->getMessage(),
+                            'file' => $e->getFile(),
+                            'line' => $e->getLine()
                         ]
-                    ], 404);
+                    ], 500);
                 }
-
-                $materialData = $alternativeData;
             }
-
-            // Transform data dengan field tambahan
-            $transformedData = [];
-            foreach ($materialData as $item) {
-                $sources = $item->source_pro_numbers ? explode(',', $item->source_pro_numbers) : [];
-                $salesOrders = $item->sales_orders ? explode(',', $item->sales_orders) : [];
-
-                // Format material code untuk display
-                $displayMaterialCode = $item->material_code;
-                if (ctype_digit($displayMaterialCode)) {
-                    $displayMaterialCode = ltrim($displayMaterialCode, '0');
-                }
-
-                // Format sources untuk display
-                $displaySources = array_map(function($source) {
-                    if (ctype_digit($source)) {
-                        return ltrim($source, '0');
-                    }
-                    return $source;
-                }, $sources);
-
-                // Get PRO details dengan field tambahan
-                $proDetails = [];
-                foreach ($sources as $source) {
-                    $proData = DB::table('sap_reservations')
-                        ->where('sap_plant', $plant)
-                        ->where('matnr', $item->material_code)
-                        ->where('sap_order', $source)
-                        ->select('psmng', 'kdauf', 'kdpos', 'dispo', 'sortf', 'mathd', 'makhd', 'groes', 'ferth', 'zeinr')
-                        ->first();
-
-                    $displayPro = $source;
-                    if (ctype_digit($displayPro)) {
-                        $displayPro = ltrim($displayPro, '0');
-                    }
-
-                    $salesOrder = ($proData && $proData->kdauf && $proData->kdpos)
-                        ? $proData->kdauf . '-' . $proData->kdpos
-                        : (($proData && $proData->kdauf) ? $proData->kdauf : null);
-
-                    // Hanya ambil field tambahan jika bukan null atau 0
-                    $additionalData = [];
-                    if ($proData) {
-                        if (!empty($proData->mathd) && $proData->mathd != '0' && strtolower($proData->mathd) != 'null') {
-                            $additionalData['mathd'] = $proData->mathd;
-                        }
-                        if (!empty($proData->makhd) && $proData->makhd != '0' && strtolower($proData->makhd) != 'null') {
-                            $additionalData['makhd'] = $proData->makhd;
-                        }
-                        if (!empty($proData->groes) && $proData->groes != '0' && strtolower($proData->groes) != 'null') {
-                            $additionalData['groes'] = $proData->groes;
-                        }
-                        if (!empty($proData->ferth) && $proData->ferth != '0' && strtolower($proData->ferth) != 'null') {
-                            $additionalData['ferth'] = $proData->ferth;
-                        }
-                        if (!empty($proData->zeinr) && $proData->zeinr != '0' && strtolower($proData->zeinr) != 'null') {
-                            $additionalData['zeinr'] = $proData->zeinr;
-                        }
-                    }
-
-                    $proDetails[] = array_merge([
-                        'pro_number' => $displayPro,
-                        'pro_number_raw' => $source,
-                        'quantity' => $proData ? $proData->psmng : 0,
-                        'kdauf' => $proData ? $proData->kdauf : null,
-                        'kdpos' => $proData ? $proData->kdpos : null,
-                        'sales_order' => $salesOrder,
-                        'dispo' => $proData ? $proData->dispo : null,
-                        'sortf' => $proData ? $proData->sortf : null
-                    ], $additionalData);
-                }
-
-                // Filter field tambahan di level material
-                $materialAdditionalData = [];
-                if (!empty($item->mathd) && $item->mathd != '0' && strtolower($item->mathd) != 'null') {
-                    $materialAdditionalData['mathd'] = $item->mathd;
-                }
-                if (!empty($item->makhd) && $item->makhd != '0' && strtolower($item->makhd) != 'null') {
-                    $materialAdditionalData['makhd'] = $item->makhd;
-                }
-                if (!empty($item->groes) && $item->groes != '0' && strtolower($item->groes) != 'null') {
-                    $materialAdditionalData['groes'] = $item->groes;
-                }
-                if (!empty($item->ferth) && $item->ferth != '0' && strtolower($item->ferth) != 'null') {
-                    $materialAdditionalData['ferth'] = $item->ferth;
-                }
-                if (!empty($item->zeinr) && $item->zeinr != '0' && strtolower($item->zeinr) != 'null') {
-                    $materialAdditionalData['zeinr'] = $item->zeinr;
-                }
-
-                $transformedData[] = array_merge([
-                    'material_code' => $item->material_code,
-                    'material_code_display' => $displayMaterialCode,
-                    'material_description' => $item->material_description,
-                    'unit' => $item->unit,
-                    'sortf' => $item->sortf,
-                    'dispo' => $item->dispo,
-                    'total_qty' => $item->total_qty,
-                    'sources' => $displaySources,
-                    'sources_raw' => $sources,
-                    'sales_orders' => $salesOrders,
-                    'sales_orders_raw' => $salesOrders,
-                    'pro_details' => $proDetails,
-                    'source_count' => $item->pro_count,
-                    'is_consolidated' => count($sources) > 1 // Flag untuk material yang dikonsolidasi
-                ], $materialAdditionalData);
-            }
-
-            Log::info('✅ Step 5 - Successfully loaded consolidated material data', [
-                'transformed_count' => count($transformedData),
-                'consolidated_materials' => count(array_filter($transformedData, function($item) {
-                    return $item['is_consolidated'];
-                })),
-                'sample_data' => $transformedData[0] ?? []
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $transformedData,
-                'count' => count($transformedData),
-                'consolidated_count' => count(array_filter($transformedData, function($item) {
-                    return $item['is_consolidated'];
-                }))
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('🔥 Failed to load PRO data: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-                'request_data' => $request->all()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'System error: ' . $e->getMessage()
-            ], 500);
-        }
-    }
 
                 /**
              * Create document dengan CSRF protection dan chunk processing untuk banyak data
@@ -1776,6 +1742,7 @@ class ReservationController extends Controller
                             'unit' => $material['unit'] ?? 'PC',
                             'sortf' => $material['sortf'] ?? null,
                             'dispo' => $dispo,
+                            'dispc' => $material['dispc'] ?? null, // TAMBAHAN: Simpan DISPC (MRP Comp)
                             'is_qty_editable' => $isQtyEditable,
                             'requested_qty' => floatval($material['requested_qty']),
                             'transferred_qty' => 0, // Default 0 untuk transferred quantity

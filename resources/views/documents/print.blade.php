@@ -59,6 +59,9 @@
             .item-checkbox {
                 display: none !important;
             }
+            .search-box {
+                display: none !important;
+            }
         }
 
         body {
@@ -234,6 +237,39 @@
             margin-right: 5px;
         }
 
+        /* Search box styling */
+        .search-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+        .search-box .input-group {
+            max-width: 400px;
+        }
+
+        .search-box .form-control {
+            font-size: 14px;
+        }
+
+        .search-box .input-group-text {
+            background-color: #e9ecef;
+            border-color: #ced4da;
+        }
+
+        .search-stats {
+            font-size: 13px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .search-highlight {
+            background-color: #fff3cd !important;
+            border-color: #ffc107 !important;
+        }
+
         /* Debug info */
         .debug-info {
             border: 1px solid red;
@@ -248,26 +284,45 @@
         <!-- Print Header (Visible only in browser) -->
         <div class="row mb-2 no-print">
             <div class="col-12">
-                <div class="btn-group d-flex justify-content-between align-items-center py-2 compact-padding">
-                    <div class="compact-text">
-                        <i class="fas fa-print"></i> Print Preview - {{ $document->document_no }}
-                    </div>
-                    <div>
-                        <button onclick="window.print()" class="btn btn-primary btn-sm">
-                            <i class="fas fa-print"></i> Print All
-                        </button>
-                        <button id="printSelectedBtn" class="btn btn-info btn-sm" disabled>
-                            <i class="fas fa-print"></i> Print Selected
-                        </button>
-                        <button id="exportExcelBtn" class="btn btn-success btn-sm" disabled>
-                            <i class="fas fa-file-excel"></i> Export Excel
-                        </button>
-                        <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-danger btn-sm" target="_blank">
-                            <i class="fas fa-file-pdf"></i> Export PDF
-                        </a>
-                        <button onclick="closeWindow()" class="btn btn-secondary btn-sm">
-                            <i class="fas fa-times"></i> Close
-                        </button>
+                <!-- Search Box -->
+                <div class="search-box no-print">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="liveSearch"
+                                       placeholder="Search items by material code, description, sales order, PRO numbers, etc...">
+                                <button class="btn btn-outline-secondary" type="button" id="clearSearch">
+                                    <i class="fas fa-times"></i> Clear
+                                </button>
+                            </div>
+                            <div class="search-stats mt-2">
+                                <span id="searchStats">
+                                    Total items: {{ count($document->items) }} | Showing all items
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <div class="btn-group">
+                                <button onclick="window.print()" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-print"></i> Print All
+                                </button>
+                                <button id="printSelectedBtn" class="btn btn-info btn-sm" disabled>
+                                    <i class="fas fa-print"></i> Print Selected
+                                </button>
+                                <button id="exportExcelBtn" class="btn btn-success btn-sm" disabled>
+                                    <i class="fas fa-file-excel"></i> Export Excel
+                                </button>
+                                <a href="{{ route('documents.pdf', $document->id) }}" class="btn btn-danger btn-sm" target="_blank">
+                                    <i class="fas fa-file-pdf"></i> Export PDF
+                                </a>
+                                <button onclick="closeWindow()" class="btn btn-secondary btn-sm">
+                                    <i class="fas fa-times"></i> Close
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -369,6 +424,7 @@
                         $hasGroes = false;
                         $hasFerth = false;
                         $hasZeinr = false;
+                        $hasMrpComp = false;
 
                         // Check each item for data
                         foreach ($document->items as $item) {
@@ -380,7 +436,7 @@
                                 $proDetails = $item->pro_details;
                             }
 
-                            // Check for data in pro_details
+                            // Check for data in pro_details for other columns
                             foreach ($proDetails as $proDetail) {
                                 if (!empty($proDetail['sortf']) && $proDetail['sortf'] != '-' && !$hasAddInfo) {
                                     $hasAddInfo = true;
@@ -395,38 +451,55 @@
                                     $hasZeinr = true;
                                 }
                             }
+
+                            // Check for MRP COMP from dispc column in reservation_document_items
+                            if (!empty($item->dispc) && $item->dispc != '-' && $item->dispc != 'null' && $item->dispc != '0' && !$hasMrpComp) {
+                                $hasMrpComp = true;
+                            }
+                        }
+
+                        // Calculate column widths based on which columns are visible
+                        $materialCodeWidth = $hasAddInfo ? '8%' : '10%';
+                        $descriptionWidth = $hasAddInfo ? '18%' : '20%';
+
+                        if ($hasMrpComp) {
+                            $materialCodeWidth = $hasAddInfo ? '7%' : '9%';
+                            $descriptionWidth = $hasAddInfo ? '16%' : '18%';
                         }
                     @endphp
 
-                    <table class="table table-bordered table-print compact-table">
+                    <table class="table table-bordered table-print compact-table" id="itemsTable">
                         <thead>
                             <tr>
                                 <th style="width: 3%; font-size: 8pt;" class="no-print">
                                     <input type="checkbox" class="select-all-checkbox" id="selectAllCheckbox">
                                 </th>
                                 <th style="width: 3%; font-size: 8pt;">No</th>
-                                <th style="width: {{ $hasAddInfo ? '10%' : '12%' }}; font-size: 8pt;">Material Code</th>
-                                <th style="width: {{ $hasAddInfo ? '20%' : '22%' }}; font-size: 8pt;">Description</th>
+                                <th style="width: {{ $materialCodeWidth }}; font-size: 8pt;">Material Code</th>
+                                <th style="width: {{ $descriptionWidth }}; font-size: 8pt;">Description</th>
                                 @if($hasAddInfo)
-                                <th style="width: 8%; font-size: 8pt;">Add Info</th>
+                                <th style="width: 6%; font-size: 8pt;">Add Info</th>
                                 @endif
                                 <th style="width: 5%; font-size: 8pt;">Req. Qty</th>
                                 <th style="width: 4%; font-size: 8pt;">Uom</th>
                                 <th style="width: 8%; font-size: 8pt;">Sales Order</th>
-                                <th style="width: 15%; font-size: 8pt;">PRO Numbers</th>
+                                <th style="width: {{ $hasMrpComp ? '12%' : '15%' }}; font-size: 8pt;">PRO Numbers</th>
                                 <th style="width: 4%; font-size: 8pt;">MRP</th>
                                 @if($hasGroes)
-                                <th style="width: 8%; font-size: 8pt;">Size Fin</th>
+                                <th style="width: 7%; font-size: 8pt;">Size Fin</th>
                                 @endif
                                 @if($hasFerth)
-                                <th style="width: 8%; font-size: 8pt;">Size Mat</th>
+                                <th style="width: 7%; font-size: 8pt;">Size Mat</th>
                                 @endif
                                 @if($hasZeinr)
-                                <th style="width: 7%; font-size: 8pt;">Jenis</th>
+                                <th style="width: 6%; font-size: 8pt;">Jenis</th>
+                                @endif
+                                @if($hasMrpComp)
+                                <th style="width: 8%; font-size: 8pt;">MRP COMP</th>
                                 @endif
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="itemsTableBody">
                             @foreach($document->items as $index => $item)
                                 @php
                                     // Format material code: hilangkan leading zero jika numeric saja
@@ -446,7 +519,7 @@
                                         $salesOrders = $item->sales_orders;
                                     }
 
-                                    // Ambil data dari pro_details jika ada
+                                    // Ambil data dari pro_details jika ada (untuk kolom lainnya)
                                     $addInfo = '-';
                                     $groes = '-';
                                     $ferth = '-';
@@ -488,8 +561,20 @@
                                             break;
                                         }
                                     }
+
+                                    // Ambil data MRP COMP langsung dari kolom dispc di tabel reservation_document_items
+                                    $mrpComp = (!empty($item->dispc) && $item->dispc != '-' && $item->dispc != 'null' && $item->dispc != '0') ? $item->dispc : '-';
                                 @endphp
-                                <tr data-item-id="{{ $item->id }}">
+                                <tr data-item-id="{{ $item->id }}"
+                                    data-material-code="{{ strtolower($materialCode) }}"
+                                    data-description="{{ strtolower($item->material_description) }}"
+                                    data-sales-orders="{{ !empty($salesOrders) ? strtolower(implode(' ', $salesOrders)) : '' }}"
+                                    data-pro-numbers="{{ !empty($item->processed_sources) ? strtolower(implode(' ', $item->processed_sources)) : '' }}"
+                                    data-add-info="{{ strtolower($addInfo) }}"
+                                    data-groes="{{ strtolower($groes) }}"
+                                    data-ferth="{{ strtolower($ferth) }}"
+                                    data-zeinr="{{ strtolower($zeinr) }}"
+                                    data-mrp-comp="{{ strtolower($mrpComp) }}">
                                     <td class="no-print" style="font-size: 8pt;">
                                         <input type="checkbox" class="item-checkbox" value="{{ $item->id }}">
                                     </td>
@@ -534,6 +619,9 @@
                                     @endif
                                     @if($hasZeinr)
                                     <td style="font-size: 8pt;">{{ $zeinr }}</td>
+                                    @endif
+                                    @if($hasMrpComp)
+                                    <td style="font-size: 8pt;">{{ $mrpComp }}</td>
                                     @endif
                                 </tr>
                             @endforeach
@@ -617,12 +705,18 @@
             const printSelectedForm = document.getElementById('printSelectedForm');
             const exportExcelForm = document.getElementById('exportExcelForm');
 
-            // CSRF Token untuk fetch request
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            // Live Search Variables
+            const liveSearch = document.getElementById('liveSearch');
+            const clearSearch = document.getElementById('clearSearch');
+            const searchStats = document.getElementById('searchStats');
+            const itemsTableBody = document.getElementById('itemsTableBody');
+            const allRows = itemsTableBody.querySelectorAll('tr');
+            const totalItems = allRows.length;
 
             // Update selection count and button states
             function updateSelection() {
-                const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
+                const visibleCheckboxes = Array.from(itemsTableBody.querySelectorAll('tr:not([style*="display: none"]) .item-checkbox'));
+                const selectedItems = visibleCheckboxes.filter(cb => cb.checked);
                 const count = selectedItems.length;
 
                 selectedCount.textContent = count;
@@ -633,11 +727,12 @@
                     exportExcelBtn.disabled = false;
 
                     // Update select all checkbox state
-                    selectAllCheckbox.checked = count === itemCheckboxes.length;
-                    selectAllCheckbox.indeterminate = count > 0 && count < itemCheckboxes.length;
+                    const allVisibleCheckboxes = itemsTableBody.querySelectorAll('tr:not([style*="display: none"]) .item-checkbox');
+                    selectAllCheckbox.checked = count === allVisibleCheckboxes.length && allVisibleCheckboxes.length > 0;
+                    selectAllCheckbox.indeterminate = count > 0 && count < allVisibleCheckboxes.length;
 
                     // Update selected items for form submission
-                    const selectedIds = selectedItems.map(cb => cb.value);
+                    const selectedIds = Array.from(document.querySelectorAll('.item-checkbox:checked')).map(cb => cb.value);
                     selectedItemsInputPrint.value = JSON.stringify(selectedIds);
                     selectedItemsInputExcel.value = JSON.stringify(selectedIds);
                 } else {
@@ -655,15 +750,21 @@
 
             // Select all checkbox handler
             selectAllCheckbox.addEventListener('change', function() {
-                itemCheckboxes.forEach(cb => {
-                    cb.checked = this.checked;
+                const visibleRows = itemsTableBody.querySelectorAll('tr:not([style*="display: none"])');
+                visibleRows.forEach(row => {
+                    const checkbox = row.querySelector('.item-checkbox');
+                    if (checkbox) {
+                        checkbox.checked = this.checked;
+                    }
                 });
                 updateSelection();
             });
 
             // Individual checkbox handlers
-            itemCheckboxes.forEach(cb => {
-                cb.addEventListener('change', updateSelection);
+            document.addEventListener('change', function(e) {
+                if (e.target.classList.contains('item-checkbox')) {
+                    updateSelection();
+                }
             });
 
             // Clear selection button
@@ -710,6 +811,73 @@
                 }, 2000);
             });
 
+            // Live Search Functionality
+            function performLiveSearch() {
+                const searchTerm = liveSearch.value.toLowerCase().trim();
+                let visibleCount = 0;
+
+                allRows.forEach(row => {
+                    let rowText = '';
+
+                    // Collect all searchable data from data attributes
+                    const materialCode = row.getAttribute('data-material-code') || '';
+                    const description = row.getAttribute('data-description') || '';
+                    const salesOrders = row.getAttribute('data-sales-orders') || '';
+                    const proNumbers = row.getAttribute('data-pro-numbers') || '';
+                    const addInfo = row.getAttribute('data-add-info') || '';
+                    const groes = row.getAttribute('data-groes') || '';
+                    const ferth = row.getAttribute('data-ferth') || '';
+                    const zeinr = row.getAttribute('data-zeinr') || '';
+                    const mrpComp = row.getAttribute('data-mrp-comp') || '';
+
+                    // Combine all searchable text
+                    rowText = `${materialCode} ${description} ${salesOrders} ${proNumbers} ${addInfo} ${groes} ${ferth} ${zeinr} ${mrpComp}`;
+
+                    // Check if search term is found
+                    if (searchTerm === '' || rowText.includes(searchTerm)) {
+                        row.style.display = '';
+                        visibleCount++;
+
+                        // Remove highlight class
+                        row.classList.remove('search-highlight');
+
+                        // Add highlight if search term is not empty
+                        if (searchTerm !== '') {
+                            row.classList.add('search-highlight');
+                        }
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+
+                // Update search stats
+                if (searchTerm === '') {
+                    searchStats.textContent = `Total items: ${totalItems} | Showing all items`;
+                } else {
+                    searchStats.textContent = `Total items: ${totalItems} | Found: ${visibleCount} item(s) | Search: "${searchTerm}"`;
+                }
+
+                // Update selection checkboxes
+                updateSelection();
+            }
+
+            // Live search event listener
+            if (liveSearch) {
+                liveSearch.addEventListener('input', performLiveSearch);
+
+                // Focus on search box when page loads
+                liveSearch.focus();
+            }
+
+            // Clear search button
+            if (clearSearch) {
+                clearSearch.addEventListener('click', function() {
+                    liveSearch.value = '';
+                    performLiveSearch();
+                    liveSearch.focus();
+                });
+            }
+
             // Auto print jika parameter autoPrint=true
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('autoPrint') === 'true') {
@@ -729,7 +897,13 @@
             };
 
             // Tambahkan event listener untuk tombol close
-            document.querySelector('.btn-secondary').addEventListener('click', closeWindow);
+            const closeBtn = document.querySelector('.btn-secondary');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', closeWindow);
+            }
+
+            // Initialize selection
+            updateSelection();
         });
     </script>
 </body>

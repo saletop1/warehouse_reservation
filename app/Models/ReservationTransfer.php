@@ -2,44 +2,37 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ReservationTransfer extends Model
 {
-    use HasFactory;
-
-    protected $table = 'reservation_transfers'; // Tentukan nama tabel
-
     protected $fillable = [
+        'transfer_no',
         'document_id',
         'document_no',
-        'transfer_no',
         'plant_supply',
         'plant_destination',
         'move_type',
-        'total_items',
-        'total_quantity',
         'status',
-        'sap_message',
+        'total_qty',
+        'total_items',
         'remarks',
         'created_by',
-        'created_by_name',
-        'completed_at'
+        'created_by_name'
     ];
 
     protected $casts = [
-        'total_quantity' => 'float',
-        'completed_at' => 'datetime',
+        'total_qty' => 'decimal:3'
     ];
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(ReservationTransferItem::class, 'transfer_id');
+    }
 
     public function document()
     {
-        return $this->belongsTo(ReservationDocument::class, 'document_id');
-    }
-
-    public function items()
-    {
-        return $this->hasMany(ReservationTransferItem::class, 'transfer_id');
+        return $this->belongsTo(ReservationDocument::class);
     }
 }

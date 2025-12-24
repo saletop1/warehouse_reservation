@@ -58,15 +58,12 @@ class ReservationDocumentController extends Controller
             ->paginate($perPage)
             ->appends($request->except('page'));
 
-        // Calculate transferred and completion for each document
+        // Update document status based on transfers
         foreach ($documents as $document) {
             $totalRequested = $document->items()->sum('requested_qty');
             $totalTransferred = $document->items()->sum('transferred_qty') ?? 0;
 
-            $document->total_transferred = $totalTransferred;
-            $document->completion_rate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
-
-            // Also update document status if needed
+            // Update document status if needed
             if ($totalTransferred >= $totalRequested && $document->status != 'closed') {
                 $document->status = 'closed';
                 $document->save();
@@ -84,14 +81,11 @@ class ReservationDocumentController extends Controller
         try {
             $document = ReservationDocument::with(['items', 'transfers'])->findOrFail($id);
 
-            // Ambil data stock untuk semua material di document
+            // PERBAIKAN: Panggil loadStockDataForDocument untuk memuat data stock
             $this->loadStockDataForDocument($document);
 
-            // Hitung summary stock
-            $stockSummary = $this->calculateStockSummary($document);
-
-            // Hitung status transfer
-            $this->calculateTransferStatus($document);
+            // Cukup ambil data yang diperlukan untuk stock info
+            $stockSummary = $this->calculateStockSummary($document); // Ini hanya untuk tampilan stock
 
             // Cek apakah user memiliki hak akses untuk membuat transfer
             $user = Auth::user();
@@ -102,7 +96,12 @@ class ReservationDocumentController extends Controller
             // Cek apakah masih ada item yang bisa ditransfer
             $hasTransferableItems = $this->hasTransferableItems($document);
 
-            return view('documents.show', compact('document', 'stockSummary', 'canGenerateTransfer', 'hasTransferableItems'));
+            return view('documents.show', compact(
+                'document',
+                'stockSummary',
+                'canGenerateTransfer',
+                'hasTransferableItems'
+            ));
 
         } catch (\Exception $e) {
             Log::error('Error in show document: ' . $e->getMessage());
@@ -111,56 +110,136 @@ class ReservationDocumentController extends Controller
         }
     }
 
-    /**
-     * Load stock data untuk document
-     */
-    private function loadStockDataForDocument($document)
-    {
-        foreach ($document->items as $item) {
-            // Ambil stock data dari database untuk material ini
-            $stockData = ReservationStock::where('document_no', $document->document_no)
-                ->where('matnr', $item->material_code)
-                ->get();
+            /**
+             * Load stock data untuk document
+             */
+            private function loadStockDataForDocument($document)
+        {
+            foreach ($document->items as $item) {
+                // Ambil stock data dari database untuk material ini
+                $stockData = ReservationStock::where('document_no', $document->document_no)
+                    ->where('matnr', $item->material_code)
+                    ->get();
 
-            if ($stockData->isNotEmpty()) {
-                $totalStock = $stockData->sum(function($stock) {
-                    return is_numeric($stock->clabs) ? floatval($stock->clabs) : 0;
+                if ($stockData->isNotEmpty()) {
+                    $totalStock = $stockData->sum(function($stock) {
+                        return is_numeric($stock->clabs) ? floatval($stock->clabs) : 0;
+                    });
+
+                    $storageLocations = $stockData->pluck('lgort')->unique()->toArray();
+
+                    $item->stock_info = [
+                        'total_stock' => $totalStock,
+                        'storage_locations' => $storageLocations,
+                        'details' => $stockData->map(function($stock) {
+                            return [
+                                'lgort' => $stock->lgort,
+                                'charg' => $stock->charg,
+                                'clabs' => is_numeric($stock->clabs) ? floatval($stock->clabs) : 0,
+                                'meins' => $stock->meins,
+                                'vbeln' => $stock->vbeln,
+                                'posnr' => $stock->posnr
+                            ];
+                        })->toArray()
+                    ];
+                } else {
+                    $item->stock_info = [
+                        'total_stock' => 0,
+                        'storage_locations' => [],
+                        'details' => []
+                    ];
+                }
+
+                // PERUBAHAN: Ambil data transfer dari reservation_transfer_items
+                $transferItems = DB::table('reservation_transfer_items')
+                    ->leftJoin('reservation_transfers', 'reservation_transfer_items.transfer_id', '=', 'reservation_transfers.id')
+                    ->select(
+                        'reservation_transfer_items.*',
+                        'reservation_transfers.transfer_no',
+                        'reservation_transfers.created_at as transfer_date',
+                        'reservation_transfers.created_by_name as transfer_by'
+                    )
+                    ->where('reservation_transfer_items.document_item_id', $item->id)
+                    ->orderBy('reservation_transfer_items.created_at', 'desc')
+                    ->get();
+
+                // Hitung total transferred dari transfer items
+                $transferredQty = $transferItems->sum('quantity');
+                $remainingQty = max(0, $item->requested_qty - $transferredQty);
+
+                // Simpan data transfer untuk item ini
+                $item->transfer_history = $transferItems;
+                $item->transferred_qty = $transferredQty;
+                $item->remaining_qty = $remainingQty;
+                $item->transfer_status = $this->getItemTransferStatus($item);
+            }
+        }
+
+                /**
+         * Get transfer history for specific item
+         */
+        public function getItemTransferHistory($documentId, $itemId)
+        {
+            try {
+                $document = ReservationDocument::findOrFail($documentId);
+                $item = ReservationDocumentItem::findOrFail($itemId);
+
+                // Pastikan item ini milik dokumen yang benar
+                if ($item->document_id != $document->id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Item not found in this document'
+                    ], 404);
+                }
+
+                // Ambil riwayat transfer untuk item ini
+                $transferHistory = DB::table('reservation_transfer_items')
+                    ->leftJoin('reservation_transfers', 'reservation_transfer_items.transfer_id', '=', 'reservation_transfers.id')
+                    ->select(
+                        'reservation_transfer_items.*',
+                        'reservation_transfers.transfer_no',
+                        'reservation_transfers.created_at as transfer_date',
+                        'reservation_transfers.created_by_name as transfer_by',
+                        'reservation_transfers.plant_supply',
+                        'reservation_transfers.plant_destination',
+                        'reservation_transfers.move_type'
+                    )
+                    ->where('reservation_transfer_items.document_item_id', $itemId)
+                    ->orderBy('reservation_transfer_items.created_at', 'desc')
+                    ->get();
+
+                // Format tanggal
+                $transferHistory->transform(function ($transfer) {
+                    $transfer->transfer_date_formatted = Carbon::parse($transfer->transfer_date)
+                        ->setTimezone('Asia/Jakarta')
+                        ->format('d/m/Y H:i:s');
+                    return $transfer;
                 });
 
-                $storageLocations = $stockData->pluck('lgort')->unique()->toArray();
+                return response()->json([
+                    'success' => true,
+                    'item' => [
+                        'id' => $item->id,
+                        'material_code' => $item->material_code,
+                        'material_description' => $item->material_description,
+                        'requested_qty' => $item->requested_qty,
+                        'transferred_qty' => $item->transferred_qty,
+                        'remaining_qty' => $item->remaining_qty,
+                        'unit' => $item->unit
+                    ],
+                    'transfer_history' => $transferHistory,
+                    'total_transfers' => count($transferHistory),
+                    'total_transferred' => $transferHistory->sum('quantity')
+                ]);
 
-                $item->stock_info = [
-                    'total_stock' => $totalStock,
-                    'storage_locations' => $storageLocations,
-                    'details' => $stockData->map(function($stock) {
-                        return [
-                            'lgort' => $stock->lgort,
-                            'charg' => $stock->charg,
-                            'clabs' => is_numeric($stock->clabs) ? floatval($stock->clabs) : 0,
-                            'meins' => $stock->meins,
-                            'vbeln' => $stock->vbeln,
-                            'posnr' => $stock->posnr
-                        ];
-                    })->toArray()
-                ];
-            } else {
-                $item->stock_info = [
-                    'total_stock' => 0,
-                    'storage_locations' => [],
-                    'details' => []
-                ];
+            } catch (\Exception $e) {
+                Log::error('Error getting item transfer history: ' . $e->getMessage());
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to get transfer history: ' . $e->getMessage()
+                ], 500);
             }
-
-            // Hitung jumlah yang sudah ditransfer
-            $transferredQty = $item->transferred_qty ?? 0;
-            $remainingQty = max(0, $item->requested_qty - $transferredQty);
-
-            $item->transferred_qty = $transferredQty;
-            $item->remaining_qty = $remainingQty;
-            $item->transfer_status = $this->getItemTransferStatus($item);
         }
-    }
-
     /**
      * Calculate stock summary untuk document
      */
@@ -219,20 +298,19 @@ class ReservationDocumentController extends Controller
      */
     private function calculateTransferStatus($document)
     {
-        $totalItems = $document->items->count();
-        $totalRequested = $document->items->sum('requested_qty');
-        $totalTransferred = $document->items->sum('transferred_qty') ?? 0;
+        $totalRequested = $document->items()->sum('requested_qty');
+        $totalTransferred = $document->items()->sum('transferred_qty') ?? 0;
 
         // Update status document berdasarkan transfer
         $oldStatus = $document->status;
         $newStatus = $oldStatus;
 
         if ($totalTransferred >= $totalRequested) {
-            $newStatus = 'closed'; // Semua item sudah ditransfer
+            $newStatus = 'closed';
         } elseif ($totalTransferred > 0) {
-            $newStatus = 'partial'; // Sebagian item sudah ditransfer
+            $newStatus = 'partial';
         } elseif ($oldStatus == 'created') {
-            $newStatus = 'booked'; // Document baru dibuat
+            $newStatus = 'booked';
         }
 
         // Update status jika berubah
@@ -248,9 +326,6 @@ class ReservationDocumentController extends Controller
                 'total_requested' => $totalRequested
             ]);
         }
-
-        $document->total_transferred = $totalTransferred;
-        $document->completion_rate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
     }
 
     /**
@@ -322,8 +397,8 @@ class ReservationDocumentController extends Controller
                 'transfer_data' => [
                     'transfer_info' => [
                         'document_no' => $document->document_no,
-                        'document_id' => $document->id, // Kirim document_id
-                        'plant_supply' => $request->sloc_supply, // PERBAIKAN: Gunakan sloc_supply sebagai plant_supply
+                        'document_id' => $document->id,
+                        'plant_supply' => $request->sloc_supply,
                         'plant_destination' => $document->plant,
                         'move_type' => '311',
                         'posting_date' => Carbon::now()->format('Ymd'),
@@ -351,7 +426,7 @@ class ReservationDocumentController extends Controller
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/json'
                 ],
-                'timeout' => 120 // 2 menit timeout
+                'timeout' => 120
             ]);
 
             $responseData = json_decode($response->getBody(), true);
@@ -394,29 +469,71 @@ class ReservationDocumentController extends Controller
         }
     }
 
-    /**
-     * Update document item transferred quantities after successful transfer
-     */
-    private function updateDocumentTransferQuantities($document, $transferItems)
-    {
-        foreach ($transferItems as $transferItem) {
-            $item = ReservationDocumentItem::where('document_id', $document->id)
-                ->where('material_code', $transferItem['material_code'])
-                ->first();
+            /**
+         * Update document item transferred quantities after successful transfer
+         * AND save transfer details to reservation_transfer_items table
+         */
+        private function updateDocumentTransferQuantities($document, $transferItems)
+        {
+            try {
+                // Generate transfer number
+                $transferNo = $this->generateTransferNumber($document->plant);
 
-            if ($item) {
-                $newTransferred = ($item->transferred_qty ?? 0) + $transferItem['quantity'];
-                $item->transferred_qty = $newTransferred;
-                $item->save();
-
-                Log::info('Updated item transferred quantity', [
-                    'material_code' => $item->material_code,
-                    'old_transferred' => $item->transferred_qty - $transferItem['quantity'],
-                    'new_transferred' => $newTransferred
+                // Create main transfer record
+                $transfer = ReservationTransfer::create([
+                    'transfer_no' => $transferNo,
+                    'document_id' => $document->id,
+                    'document_no' => $document->document_no,
+                    'plant_supply' => request()->sloc_supply,
+                    'plant_destination' => $document->plant,
+                    'move_type' => '311',
+                    'status' => 'completed',
+                    'created_by' => Auth::user()->id,
+                    'created_by_name' => Auth::user()->name,
+                    'total_qty' => array_sum(array_column($transferItems, 'quantity')),
+                    'total_items' => count($transferItems),
+                    'remarks' => request()->input('transfer_data.remarks', ''),
                 ]);
+
+                foreach ($transferItems as $transferItem) {
+                    // Update document item transferred quantity
+                    $item = ReservationDocumentItem::where('document_id', $document->id)
+                        ->where('material_code', $transferItem['material_code'])
+                        ->first();
+
+                     if ($item) {
+                // JANGAN update transferred_qty di sini
+                // transferred_qty akan dihitung dari reservation_transfer_items
+
+                // Simpan ke reservation_transfer_items table
+                        DB::table('reservation_transfer_items')->insert([
+                            'transfer_id' => $transfer->id,
+                            'document_item_id' => $item->id,
+                            'material_code' => $item->material_code,
+                            'material_description' => $item->material_description,
+                            'unit' => $item->unit,
+                            'quantity' => $transferItem['quantity'],
+                            'batch' => $transferItem['batch'] ?? null,
+                            'storage_location' => $transferItem['storage_location'] ?? null,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+
+                        Log::info('Updated item transferred quantity and saved to transfer_items', [
+                            'material_code' => $item->material_code,
+                            'transfer_item_qty' => $transferItem['quantity']
+                        ]);
+                    }
+                }
+
+                // Perbaikan: Gunakan method recalculateTotals dari model
+                $document->recalculateTotals();
+
+            } catch (\Exception $e) {
+                Log::error('Error updating transfer quantities: ' . $e->getMessage());
+                throw $e;
             }
         }
-    }
 
     /**
      * Generate transfer number
@@ -425,7 +542,7 @@ class ReservationDocumentController extends Controller
     {
         $prefix = ($plant == '3000') ? 'TRMG' : 'TRBY';
 
-        $latestSeq = DB::table('reservation_transfers') // PERBAIKAN: Gunakan tabel reservation_transfers
+        $latestSeq = DB::table('reservation_transfers')
             ->select(DB::raw('COALESCE(MAX(CAST(SUBSTRING(transfer_no, 5) AS UNSIGNED)), 0) as max_seq'))
             ->where('transfer_no', 'LIKE', $prefix . '%')
             ->value('max_seq');
@@ -435,7 +552,7 @@ class ReservationDocumentController extends Controller
 
         // Verify unique
         $counter = 0;
-        while (DB::table('reservation_transfers')->where('transfer_no', $transferNo)->exists()) { // PERBAIKAN: Gunakan tabel reservation_transfers
+        while (DB::table('reservation_transfers')->where('transfer_no', $transferNo)->exists()) {
             $sequence++;
             $transferNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
             $counter++;
@@ -630,6 +747,9 @@ class ReservationDocumentController extends Controller
         $document->total_qty = $totalQty;
         $document->total_items = count($request->items);
         $document->save();
+
+        // Recalculate totals untuk update total_transferred dan completion_rate
+        $document->recalculateTotals();
 
         return redirect()->route('documents.show', $document->id)
             ->with('success', 'Document updated successfully.');
@@ -943,10 +1063,8 @@ class ReservationDocumentController extends Controller
             ->whereIn('id', $selectedItems)
             ->delete();
 
-        // Update document totals
-        $document->total_items = $document->items()->count();
-        $document->total_qty = $document->items()->sum('requested_qty');
-        $document->save();
+        // Update document totals menggunakan recalculateTotals
+        $document->recalculateTotals();
 
         Log::info('Selected items deleted from document', [
             'document_id' => $document->id,
@@ -1044,4 +1162,3 @@ class ReservationDocumentController extends Controller
         }
     }
 }
-

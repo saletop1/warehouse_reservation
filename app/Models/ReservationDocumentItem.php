@@ -5,21 +5,28 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 class ReservationDocumentItem extends Model
-{
-    protected $fillable = [
-        'document_id',
-        'material_code',
-        'material_description',
-        'unit',
-        'sortf',
-        'dispo',
-        'is_qty_editable',
-        'requested_qty',
-        'sources',
-        'sales_orders',
-        'pro_details',
-        'additional_info'
-    ];
+        {
+            protected $fillable = [
+            'document_id',
+            'material_code',
+            'material_description',
+            'unit',
+            'sortf',
+            'dispo',
+            'dispc', // TAMBAHAN
+            'is_qty_editable',
+            'requested_qty',
+            'transferred_qty',
+            'remaining_qty',
+            'sources',
+            'sales_orders',
+            'pro_details',
+            'mathd',
+            'makhd',
+            'groes',
+            'ferth',
+            'zeinr'
+        ];
 
     protected $casts = [
         'sources' => 'array',
@@ -27,7 +34,13 @@ class ReservationDocumentItem extends Model
         'pro_details' => 'array',
         'additional_info' => 'array',
         'is_qty_editable' => 'boolean',
-        'requested_qty' => 'decimal:3'
+        'requested_qty' => 'decimal:3',
+        'transferred_qty' => 'decimal:3'
+    ];
+
+    // Set default value untuk transferred_qty
+    protected $attributes = [
+        'transferred_qty' => 0
     ];
 
     public function document()
@@ -52,5 +65,33 @@ class ReservationDocumentItem extends Model
         }
 
         return null;
+    }
+
+    /**
+     * Accessor untuk remaining_qty
+     */
+    public function getRemainingQtyAttribute()
+    {
+        $requested = (float)$this->requested_qty;
+        $transferred = (float)$this->transferred_qty;
+
+        return max(0, $requested - $transferred);
+    }
+
+    /**
+     * Accessor untuk status transfer
+     */
+    public function getTransferStatusAttribute()
+    {
+        $requested = (float)$this->requested_qty;
+        $transferred = (float)$this->transferred_qty;
+
+        if ($transferred >= $requested) {
+            return 'completed';
+        } elseif ($transferred > 0) {
+            return 'partial';
+        } else {
+            return 'pending';
+        }
     }
 }

@@ -133,7 +133,8 @@
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Reservation No.</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Plant</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">PRO No.</th>
-                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">MRP</th>
+                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">MRP Pro</th>
+                                    <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">MRP Comp</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Sales Order</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Material PRO</th>
                                     <th class="py-2 px-3 border-bottom small fw-semibold text-uppercase">Material Comp</th>
@@ -175,6 +176,8 @@
 
                                         // MRP dari kolom dispo
                                         $mrp = $reservation->dispo ?? '-';
+                                        // DISPC (MRP Comp) - tambah kolom ini
+                                        $mrpc = $reservation->dispc ?? '-';
 
                                         // Sales Order - combine kdauf dan kdpos
                                         $salesOrder = '';
@@ -202,6 +205,7 @@
                                             $reservation->sap_plant,
                                             $reservation->sap_order,
                                             $mrp,
+                                            $mrpc, // TAMBAHAN: Tambahkan mrpc ke data search
                                             $salesOrder,
                                             $finishGood,
                                             $materialNumber,
@@ -223,6 +227,13 @@
                                         <td class="py-2 px-3 border-bottom">
                                             <span class="badge bg-info">{{ $mrp }}</span>
                                         </td>
+                                        <!-- TAMBAHAN: Kolom DISPC (MRP Comp) -->
+                                        <td class="py-2 px-3 border-bottom">
+                                            @if($mrpc && $mrpc != '-')
+                                                <span class="badge bg-warning text-dark">{{ $mrpc }}</span>
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
                                         <td class="py-2 px-3 border-bottom">
                                             <span class="text-mono">{{ $salesOrder }}</span>
                                         </td>
@@ -259,8 +270,9 @@
                                         </td>
                                     </tr>
                                 @empty
+                                    <!-- Ubah colspan dari 12 menjadi 13 karena kita menambah 1 kolom -->
                                     <tr id="noDataRow">
-                                        <td colspan="12" class="text-center text-muted py-4">
+                                        <td colspan="13" class="text-center text-muted py-4">
                                             <div class="py-3">
                                                 <i class="fas fa-database fa-2x text-muted mb-3 opacity-50"></i>
                                                 <p class="mb-2">No reservation data found</p>

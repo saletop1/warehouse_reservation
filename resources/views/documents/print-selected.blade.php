@@ -336,6 +336,7 @@
                         $hasGroes = false;
                         $hasFerth = false;
                         $hasZeinr = false;
+                        $hasMrpComp = false;
 
                         // Check each item for data
                         foreach ($items as $item) {
@@ -347,7 +348,7 @@
                                 $proDetails = $item->pro_details;
                             }
 
-                            // Check for data in pro_details
+                            // Check for data in pro_details for other columns
                             foreach ($proDetails as $proDetail) {
                                 if (!empty($proDetail['sortf']) && $proDetail['sortf'] != '-' && !$hasAddInfo) {
                                     $hasAddInfo = true;
@@ -362,6 +363,23 @@
                                     $hasZeinr = true;
                                 }
                             }
+
+                            // Check for MRP COMP from dispc column in reservation_document_items
+                            if (!empty($item->dispc) && $item->dispc != '-' && $item->dispc != 'null' && $item->dispc != '0' && !$hasMrpComp) {
+                                $hasMrpComp = true;
+                            }
+                        }
+
+                        // Calculate column widths based on which columns are visible
+                        // NOTE: Kolom MRP (dispo) disembunyikan, sehingga kita tidak perlu menyertakan lebar untuk MRP
+                        $materialCodeWidth = $hasAddInfo ? '9%' : '11%';
+                        $descriptionWidth = $hasAddInfo ? '20%' : '22%';
+                        $proNumbersWidth = '20%'; // Lebih lebar karena MRP tidak ada
+
+                        if ($hasMrpComp) {
+                            $materialCodeWidth = $hasAddInfo ? '8%' : '10%';
+                            $descriptionWidth = $hasAddInfo ? '18%' : '20%';
+                            $proNumbersWidth = '18%';
                         }
                     @endphp
 
@@ -369,24 +387,26 @@
                         <thead>
                             <tr>
                                 <th style="width: 3%; font-size: 8pt;">No</th>
-                                <th style="width: {{ $hasAddInfo ? '10%' : '12%' }}; font-size: 8pt;">Material Code</th>
-                                <th style="width: {{ $hasAddInfo ? '20%' : '22%' }}; font-size: 8pt;">Description</th>
+                                <th style="width: {{ $materialCodeWidth }}; font-size: 8pt;">Material Code</th>
+                                <th style="width: {{ $descriptionWidth }}; font-size: 8pt;">Description</th>
                                 @if($hasAddInfo)
-                                <th style="width: 8%; font-size: 8pt;">Add Info</th>
+                                <th style="width: 7%; font-size: 8pt;">Add Info</th>
                                 @endif
-                                <th style="width: 5%; font-size: 8pt;">Req. Qty</th>
+                                <th style="width: 6%; font-size: 8pt;">Req. Qty</th>
                                 <th style="width: 4%; font-size: 8pt;">Uom</th>
-                                <th style="width: 8%; font-size: 8pt;">Sales Order</th>
-                                <th style="width: 15%; font-size: 8pt;">PRO Numbers</th>
-                                <th style="width: 4%; font-size: 8pt;">MRP</th>
+                                <th style="width: 9%; font-size: 8pt;">Sales Order</th>
+                                <th style="width: {{ $proNumbersWidth }}; font-size: 8pt;">PRO Numbers</th>
                                 @if($hasGroes)
-                                <th style="width: 8%; font-size: 8pt;">Size Fin</th>
+                                <th style="width: 7%; font-size: 8pt;">Size Fin</th>
                                 @endif
                                 @if($hasFerth)
-                                <th style="width: 8%; font-size: 8pt;">Size Mat</th>
+                                <th style="width: 7%; font-size: 8pt;">Size Mat</th>
                                 @endif
                                 @if($hasZeinr)
-                                <th style="width: 7%; font-size: 8pt;">Jenis</th>
+                                <th style="width: 6%; font-size: 8pt;">Jenis</th>
+                                @endif
+                                @if($hasMrpComp)
+                                <th style="width: 8%; font-size: 8pt;">MRP COMP</th>
                                 @endif
                             </tr>
                         </thead>
@@ -410,7 +430,7 @@
                                         $salesOrders = $item->sales_orders;
                                     }
 
-                                    // Ambil data dari pro_details jika ada
+                                    // Ambil data dari pro_details jika ada (untuk kolom lainnya)
                                     $addInfo = '-';
                                     $groes = '-';
                                     $ferth = '-';
@@ -452,6 +472,9 @@
                                             break;
                                         }
                                     }
+
+                                    // Ambil data MRP COMP langsung dari kolom dispc di tabel reservation_document_items
+                                    $mrpComp = (!empty($item->dispc) && $item->dispc != '-' && $item->dispc != 'null' && $item->dispc != '0') ? $item->dispc : '-';
                                 @endphp
                                 <tr>
                                     <td style="font-size: 8pt;">{{ $index + 1 }}</td>
@@ -480,13 +503,6 @@
                                             <span style="font-size: 8pt; color: #6c757d;">No sources</span>
                                         @endif
                                     </td>
-                                    <td style="font-size: 8pt;">
-                                        @if($item->dispo)
-                                            <span class="badge bg-light text-dark border compact-badge">{{ $item->dispo }}</span>
-                                        @else
-                                            <span style="font-size: 8pt; color: #6c757d;">-</span>
-                                        @endif
-                                    </td>
                                     @if($hasGroes)
                                     <td style="font-size: 8pt;">{{ $groes }}</td>
                                     @endif
@@ -495,6 +511,9 @@
                                     @endif
                                     @if($hasZeinr)
                                     <td style="font-size: 8pt;">{{ $zeinr }}</td>
+                                    @endif
+                                    @if($hasMrpComp)
+                                    <td style="font-size: 8pt;">{{ $mrpComp }}</td>
                                     @endif
                                 </tr>
                             @endforeach

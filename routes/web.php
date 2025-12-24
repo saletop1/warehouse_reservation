@@ -100,6 +100,10 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{id}', [ReservationDocumentController::class, 'update'])->name('update');
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
+        // routes/web.php atau routes/api.php
+        Route::get('/documents/{document}/items/{item}/transfer-history',
+        [ReservationDocumentController::class, 'getItemTransferHistory'])
+        ->name('documents.items.transfer-history');
 
         // Print selected items - DIPERBAIKI: POST bukan GET
         Route::post('/{id}/print-selected', [ReservationDocumentController::class, 'printSelected'])->name('print-selected');

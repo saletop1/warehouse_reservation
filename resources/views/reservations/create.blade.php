@@ -230,6 +230,8 @@
                                                         <th width="10%" class="text-center">Material PRO</th>
                                                         <th width="10%" class="text-center">Desc PRO</th>
                                                         <th width="8%" class="text-center">MRP</th>
+                                                        <!-- TAMBAHAN: Kolom MRP Comp (DISPC) -->
+                                                        <th width="8%" class="text-center">MRP Comp</th>
                                                         <th width="10%" class="text-center">Sales Order</th>
                                                         <th width="10%" class="text-center">Material Req</th>
                                                         <th width="15%" class="text-center">Description</th>
@@ -308,7 +310,7 @@
     }
 
     /* Description column */
-    #materials-table td:nth-child(8) {
+    #materials-table td:nth-child(9) {
         min-width: 250px;
         max-width: 300px;
     }
@@ -505,7 +507,7 @@
         font-family: 'Consolas', monospace;
         background-color: #f8f9fa;
         padding: 2px 6px;
-                border-radius: 3px;
+        border-radius: 3px;
         display: inline-block;
         margin-top: 1px;
         word-break: break-all;
@@ -683,6 +685,11 @@
     /* MRP badge styles */
     .mrp-badge {
         background-color: #6f42c1;
+        color: white;
+    }
+
+    .mrp-comp-badge {
+        background-color: #fd7e14;
         color: white;
     }
 
@@ -1244,6 +1251,8 @@
     // ============================
 
     function loadMaterials(plant, materialTypes) {
+        console.log('📋 Loading materials for plant:', plant, 'types:', materialTypes);
+
         $('#materials-checkbox-container').html(`
             <div class="text-center py-3">
                 <div class="spinner-border text-primary spinner-border-sm" role="status">
@@ -1266,6 +1275,7 @@
 
                 if (response.success) {
                     allMaterials = response.materials;
+                    console.log(`✅ Loaded ${allMaterials.length} materials`);
 
                     let containerHtml = '';
                     if (allMaterials.length > 0) {
@@ -1388,11 +1398,14 @@
                         $('#toggle_all_materials').text('All');
                         window.allMaterialsSelected = false;
                     }
+                } else {
+                    console.error('❌ Failed to load materials:', response.message);
+                    showNotification('Failed to load materials: ' + (response.message || 'Unknown error'), 'error', 4000);
                 }
             },
             error: function(xhr) {
-                console.error('Materials error:', xhr);
-                showNotification('Failed to load materials', 'error', 4000);
+                console.error('❌ Materials AJAX error:', xhr);
+                showNotification('Failed to load materials. Please try again.', 'error', 4000);
             }
         });
     }
@@ -1459,9 +1472,13 @@
                 return;
             }
 
-            // showLoading('Loading PRO numbers...', 'Please wait');
+            console.log('🚀 Proceeding to Step 4 - Loading PRO numbers');
+            console.log('Selected materials:', selectedMaterials);
+
+            showLoading('Loading PRO numbers...', 'Please wait');
 
             const materialsForAPI = selectedMaterials.map(m => formatMaterialCodeForDB(m));
+            console.log('Materials for API (formatted):', materialsForAPI);
 
             $.ajax({
                 url: '/reservations/get-pro-numbers-for-materials',
@@ -1474,6 +1491,7 @@
                 },
                 success: function(response) {
                     hideLoading();
+                    console.log('✅ PRO numbers response:', response);
 
                     if (response.success) {
                         if (response.pro_numbers && Array.isArray(response.pro_numbers)) {
@@ -1488,19 +1506,23 @@
                                 return {pro_number: String(item), material_count: 0};
                             });
 
+                            console.log(`✅ Loaded ${proNumbers.length} PRO numbers`);
                             selectedProNumbers = [];
                             currentStep = 4;
                             updateStepNavigation();
                             populateProNumbersContainer();
                         } else {
+                            console.error('❌ PRO numbers data format incorrect');
                             showNotification('Error: PRO numbers data format is incorrect', 'error', 4000);
                         }
                     } else {
+                        console.error('❌ Failed to load PRO numbers:', response.message);
                         showNotification('Error: ' + (response.message || 'Failed to load PRO numbers'), 'error', 4000);
                     }
                 },
                 error: function(xhr) {
                     hideLoading();
+                    console.error('❌ PRO numbers AJAX error:', xhr);
                     let errorMsg = 'Failed to load PRO numbers. ';
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         errorMsg += xhr.responseJSON.message;
@@ -1516,6 +1538,8 @@
     // ============================
 
     function populateProNumbersContainer() {
+        console.log('📊 Populating PRO numbers container with', proNumbers.length, 'items');
+
         let containerHtml = '';
         if (proNumbers.length > 0) {
             proNumbers.forEach(function(proObj, index) {
@@ -1622,7 +1646,14 @@
                 _token: csrfToken
             };
 
-            // showLoading('Loading material data...', 'Formatting data for database matching');
+            console.log('🚀 Loading multiple PRO data:', {
+                plant: selectedPlant,
+                materialTypes: selectedMaterialTypes.length,
+                materials: selectedMaterials.length,
+                proNumbers: selectedProNumbers.length
+            });
+
+            showLoading('Loading material data...', 'Formatting data for database matching');
 
             $.ajax({
                 url: '/reservations/load-multiple-pro',
@@ -1630,24 +1661,37 @@
                 data: requestData,
                 success: function(response) {
                     console.log('✅ Step 5 Response:', response);
+                    console.log('Response success:', response.success);
+                    console.log('Has data?', response.data && response.data.length > 0);
+                    console.log('Data count:', response.data ? response.data.length : 0);
 
                     if (response.success && response.data && response.data.length > 0) {
                         loadedMaterials = response.data;
-                        hideLoading();
+                        console.log(`✅ Successfully loaded ${loadedMaterials.length} materials`);
+                        console.log('Sample material:', loadedMaterials[0]);
 
+                        hideLoading();
                         currentStep = 5;
                         updateStepNavigation();
                         populateMaterialsTable();
                     } else {
                         hideLoading();
                         let errorMsg = response.message || 'No material data found.';
+                        console.error('❌ Error:', errorMsg);
                         showNotification(errorMsg, 'warning', 4000);
                         currentStep = 4;
                         updateStepNavigation();
                     }
                 },
-                error: function(xhr) {
+                error: function(xhr, status, error) {
+                    console.error('❌ AJAX Error:', {
+                        status: xhr.status,
+                        statusText: xhr.statusText,
+                        error: error,
+                        responseText: xhr.responseText
+                    });
                     hideLoading();
+
                     let errorMsg = 'Server error occurred.';
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         errorMsg = xhr.responseJSON.message;
@@ -1670,14 +1714,20 @@
     }
 
     function populateMaterialsTable() {
+        console.log('🔧 populateMaterialsTable called');
+        console.log('loadedMaterials:', loadedMaterials);
+
         const tbody = $('#materials-table-body');
         let html = '';
 
         if (!loadedMaterials || loadedMaterials.length === 0) {
+            console.warn('⚠️ No loaded materials data');
             html = `
                 <tr>
-                    <td colspan="12" class="text-center text-muted py-3">
+                    <td colspan="14" class="text-center text-muted py-3">
                         <h6>No materials data available</h6>
+                        <small class="text-danger">Debug: loadedMaterials is empty or undefined</small>
+                        <br><small>Please go back and select PRO numbers again</small>
                     </td>
                 </tr>
             `;
@@ -1685,23 +1735,36 @@
             return;
         }
 
+        console.log(`📊 Total materials to display: ${loadedMaterials.length}`);
+
         // PERUBAHAN 1: Cek apakah ada minimal satu item yang memiliki data di kolom Add Info (sortf)
         const hasAddInfoData = loadedMaterials.some(material => {
             const sortfValue = material.sortf || '';
             return sortfValue.trim() !== '';
         });
+        console.log('Has Add Info data?', hasAddInfoData);
 
         // PERUBAHAN: Tampilkan atau sembunyikan kolom Add Info berdasarkan kondisi
         if (hasAddInfoData) {
             $('#add-info-header').removeClass('column-hidden');
+            console.log('Add Info column: VISIBLE');
         } else {
             $('#add-info-header').addClass('column-hidden');
+            console.log('Add Info column: HIDDEN');
         }
 
         // PERUBAHAN: Group materials by material_code untuk konsolidasi
         const consolidatedMaterials = {};
+        console.log('Starting consolidation...');
 
         loadedMaterials.forEach(function(material, index) {
+            console.log(`Processing material ${index + 1}:`, {
+                material_code: material.material_code,
+                dispo: material.dispo,
+                dispc: material.dispc,
+                total_qty: material.total_qty
+            });
+
             const materialCode = material.material_code;
 
             if (!consolidatedMaterials[materialCode]) {
@@ -1735,6 +1798,8 @@
             }
         });
 
+        console.log('Consolidated materials:', Object.keys(consolidatedMaterials).length);
+
         // Convert Set to Array and prepare display
         let consolidatedIndex = 0;
         Object.values(consolidatedMaterials).forEach((consolidated, groupIndex) => {
@@ -1743,6 +1808,14 @@
             const salesOrdersArray = Array.from(consolidated.salesOrders);
             const originalQty = consolidated.totalQty;
 
+            console.log(`Building row ${groupIndex + 1}:`, {
+                material_code: material.material_code,
+                dispo: material.dispo,
+                dispc: material.dispc,
+                sources: sourcesArray.length,
+                originalQty: originalQty
+            });
+
             // PERUBAHAN: Format Required Qty berdasarkan UOM
             const formattedOriginalQtyForDisplay = formatNumberByUOM(originalQty, material.unit, false);
             // PERUBAHAN: Format untuk input berdasarkan UOM
@@ -1750,6 +1823,7 @@
 
             // Check if quantity is editable based on MRP
             const isQtyEditable = isMRPAllowedForEdit(material.dispo);
+            console.log(`Qty editable for ${material.dispo}?`, isQtyEditable);
 
             // PERUBAHAN: Tentukan step berdasarkan UOM
             const useDecimal = isDecimalUOM(material.unit);
@@ -1805,6 +1879,10 @@
             if (material.zeinr && material.zeinr !== 'null' && material.zeinr !== '0') {
                 additionalData.zeinr = material.zeinr;
             }
+            // TAMBAHAN: DISPC (MRP Comp)
+            if (material.dispc && material.dispc !== '0' && material.dispc.toLowerCase() !== 'null') {
+                additionalData.dispc = material.dispc;
+            }
 
             // PERUBAHAN: Tambahkan class column-hidden pada kolom Add Info jika tidak ada data
             const addInfoClass = hasAddInfoData ? '' : 'column-hidden';
@@ -1817,6 +1895,10 @@
                     <td class="text-center desc-pro-cell">${descPro}</td>
                     <td class="text-center">
                         ${material.dispo ? `<span class="badge mrp-badge">${material.dispo}</span>` : '-'}
+                    </td>
+                    <!-- TAMBAHAN: Kolom MRP Comp (DISPC) -->
+                    <td class="text-center">
+                        ${material.dispc ? `<span class="badge mrp-comp-badge">${material.dispc}</span>` : '-'}
                     </td>
                     <td class="text-center">${salesOrderBadges}</td>
                     <td class="text-center"><code>${formatMaterialCodeForUI(material.material_code)}</code></td>
@@ -1842,6 +1924,7 @@
         });
 
         tbody.html(html);
+        console.log('✅ Table HTML generated, rows:', $('tr[data-material]').length);
 
         // Event listeners for editable quantities only
         $('.requested-qty:not(.qty-disabled)').on('change', function() {
@@ -1917,7 +2000,9 @@
                 // Field tambahan untuk disimpan (tidak ditampilkan)
                 groes: additionalData.groes || null,
                 ferth: additionalData.ferth || null,
-                zeinr: additionalData.zeinr || null
+                zeinr: additionalData.zeinr || null,
+                // TAMBAHAN: DISPC (MRP Comp)
+                dispc: additionalData.dispc || originalMaterial.dispc || null
             });
         });
 
@@ -1931,7 +2016,9 @@
                 code: materialsData[0].material_code_display,
                 qty: materialsData[0].requested_qty,
                 mathd: materialsData[0].mathd,
-                makhd: materialsData[0].makhd
+                makhd: materialsData[0].makhd,
+                dispo: materialsData[0].dispo,
+                dispc: materialsData[0].dispc
             } : 'No data'
         });
 
