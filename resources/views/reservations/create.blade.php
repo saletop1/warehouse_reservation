@@ -67,16 +67,29 @@
                                         </button>
                                     </div>
 
-                                    <div class="mb-3">
-                                        <div class="input-group">
-                                            <select class="form-control form-control-sm" id="plant_select" required>
-                                                <option value="">-- Select Plant --</option>
-                                                @foreach($plants as $plant)
-                                                    <option value="{{ $plant->sap_plant }}" data-code="{{ $plant->dwerk }}">
-                                                        {{ $plant->sap_plant }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="plant_select" class="form-label">Plant Request (Destination) *</label>
+                                            <div class="input-group">
+                                                <select class="form-control form-control-sm" id="plant_select" required>
+                                                    <option value="">-- Select Plant --</option>
+                                                    @foreach($plants as $plant)
+                                                        <option value="{{ $plant->sap_plant }}" data-code="{{ $plant->dwerk }}">
+                                                            {{ $plant->sap_plant }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <small class="text-muted">Plant tujuan (dimana material akan dikirim)</small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="plant_supply" class="form-label">Plant Supply (Source) *</label>
+                                            <input type="text"
+                                                   class="form-control form-control-sm"
+                                                   id="plant_supply"
+                                                   placeholder="Enter plant supply (e.g., 1200, 1300)"
+                                                   maxlength="10">
+                                            <small class="text-muted">Plant sumber (dari mana material akan diambil)</small>
                                         </div>
                                     </div>
                                 </div>
@@ -213,9 +226,49 @@
                                             <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-prev-step5">
                                                 <i class="fas fa-arrow-left"></i>
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-success" id="btn-create-reservation">
+                                            <button type="button" class="btn btn-sm btn-success" id="btn-create-reservation" disabled>
                                                 <i class="fas fa-file-alt me-1"></i> Create Reservation
                                             </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Plant Information -->
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">Plant Information</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <!-- PERUBAHAN 1: Plant Request di atas -->
+                                                <div class="col-md-12 mb-3">
+                                                    <div class="mb-2">
+                                                        <label class="form-label fw-bold">Plant Request (Destination):</label>
+                                                        <span id="review-plant-request" class="ms-2 badge bg-primary">{{ old('plant', '') }}</span>
+                                                    </div>
+                                                </div>
+                                                <!-- PERUBAHAN 1: Plant Supply di bawah -->
+                                                <div class="col-md-12">
+                                                    <div class="mb-2">
+                                                        <label class="form-label fw-bold">Plant Supply (Source):</label>
+                                                        <span id="review-plant-supply" class="ms-2 badge bg-info">{{ old('plant_supply', '') }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- PERUBAHAN 2: Tambahkan Remarks Card (Mandatory) -->
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">Document Remarks <span class="text-danger">*</span></h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label for="document-remarks" class="form-label">Remarks / Notes <span class="text-danger">*</span></label>
+                                                <textarea class="form-control" id="document-remarks" rows="3"
+                                                          placeholder="Enter document remarks or notes..." required></textarea>
+                                                <small class="text-muted">Document remarks are required for tracking purposes.</small>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -423,7 +476,7 @@
     .material-basic-info {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
+                        flex-wrap: wrap;
         gap: 4px;
         margin-bottom: 2px;
     }
@@ -501,7 +554,7 @@
     }
 
     .material-pro-value {
-        font-size: 0.85rem;
+                        font-size: 0.85rem;
         color: #495057;
         font-weight: 500;
         font-family: 'Consolas', monospace;
@@ -827,6 +880,18 @@
     .column-hidden {
         display: none !important;
     }
+
+    /* Plant info badges */
+    .plant-badge {
+        font-size: 0.9rem;
+        padding: 0.35rem 0.75rem;
+    }
+
+    /* Remarks validation styling */
+    .remarks-error {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25) !important;
+    }
 </style>
 @endpush
 
@@ -837,6 +902,7 @@
     // ============================
     let currentStep = 1;
     let selectedPlant = '';
+    let selectedPlantSupply = '';
     let selectedMaterialTypes = [];
     let selectedMaterials = [];
     let selectedProNumbers = [];
@@ -864,7 +930,7 @@
     };
 
     // MRP yang diperbolehkan untuk edit quantity
-    const allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2'];
+    const allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'D22', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2'];
 
     // PERUBAHAN: Daftar UOM yang menggunakan desimal (tanpa desimal untuk PC, ST, SET)
     const decimalUOMs = ['KG', 'M', 'M2', 'M3', 'L', 'ML', 'G', 'MG', 'CM', 'MM', 'IN', 'FT', 'YD'];
@@ -997,6 +1063,55 @@
     }
 
     // ============================
+    // VALIDATION FUNCTIONS
+    // ============================
+
+    // PERUBAHAN BARU: Fungsi untuk validasi remarks
+    function validateRemarks() {
+        const remarks = $('#document-remarks').val().trim();
+        const isValid = remarks !== '';
+
+        if (!isValid) {
+            $('#document-remarks').addClass('remarks-error');
+        } else {
+            $('#document-remarks').removeClass('remarks-error');
+        }
+
+        return isValid;
+    }
+
+    // PERUBAHAN BARU: Fungsi untuk validasi kuantitas
+    function validateQuantities() {
+        let isValid = true;
+
+        $('.requested-qty').each(function() {
+            const value = parseFloat($(this).val()) || 0;
+            const minValue = parseFloat($(this).attr('min')) || 0;
+            const isEditable = !$(this).hasClass('qty-disabled');
+
+            if (isEditable && value < minValue) {
+                isValid = false;
+                $(this).addClass('is-invalid');
+            } else {
+                $(this).removeClass('is-invalid');
+            }
+        });
+
+        return isValid;
+    }
+
+    // PERUBAHAN BARU: Fungsi untuk validasi tombol create
+    function validateCreateButton() {
+        const hasRemarks = validateRemarks();
+        const hasValidQuantities = validateQuantities();
+
+        const isEnabled = hasRemarks && hasValidQuantities;
+        $('#btn-create-reservation').prop('disabled', !isEnabled);
+
+        return isEnabled;
+    }
+
+    // ============================
     // CSRF ERROR HANDLING
     // ============================
 
@@ -1049,22 +1164,54 @@
     // STEP 1: PLANT SELECTION
     // ============================
 
+    function updateNextButtonStep1() {
+        const plantSelected = $('#plant_select').val() !== '';
+        const plantSupplyFilled = $('#plant_supply').val().trim() !== '';
+
+        $('#btn-next-step1').prop('disabled', !(plantSelected && plantSupplyFilled));
+
+        // Update review section
+        if (plantSelected) {
+            $('#review-plant-request').text($('#plant_select').val());
+        }
+        if (plantSupplyFilled) {
+            $('#review-plant-supply').text($('#plant_supply').val());
+        }
+    }
+
     function initializePlantSelection() {
         $('#plant_select').on('change', function() {
             selectedPlant = $(this).val();
             if (selectedPlant) {
-                $('#btn-next-step1').prop('disabled', false);
+                updateNextButtonStep1();
                 loadMaterialTypes(selectedPlant);
             } else {
-                $('#btn-next-step1').prop('disabled', true);
+                updateNextButtonStep1();
             }
+        });
+
+        $('#plant_supply').on('input', function() {
+            selectedPlantSupply = $(this).val().trim();
+            updateNextButtonStep1();
         });
 
         $('#btn-next-step1').on('click', function() {
             if (!selectedPlant) {
-                showNotification('Please select a plant first', 'warning', 3000);
+                showNotification('Please select a plant request first', 'warning', 3000);
                 return;
             }
+
+            if (!selectedPlantSupply) {
+                showNotification('Please enter plant supply', 'warning', 3000);
+                return;
+            }
+
+            // Validate plant supply format (should be numeric)
+            if (!/^\d+$/.test(selectedPlantSupply)) {
+                showNotification('Plant supply must contain only numbers', 'warning', 3000);
+                return;
+            }
+
             currentStep = 2;
             updateStepNavigation();
         });
@@ -1231,7 +1378,7 @@
         });
 
         $('#btn-prev-step2').on('click', function() {
-            currentStep = 1;
+            currentStep = 2;
             updateStepNavigation();
         });
 
@@ -1935,10 +2082,24 @@
                 $(this).val(minValue);
                 showNotification(`Quantity cannot be less than ${minValue}`, 'warning', 3000);
             }
+            // PERUBAHAN: Validasi tombol setelah perubahan kuantitas
+            validateCreateButton();
         });
+
+        // PERUBAHAN: Initial validation setelah tabel terisi
+        validateCreateButton();
     }
 
     function createReservationDocument() {
+        // Validasi remarks wajib diisi
+        const documentRemarks = $('#document-remarks').val().trim();
+        if (!documentRemarks) {
+            showNotification('Document remarks are required', 'error', 5000);
+            $('#document-remarks').addClass('remarks-error');
+            $('#document-remarks').focus();
+            return;
+        }
+
         // Validate quantities
         let isValid = true;
         let materialsData = [];
@@ -2009,9 +2170,11 @@
         // Debug logging untuk melihat data yang akan dikirim
         console.log('📤 Preparing to send materials data:', {
             plant: selectedPlant,
+            plant_supply: selectedPlantSupply,
             material_types: selectedMaterialTypes,
             materials_count: materialsData.length,
             pro_numbers_count: selectedProNumbers.length,
+            document_remarks: documentRemarks,
             first_material: materialsData[0] ? {
                 code: materialsData[0].material_code_display,
                 qty: materialsData[0].requested_qty,
@@ -2027,10 +2190,13 @@
         // Format data untuk dikirim
         const requestData = {
             plant: selectedPlant,
+            plant_supply: selectedPlantSupply,
             material_types: selectedMaterialTypes,
             materials: materialsData,
             selected_materials: selectedMaterials,
             pro_numbers: selectedProNumbers,
+            // PERUBAHAN: Tambahkan remarks ke data yang dikirim
+            remarks: documentRemarks,
             _token: csrfToken
         };
 
@@ -2038,7 +2204,9 @@
             url: '/reservations/create-document',
             data_summary: {
                 plant: selectedPlant,
+                plant_supply: selectedPlantSupply,
                 materials_count: materialsData.length,
+                document_remarks: documentRemarks,
                 first_material: materialsData[0]?.material_code_display
             }
         });
@@ -2141,11 +2309,19 @@
             updateStepNavigation();
         });
 
+        // PERUBAHAN: Event listener untuk remarks
+        $('#document-remarks').on('input', function() {
+            validateCreateButton();
+        });
+
         $('#btn-create-reservation').on('click', function() {
             if (confirm('Are you sure you want to create the reservation document?\n\nThis will delete used sync data from the database.')) {
                 createReservationDocument();
             }
         });
+
+        // PERUBAHAN: Initial validation saat step 5 dimuat
+        validateCreateButton();
     }
 
     // ============================
@@ -2192,3 +2368,4 @@
 </script>
 @endpush
 @endsection
+

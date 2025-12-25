@@ -30,7 +30,7 @@ class TransferItem extends Model
         'available_stock' => 'decimal:3'
     ];
 
-    public function transfer(): BelongsTo
+    public function transfer()
     {
         return $this->belongsTo(Transfer::class);
     }

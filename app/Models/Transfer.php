@@ -30,7 +30,7 @@ class Transfer extends Model
         'completed_at' => 'datetime'
     ];
 
-    public function items(): HasMany
+    public function items()
     {
         return $this->hasMany(TransferItem::class);
     }

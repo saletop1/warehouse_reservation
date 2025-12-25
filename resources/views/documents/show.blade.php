@@ -205,10 +205,7 @@
                                 <span class="info-value text-truncate" style="max-width: 200px;" title="{{ $document->remarks }}">{{ $document->remarks }}</span>
                             </div>
                             @endif
-                            <div class="info-item">
-                                <span class="info-label">Total Transferred</span>
-                                <span class="info-value">{{ number_format($document->total_transferred ?? 0) }} / {{ number_format($document->total_qty) }}</span>
-                            </div>
+                            <!-- HAPUS TOTAL TRANSFERRED -->
                         </div>
                     </div>
                 </div>
@@ -289,8 +286,8 @@
                                             <!-- KOLOM BARU: DISPC = MRP Comp -->
                                             <th class="border-end-0 text-center" style="min-width: 100px;">MRP Comp</th>
                                             <th class="border-end-0 text-center">Req Qty</th>
-                                            <th class="border-end-0 text-center">Transferred</th>
                                             <th class="border-end-0 text-center">Remaining</th>
+                                            <th class="border-end-0 text-center">Status</th>
                                             <th class="border-end-0 text-center">Stock</th>
                                             <th class="border-end-0 text-center">Uom</th>
                                             <th class="text-center">Batch</th>
@@ -331,9 +328,36 @@
                                                     $salesOrders = $item->sales_orders;
                                                 }
 
-                                                $requestedQty = is_numeric($item->requested_qty ?? 0) ? floatval($item->requested_qty) : 0;
-                                                $transferredQty = is_numeric($item->transferred_qty ?? 0) ? floatval($item->transferred_qty) : 0;
+                                                // PERBAIKAN: Pastikan perhitungan akurat
+                                                $requestedQty = isset($item->requested_qty) && is_numeric($item->requested_qty)
+                                                    ? floatval($item->requested_qty)
+                                                    : 0;
+
+                                                $transferredQty = isset($item->transferred_qty) && is_numeric($item->transferred_qty)
+                                                    ? floatval($item->transferred_qty)
+                                                    : 0;
+
+                                                // Batasi transferred tidak melebihi requested
+                                                $transferredQty = min($transferredQty, $requestedQty);
+
+                                                // PERHITUNGAN REMAINING: Req Qty - Total Transferred
                                                 $remainingQty = max(0, $requestedQty - $transferredQty);
+
+                                                // PERBAIKAN: Hitung $hasTransferHistory dengan benar
+                                                $hasTransferHistory = $transferredQty > 0;
+
+                                                // PERBAIKAN: Gunakan transferred_qty dari relasi jika ada
+                                                // Coba ambil dari transfer details jika ada
+                                                $actualTransfers = 0;
+                                                if (method_exists($item, 'transferDetails') && $item->transferDetails) {
+                                                    $actualTransfers = $item->transferDetails->sum('quantity');
+                                                    // Jika ada transfer details, gunakan jumlahnya
+                                                    if ($actualTransfers > 0) {
+                                                        $hasTransferHistory = true;
+                                                        $transferredQty = $actualTransfers;
+                                                        $remainingQty = max(0, $requestedQty - $transferredQty);
+                                                    }
+                                                }
 
                                                 // Stock information - PERBAIKAN: Ambil dari stock_info yang sudah di-load
                                                 $stockInfo = $item->stock_info ?? null;
@@ -355,23 +379,8 @@
 
                                                 // Check if stock is available
                                                 $hasStock = $totalStock > 0;
-                                                $canTransfer = $hasStock && $remainingQty > 0;
                                                 $transferableQty = min($remainingQty, $totalStock);
-
-                                                // Determine status color
-                                                if ($transferredQty >= $requestedQty) {
-                                                    $statusClass = 'stock-custom-available';
-                                                    $statusIcon = 'fa-check-circle';
-                                                    $statusText = 'Completed';
-                                                } elseif ($transferredQty > 0) {
-                                                    $statusClass = 'stock-custom-partial';
-                                                    $statusIcon = 'fa-tasks';
-                                                    $statusText = 'Partial';
-                                                } else {
-                                                    $statusClass = 'stock-custom-unavailable';
-                                                    $statusIcon = 'fa-clock';
-                                                    $statusText = 'Pending';
-                                                }
+                                                $canTransfer = $remainingQty > 0 && $hasStock && $transferableQty > 0;
 
                                                 // Determine stock color class
                                                 if ($totalStock > 0) {
@@ -386,6 +395,10 @@
                                                     $stockClass = 'stock-custom-unavailable';
                                                     $stockIcon = 'fa-times-circle';
                                                 }
+
+                                                // PERBAIKAN: Tentukan apakah harus menampilkan View Details
+                                                // Tampilkan jika ada transfer history atau jika sudah ditransfer sebagian/seluruhnya
+                                                $showViewDetails = $hasTransferHistory || $transferredQty > 0 || $remainingQty < $requestedQty;
                                             @endphp
                                             <tr class="item-row draggable-row"
                                                 draggable="true"
@@ -458,13 +471,33 @@
                                                     <div class="fw-medium text-dark">{{ \App\Helpers\NumberHelper::formatQuantity($requestedQty) }}</div>
                                                 </td>
                                                 <td class="text-center border-end-0 align-middle">
-                                                    <div class="{{ $statusClass }} fw-medium">
-                                                        {{ \App\Helpers\NumberHelper::formatQuantity($transferredQty) }}
+                                                    <div class="fw-bold text-dark">
+                                                        {{ \App\Helpers\NumberHelper::formatQuantity($remainingQty) }}
                                                     </div>
                                                 </td>
                                                 <td class="text-center border-end-0 align-middle">
-                                                    <div class="fw-bold text-dark">
-                                                        {{ \App\Helpers\NumberHelper::formatQuantity($remainingQty) }}
+                                                    <!-- STATUS BERDASARKAN REMAINING -->
+                                                    @if($remainingQty == 0)
+                                                        <span class="badge bg-success">
+                                                            <i class="fas fa-check-circle me-1"></i>Completed
+                                                        </span>
+                                                    @elseif($remainingQty < $requestedQty && $remainingQty > 0)
+                                                        <span class="badge bg-warning">
+                                                            <i class="fas fa-tasks me-1"></i>Partial
+                                                        </span>
+                                                    @else
+                                                        <span class="badge bg-secondary">
+                                                            <i class="fas fa-clock me-1"></i>Pending
+                                                        </span>
+                                                    @endif
+
+                                                    <!-- SELALU tampilkan View Details untuk semua item -->
+                                                    <div class="mt-1">
+                                                        <a href="#" class="small text-primary view-transfer-details"
+                                                        data-material-code="{{ $item->material_code }}"
+                                                        data-material-description="{{ $item->material_description }}">
+                                                            <i class="fas fa-eye me-1"></i>View Details
+                                                        </a>
                                                     </div>
                                                 </td>
                                                 <td class="text-center border-end-0 align-middle">
@@ -604,184 +637,10 @@
     </div>
 </div>
 
-<!-- Custom Loader Modal -->
-<div class="modal fade" id="customLoadingModal" tabindex="-1" aria-labelledby="customLoadingModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content border-0 bg-transparent">
-            <div class="modal-body p-0">
-                <!-- Loader from Uiverse.io by DevPTG - Modified -->
-                <div class="loader-stock" id="loaderStock">
-                    <div>S</div>
-                    <div>T</div>
-                    <div>O</div>
-                    <div>C</div>
-                    <div>K</div>
-                    <div>!</div>
-                </div>
-                <div class="text-center text-white mt-4" id="customLoadingText">Checking Stock...</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-    <!-- Transfer Preview Modal -->
-    <div class="modal fade" id="transferPreviewModal" tabindex="-1" aria-labelledby="transferPreviewModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content border-0 shadow-lg">
-                <div class="modal-header border-bottom py-3">
-                    <div class="d-flex justify-content-between align-items-center w-100">
-                        <h5 class="modal-title fw-semibold" id="transferPreviewModalLabel">
-                            <i class="fas fa-file-export me-2 text-primary"></i>Transfer Preview
-                        </h5>
-                        <div class="d-flex align-items-center">
-                            <span class="badge bg-primary ms-2">
-                                <i class="fas fa-file-alt me-1"></i>Doc: {{ $document->document_no }}
-                            </span>
-                            <button type="button" class="btn-close ms-3" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="alert alert-info border-0 bg-light mb-4">
-                        <i class="fas fa-info-circle me-2"></i>Review and edit transfer details before confirming. All fields are required.
-                    </div>
-
-                    <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
-                        <table class="table table-borderless mb-0" id="transferPreviewTable">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th class="text-center" style="width: 40px;">#</th>
-                                    <th style="width: 90px;">Material</th>
-                                    <th style="min-width: 150px;">Description</th>
-                                    <th class="text-center" style="width: 70px;">Remaining</th>
-                                    <th class="text-center" style="width: 70px;">Selected Batch Qty</th>
-                                    <th class="text-center" style="width: 90px;">Transfer Qty *</th>
-                                    <th class="text-center" style="width: 50px;">Unit</th>
-                                    <th class="text-center" style="width: 80px;">Plant Dest *</th>
-                                    <th class="text-center" style="width: 80px;">Sloc Dest *</th>
-                                    <th class="text-center" style="width: 200px;">Batch Source *</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Preview rows will be inserted here -->
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="row mt-4">
-                        <div class="col-md-6">
-                            <!-- PERBAIKAN: Tambahkan Document Information -->
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">
-                                    <i class="fas fa-file-alt me-1 text-muted"></i>Document Information
-                                </label>
-                                <div class="form-control-plaintext border rounded p-2 bg-light">
-                                    @if($document->remarks)
-                                        <div class="mb-2">{{ $document->remarks }}</div>
-                                    @endif
-                                    @if($document->created_by_name ?? $document->user->name ?? false)
-                                        <div class="mt-2">
-                                            <span class="badge bg-warning text-dark">
-                                                <i class="fas fa-user me-1"></i>
-                                                {{ $document->created_by_name ?? $document->user->name ?? 'N/A' }}
-                                            </span>
-                                        </div>
-                                    @endif
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="transferRemarks" class="form-label fw-semibold">
-                                    <i class="fas fa-sticky-note me-1 text-muted"></i>Transfer Remarks *
-                                </label>
-                                <textarea class="form-control" id="transferRemarks" rows="2"
-                                        placeholder="Add remarks for this transfer..."></textarea>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card border-0 bg-light">
-                                <div class="card-body">
-                                    <h6 class="fw-semibold mb-3">
-                                        <i class="fas fa-clipboard-list me-2 text-primary"></i>Transfer Summary
-                                    </h6>
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">Total Items:</span>
-                                        <span class="fw-bold" id="modalTotalItems">0</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">Total Transfer Qty:</span>
-                                        <span class="fw-bold" id="modalTotalQty">0</span>
-                                    </div>
-                                    <!-- PERBAIKAN: Tampilkan Plant Supply dengan field yang benar -->
-                                    <div class="d-flex justify-content-between">
-                                        <span class="text-muted">Plant Supply:</span>
-                                        <span class="fw-medium">
-                                            @if(isset($document->plant_supply) && !empty($document->plant_supply))
-                                                {{ $document->plant_supply }}
-                                            @elseif(isset($document->sloc_supply) && !empty($document->sloc_supply))
-                                                {{ $document->sloc_supply }}
-                                            @else
-                                                N/A
-                                            @endif
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-top py-3">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-1"></i> Cancel
-                    </button>
-                    <button type="button" class="btn btn-primary" id="confirmTransfer">
-                        <i class="fas fa-paper-plane me-1"></i> Confirm
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-<!-- SAP Credentials Modal -->
-<div class="modal fade" id="sapCredentialsModal" tabindex="-1" aria-labelledby="sapCredentialsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-md">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header border-bottom py-3">
-                <h5 class="modal-title fw-semibold" id="sapCredentialsModalLabel">
-                    <i class="fas fa-key me-2 text-primary"></i>SAP Credentials Required
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-4">
-                <div class="alert alert-warning border-0 bg-light mb-4">
-                    <i class="fas fa-exclamation-triangle me-2"></i>Please enter your SAP credentials to proceed with the transfer.
-                </div>
-                <div class="mb-3">
-                    <label for="sapUsername" class="form-label fw-semibold">
-                        <i class="fas fa-user me-1 text-muted"></i>SAP Username *
-                    </label>
-                    <input type="text" class="form-control uppercase-input" id="sapUsername"
-                           placeholder="Enter SAP username" required>
-                </div>
-                <div class="mb-3">
-                    <label for="sapPassword" class="form-label fw-semibold">
-                        <i class="fas fa-lock me-1 text-muted"></i>SAP Password *
-                    </label>
-                    <input type="password" class="form-control" id="sapPassword"
-                           placeholder="Enter SAP password" required>
-                </div>
-            </div>
-            <div class="modal-footer border-top py-3">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-1"></i> Cancel
-                </button>
-                                <button type="button" class="btn btn-primary" id="submitSapCredentials">
-                    <i class="fas fa-paper-plane me-1"></i> Submit & Process Transfer
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Include Modals -->
+@include('documents.partials.transfer-details-modal')
+@include('documents.partials.transfer-preview-modal')
+@include('documents.partials.sap-credentials-modal')
 
 <!-- Toast Container -->
 <div id="toastContainer" class="toast-container position-fixed top-0 start-0 p-3" style="z-index: 9999;"></div>
@@ -1042,7 +901,7 @@
 
 .transfer-item-qty {
     display: flex;
-    align-items-center;
+    align-items: center;
     flex-wrap: wrap;
     gap: 6px;
     margin-top: 4px;
@@ -1054,6 +913,32 @@
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 12px;
+}
+
+/* PERBAIKAN: Badge color fixes */
+.badge.bg-success {
+    background-color: #28a745 !important;
+    color: white !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+    color: white !important;
+}
+
+.badge.bg-info {
+    background-color: #17a2b8 !important;
+    color: white !important;
+}
+
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+    color: white !important;
 }
 
 /* Drag and Drop */
@@ -1216,255 +1101,6 @@
     font-weight: 500;
 }
 
-/* Custom Loader from Uiverse.io by DevPTG - Modified */
-.loader-stock {
-  position: relative;
-  width: 600px;
-  height: 36px;
-  left: 50%;
-  top: 40%;
-  margin-left: -300px;
-  overflow: visible;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-  cursor: default;
-}
-
-.loader-stock div {
-  position: absolute;
-  width: 20px;
-  height: 36px;
-  opacity: 0;
-  font-family: Helvetica, Arial, sans-serif;
-  animation: move 2s linear infinite;
-  -o-animation: move 2s linear infinite;
-  -moz-animation: move 2s linear infinite;
-  -webkit-animation: move 2s linear infinite;
-  transform: rotate(180deg);
-  -o-transform: rotate(180deg);
-  -moz-transform: rotate(180deg);
-  -webkit-transform: rotate(180deg);
-  font-size: 28px;
-  font-weight: bold;
-}
-
-/* Warna default untuk checking stock */
-.loader-stock.checking-stock div {
-  color: #35C4F0;
-}
-
-/* Warna untuk processing transfer */
-.loader-stock.processing-transfer div {
-  color: #4CAF50;
-}
-
-/* Warna untuk resetting */
-.loader-stock.resetting div {
-  color: #FF9800;
-}
-
-.loader-stock div:nth-child(2) {
-  animation-delay: 0.2s;
-  -o-animation-delay: 0.2s;
-  -moz-animation-delay: 0.2s;
-  -webkit-animation-delay: 0.2s;
-}
-
-.loader-stock div:nth-child(3) {
-  animation-delay: 0.4s;
-  -o-animation-delay: 0.4s;
-  -webkit-animation-delay: 0.4s;
-  -webkit-animation-delay: 0.4s;
-}
-
-.loader-stock div:nth-child(4) {
-  animation-delay: 0.6s;
-  -o-animation-delay: 0.6s;
-  -moz-animation-delay: 0.6s;
-  -webkit-animation-delay: 0.6s;
-}
-
-.loader-stock div:nth-child(5) {
-  animation-delay: 0.8s;
-  -o-animation-delay: 0.8s;
-  -moz-animation-delay: 0.8s;
-  -webkit-animation-delay: 0.8s;
-}
-
-.loader-stock div:nth-child(6) {
-  animation-delay: 1s;
-  -o-animation-delay: 1s;
-  -moz-animation-delay: 1s;
-  -webkit-animation-delay: 1s;
-}
-
-@keyframes move {
-  0% {
-    left: 0;
-    opacity: 0;
-  }
-
-  35% {
-    left: 41%;
-    -moz-transform: rotate(0deg);
-    -webkit-transform: rotate(0deg);
-    -o-transform: rotate(0deg);
-    transform: rotate(0deg);
-    opacity: 1;
-  }
-
-  65% {
-    left: 59%;
-    -moz-transform: rotate(0deg);
-    -webkit-transform: rotate(0deg);
-    -o-transform: rotate(0deg);
-    transform: rotate(0deg);
-    opacity: 1;
-  }
-
-  100% {
-    left: 100%;
-    -moz-transform: rotate(-180deg);
-    -webkit-transform: rotate(-180deg);
-    -o-transform: rotate(-180deg);
-    transform: rotate(-180deg);
-    opacity: 0;
-  }
-}
-
-@-moz-keyframes move {
-  0% {
-    left: 0;
-    opacity: 0;
-  }
-
-  35% {
-    left: 41%;
-    -moz-transform: rotate(0deg);
-    transform: rotate(0deg);
-    opacity: 1;
-  }
-
-  65% {
-    left: 59%;
-    -moz-transform: rotate(0deg);
-    transform: rotate(0deg);
-    opacity: 1;
-  }
-
-  100% {
-    left: 100%;
-    -moz-transform: rotate(-180deg);
-    transform: rotate(-180deg);
-    opacity: 0;
-  }
-}
-
-@-webkit-keyframes move {
-  0% {
-    left: 0;
-    opacity: 0;
-  }
-
-  35% {
-    left: 41%;
-    -webkit-transform: rotate(0deg);
-    transform: rotate(0deg);
-    opacity: 1;
-  }
-
-  65% {
-    left: 59%;
-    -webkit-transform: rotate(0deg);
-    transform: rotate(0deg);
-    opacity: 1;
-  }
-
-  100% {
-    left: 100%;
-    -webkit-transform: rotate(-180deg);
-    transform: rotate(-180deg);
-    opacity: 0;
-  }
-}
-
-@-o-keyframes move {
-  0% {
-    left: 0;
-    opacity: 0;
-  }
-
-  35% {
-    left: 41%;
-    -o-transform: rotate(0deg);
-    transform: rotate(0deg);
-    opacity: 1;
-  }
-
-  65% {
-    left: 59%;
-    -o-transform: rotate(0deg);
-    transform: rotate(0deg);
-    opacity: 1;
-  }
-
-  100% {
-    left: 100%;
-    -o-transform: rotate(-180deg);
-    transform: rotate(-180deg);
-    opacity: 0;
-  }
-}
-
-/* Adjust modal for the loader */
-#customLoadingModal .modal-content {
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-}
-
-#customLoadingModal .modal-body {
-  padding: 60px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-#customLoadingText {
-  font-size: 16px;
-  font-weight: 500;
-  color: #35C4F0;
-  text-shadow: 0 0 10px rgba(53, 196, 240, 0.5);
-  margin-top: 20px;
-  font-family: 'Segoe UI', Arial, sans-serif;
-}
-
-/* Responsive adjustments for loader */
-@media (max-width: 768px) {
-  .loader-stock {
-    width: 400px;
-    margin-left: -200px;
-  }
-
-  .loader-stock div {
-    font-size: 24px;
-  }
-}
-
-@media (max-width: 576px) {
-  .loader-stock {
-    width: 300px;
-    margin-left: -150px;
-  }
-
-  .loader-stock div {
-    font-size: 20px;
-  }
-}
-
 /* Button disabled styles */
 .btn:disabled {
     opacity: 0.5;
@@ -1475,7 +1111,72 @@
     background-color: #6c757d;
     border-color: #6c757d;
 }
+
+/* View Details link */
+.view-transfer-details {
+    text-decoration: none;
+    font-size: 11px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background-color: rgba(13, 110, 253, 0.1);
+    display: inline-block;
+    margin-top: 3px;
+}
+
+.view-transfer-details:hover {
+    text-decoration: underline;
+    background-color: rgba(13, 110, 253, 0.2);
+}
+
+/* Status badge text colors */
+.bg-success {
+    color: white !important;
+}
+
+.bg-warning {
+    color: #212529 !important;
+}
+
+.bg-secondary {
+    color: white !important;
+}
+
+/* Loading overlay */
+.loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+
+.loading-overlay.show {
+    display: flex;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 </style>
+
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -1483,6 +1184,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let transferItems = [];
     let selectedItems = new Set();
     let pendingTransferData = null;
+    let isDragging = false;
 
     // Helper functions
     function formatAngka(num, decimalDigits = 2) {
@@ -1508,76 +1210,212 @@ document.addEventListener('DOMContentLoaded', function() {
         return parseFloat(cleaned) || 0;
     }
 
-    // Function to show loader with specific action
-    function showLoader(action, text = '') {
-        const loaderElement = document.getElementById('loaderStock');
-        const loadingText = document.getElementById('customLoadingText');
+    // Show/hide loading overlay
+    function showLoading() {
+        document.getElementById('loadingOverlay').classList.add('show');
+    }
 
-        // Reset loader classes
-        loaderElement.classList.remove('checking-stock', 'processing-transfer', 'resetting');
+    function hideLoading() {
+        document.getElementById('loadingOverlay').classList.remove('show');
+    }
 
-        // Set loader class based on action
-        switch(action) {
-            case 'checking':
-                loaderElement.classList.add('checking-stock');
-                loadingText.textContent = text || 'Checking Stock...';
-                loadingText.style.color = '#35C4F0';
-                break;
-            case 'transfer':
-                loaderElement.classList.add('processing-transfer');
-                loadingText.textContent = text || 'Processing Transfer...';
-                loadingText.style.color = '#4CAF50';
-                break;
-            case 'resetting':
-                loaderElement.classList.add('resetting');
-                loadingText.textContent = text || 'Resetting Stock...';
-                loadingText.style.color = '#FF9800';
-                break;
-            default:
-                loaderElement.classList.add('checking-stock');
-                loadingText.textContent = text || 'Loading...';
-                loadingText.style.color = '#35C4F0';
+    // Toast notification
+    function showToast(message, type = 'info') {
+        const toastContainer = document.getElementById('toastContainer');
+        const toastId = 'toast-' + Date.now();
+
+        const bgClass = {
+            'success': 'bg-success',
+            'error': 'bg-danger',
+            'warning': 'bg-warning',
+            'info': 'bg-info'
+        }[type] || 'bg-info';
+
+        const iconClass = {
+            'success': 'fa-check-circle',
+            'error': 'fa-times-circle',
+            'warning': 'fa-exclamation-triangle',
+            'info': 'fa-info-circle'
+        }[type] || 'fa-info-circle';
+
+        const toastHTML = `
+            <div id="${toastId}" class="toast ${bgClass} text-white border-0" role="alert">
+                <div class="toast-body">
+                    <div class="d-flex align-items-center">
+                        <i class="fas ${iconClass} me-3"></i>
+                        <div class="flex-grow-1">${message}</div>
+                        <button type="button" class="btn-close btn-close-white ms-3" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+        const toastElement = document.getElementById(toastId);
+
+        const toast = new bootstrap.Toast(toastElement, {
+            delay: 5000,
+            animation: true,
+            autohide: true
+        });
+        toast.show();
+
+        toastElement.addEventListener('hidden.bs.toast', function() {
+            this.remove();
+        });
+    }
+
+    // Function untuk show transfer details dengan data
+    function showTransferDetailsModalWithData(materialCode, materialDescription, transferData) {
+        const modalElement = document.getElementById('transferDetailsModal');
+        if (!modalElement) {
+            console.error('Modal element not found');
+            return;
         }
 
-        // Show modal
-        const loadingModal = new bootstrap.Modal(document.getElementById('customLoadingModal'));
-        loadingModal.show();
+        // Gunakan modal instance yang ada atau buat baru
+        let modal = bootstrap.Modal.getInstance(modalElement);
+        if (!modal) {
+            modal = new bootstrap.Modal(modalElement);
+        }
 
-        return loadingModal;
+        // Set judul modal
+        const modalTitle = document.getElementById('transferDetailsModalLabel');
+        if (modalTitle) {
+            modalTitle.innerHTML = `<i class="fas fa-list-alt me-2 text-primary"></i>Transfer Details - ${materialCode}`;
+        }
+
+        // Set deskripsi material
+        const materialDesc = document.getElementById('detailMaterialDescription');
+        if (materialDesc) {
+            materialDesc.textContent = materialDescription;
+        }
+
+        // Isi tabel dengan data transfer
+        const tbody = document.querySelector('#transferDetailsTable tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+
+            if (transferData && transferData.length > 0) {
+                transferData.forEach((transfer, index) => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td class="text-center">${index + 1}</td>
+                        <td>${transfer.transfer_no || '-'}</td>
+                        <td>${transfer.material_code || materialCode}</td>
+                        <td>${transfer.batch || '-'}</td>
+                        <td class="text-center">${formatAngka(transfer.quantity || 0)}</td>
+                        <td class="text-center">${transfer.unit || 'PC'}</td>
+                        <td class="text-center">${transfer.created_at ? new Date(transfer.created_at).toLocaleString() : '-'}</td>
+                    `;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-info-circle me-2"></i>No transfer data found</td></tr>';
+            }
+        }
+
+        // Tampilkan modal
+        modal.show();
     }
+
+    // Setup event listener untuk view transfer details
+    document.querySelectorAll('.view-transfer-details').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const materialCode = this.getAttribute('data-material-code');
+            const materialDescription = this.getAttribute('data-material-description');
+
+            // Tampilkan loading
+            showLoading();
+
+            // Ambil data dari server
+            fetch(`/documents/{{ $document->id }}/items/${encodeURIComponent(materialCode)}/transfer-history`, {
+                method: 'GET',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok: ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Sembunyikan loading
+                hideLoading();
+
+                // Tampilkan data di modal dengan fungsi aman
+                showTransferDetailsModalWithData(materialCode, materialDescription, data);
+            })
+            .catch(error => {
+                console.error('Error fetching transfer details:', error);
+                // Sembunyikan loading
+                hideLoading();
+                showToast('Error loading transfer details: ' + error.message, 'error');
+
+                // Tampilkan modal kosong dengan fungsi aman
+                showTransferDetailsModalWithData(materialCode, materialDescription, []);
+            });
+        });
+    });
 
     // Setup drag and drop
     function setupDragAndDrop() {
         const rows = document.querySelectorAll('.draggable-row');
         const dropZone = document.getElementById('transferContainer');
 
+        // Make rows draggable
         rows.forEach(function(row) {
             const remainingQty = parseFloat(row.dataset.remainingQty || 0);
             const availableStock = parseFloat(row.dataset.availableStock || 0);
 
             if (remainingQty > 0 && availableStock > 0) {
                 row.draggable = true;
+                row.style.cursor = 'grab';
 
                 row.addEventListener('dragstart', function(e) {
+                    isDragging = true;
                     this.classList.add('dragging');
-                    const isSelected = selectedItems.has(this.dataset.itemId);
 
-                    if (selectedItems.size > 0 && isSelected) {
-                        e.dataTransfer.setData('text/plain', 'multiple');
-                    } else {
-                        e.dataTransfer.setData('text/plain', this.dataset.itemId);
-                    }
-
+                    // Set the drag data
+                    e.dataTransfer.setData('text/plain', this.dataset.itemId);
                     e.dataTransfer.effectAllowed = 'copy';
+
+                    // Visual feedback
+                    setTimeout(() => {
+                        this.classList.add('opacity-50');
+                    }, 0);
                 });
 
                 row.addEventListener('dragend', function() {
-                    this.classList.remove('dragging');
+                    isDragging = false;
+                    this.classList.remove('dragging', 'opacity-50');
+                });
+
+                row.addEventListener('dragenter', function(e) {
+                    if (isDragging) {
+                        e.preventDefault();
+                        this.classList.add('drag-over');
+                    }
+                });
+
+                row.addEventListener('dragover', function(e) {
+                    if (isDragging) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'copy';
+                    }
+                });
+
+                row.addEventListener('dragleave', function() {
+                    this.classList.remove('drag-over');
                 });
             } else {
                 row.draggable = false;
                 row.classList.add('zero-stock');
                 row.title = remainingQty <= 0 ? 'Already transferred' : 'No stock available';
+                row.style.cursor = 'not-allowed';
             }
         });
 
@@ -1588,8 +1426,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (canGenerateTransfer && hasTransferableItems) {
             dropZone.addEventListener('dragover', function(e) {
                 e.preventDefault();
-                this.classList.add('drag-over');
                 e.dataTransfer.dropEffect = 'copy';
+                this.classList.add('drag-over');
             });
 
             dropZone.addEventListener('dragleave', function() {
@@ -1599,12 +1437,10 @@ document.addEventListener('DOMContentLoaded', function() {
             dropZone.addEventListener('drop', function(e) {
                 e.preventDefault();
                 this.classList.remove('drag-over');
-                const data = e.dataTransfer.getData('text/plain');
+                const itemId = e.dataTransfer.getData('text/plain');
 
-                if (data === 'multiple') {
-                    addSelectedItemsToTransfer();
-                } else if (data) {
-                    addItemById(data);
+                if (itemId) {
+                    addItemById(itemId);
                 }
             });
         }
@@ -1615,41 +1451,32 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectAllCheckbox = document.getElementById('selectAllCheckbox');
         const selectAllHeader = document.getElementById('selectAllHeader');
 
+        // Handle select all checkboxes
+        function handleSelectAll(isChecked) {
+            const checkboxes = document.querySelectorAll('.row-select:not(:disabled)');
+
+            checkboxes.forEach(function(cb) {
+                cb.checked = isChecked;
+                const itemId = cb.dataset.itemId;
+                if (isChecked) {
+                    selectedItems.add(itemId);
+                } else {
+                    selectedItems.delete(itemId);
+                }
+            });
+
+            updateSelectionCount();
+        }
+
         if (selectAllCheckbox) {
-            selectAllCheckbox.addEventListener('click', function(e) {
-                const isChecked = e.target.checked;
-                const checkboxes = document.querySelectorAll('.row-select:not(:disabled)');
-
-                checkboxes.forEach(function(cb) {
-                    cb.checked = isChecked;
-                    const itemId = cb.dataset.itemId;
-                    if (isChecked) {
-                        selectedItems.add(itemId);
-                    } else {
-                        selectedItems.delete(itemId);
-                    }
-                });
-
-                updateSelectionCount();
+            selectAllCheckbox.addEventListener('change', function(e) {
+                handleSelectAll(e.target.checked);
             });
         }
 
         if (selectAllHeader) {
-            selectAllHeader.addEventListener('click', function(e) {
-                const isChecked = e.target.checked;
-                const checkboxes = document.querySelectorAll('.row-select:not(:disabled)');
-
-                checkboxes.forEach(function(cb) {
-                    cb.checked = isChecked;
-                    const itemId = cb.dataset.itemId;
-                    if (isChecked) {
-                        selectedItems.add(itemId);
-                    } else {
-                        selectedItems.delete(itemId);
-                    }
-                });
-
-                updateSelectionCount();
+            selectAllHeader.addEventListener('change', function(e) {
+                handleSelectAll(e.target.checked);
             });
         }
 
@@ -1677,6 +1504,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.querySelectorAll('.row-select').forEach(function(cb) {
                         cb.checked = false;
                     });
+                    if (selectAllCheckbox) selectAllCheckbox.checked = false;
+                    if (selectAllHeader) selectAllHeader.checked = false;
                     updateSelectionCount();
                     showToast('Selection cleared', 'info');
                 }
@@ -1719,53 +1548,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (selectAllCheckbox) selectAllCheckbox.checked = false;
             if (selectAllHeader) selectAllHeader.checked = false;
         }
-    }
-
-    // Toast notification
-    function showToast(message, type = 'info') {
-        const toastContainer = document.getElementById('toastContainer');
-        const toastId = 'toast-' + Date.now();
-
-        const bgClass = {
-            'success': 'bg-success',
-            'error': 'bg-danger',
-            'warning': 'bg-warning',
-            'info': 'bg-info'
-        }[type] || 'bg-info';
-
-        const iconClass = {
-            'success': 'fa-check-circle',
-            'error': 'fa-times-circle',
-            'warning': 'fa-exclamation-triangle',
-            'info': 'fa-info-circle'
-        }[type] || 'fa-info-circle';
-
-        const toastHTML = `
-            <div id="${toastId}" class="toast ${bgClass} text-white border-0" role="alert">
-                <div class="toast-body">
-                    <div class="d-flex align-items-center">
-                        <i class="fas ${iconClass} me-3"></i>
-                        <div class="flex-grow-1">${message}</div>
-                        <button type="button" class="btn-close btn-close-white ms-3" data-bs-dismiss="toast"></button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-        const toastElement = document.getElementById(toastId);
-
-        // Set longer duration (8000ms = 8 seconds)
-        const toast = new bootstrap.Toast(toastElement, {
-            delay: 8000,
-            animation: true,
-            autohide: true
-        });
-        toast.show();
-
-        toastElement.addEventListener('hidden.bs.toast', function() {
-            this.remove();
-        });
     }
 
     // Get item data from row
@@ -2124,6 +1906,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Setup event listeners for modal inputs
         setupModalEventListeners();
+
+        // Setup confirm button event listener
+        setupConfirmButton();
     }
 
     // Create batch options
@@ -2316,6 +2101,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Setup confirm button event listener
+    function setupConfirmButton() {
+        const confirmTransferBtn = document.getElementById('confirmTransfer');
+        if (confirmTransferBtn) {
+            // Remove existing event listeners
+            const newConfirmBtn = confirmTransferBtn.cloneNode(true);
+            confirmTransferBtn.parentNode.replaceChild(newConfirmBtn, confirmTransferBtn);
+
+            // Add new event listener
+            newConfirmBtn.addEventListener('click', function() {
+                validateAndConfirmTransfer();
+            });
+        }
+    }
+
     // Update modal totals
     function updateModalTotals() {
         let totalQty = 0;
@@ -2335,208 +2135,205 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Confirm transfer button
-    const confirmTransferBtn = document.getElementById('confirmTransfer');
-    if (confirmTransferBtn) {
-        confirmTransferBtn.addEventListener('click', function() {
-            const transferRemarks = document.getElementById('transferRemarks');
-            const remarks = transferRemarks ? transferRemarks.value.trim() : '';
+    // Validate and confirm transfer
+    function validateAndConfirmTransfer() {
+        const transferRemarks = document.getElementById('transferRemarks');
+        const remarks = transferRemarks ? transferRemarks.value.trim() : '';
 
-            // Validasi: Plant Supply
-            const plantSupply = "{{ $document->plant_supply ?? '' }}";
-            const slocSupply = "{{ $document->sloc_supply ?? '' }}";
-            const finalPlantSupply = plantSupply || slocSupply;
+        // Validasi: Plant Supply
+        const plantSupply = "{{ $document->plant_supply ?? '' }}";
+        const slocSupply = "{{ $document->sloc_supply ?? '' }}";
+        const finalPlantSupply = plantSupply || slocSupply;
 
-            if (!finalPlantSupply) {
-                showToast('Plant Supply is required. Please check document information.', 'error');
-                return;
-            }
+        if (!finalPlantSupply) {
+            showToast('Plant Supply is required. Please check document information.', 'error');
+            return;
+        }
 
-            // Validasi: SLOC Destination untuk semua item
-            let slocDestValid = true;
-            let slocErrorMessage = '';
-            document.querySelectorAll('.sloc-tujuan-input').forEach(function(input) {
-                if (!input.value || input.value.trim() === '') {
-                    slocDestValid = false;
-                    const index = parseInt(input.dataset.index);
-                    const materialCode = transferItems[index].materialCode;
-                    slocErrorMessage = 'SLOC Destination for ' + materialCode + ' is required';
-                    input.classList.add('is-invalid');
-                    input.focus();
-                    return false;
-                } else {
-                    input.classList.remove('is-invalid');
-                }
-            });
-
-            if (!slocDestValid) {
-                showToast(slocErrorMessage, 'error');
-                return;
-            }
-
-            // Validasi: Remarks
-            if (!remarks) {
-                showToast('Remarks is required. Please add remarks for this transfer.', 'error');
-                if (transferRemarks) {
-                    transferRemarks.focus();
-                    transferRemarks.classList.add('is-invalid');
-                }
-                return;
+        // Validasi: SLOC Destination untuk semua item
+        let slocDestValid = true;
+        let slocErrorMessage = '';
+        document.querySelectorAll('.sloc-tujuan-input').forEach(function(input) {
+            if (!input.value || input.value.trim() === '') {
+                slocDestValid = false;
+                const index = parseInt(input.dataset.index);
+                const materialCode = transferItems[index].materialCode;
+                slocErrorMessage = 'SLOC Destination for ' + materialCode + ' is required';
+                input.classList.add('is-invalid');
+                input.focus();
+                return false;
             } else {
-                if (transferRemarks) {
-                    transferRemarks.classList.remove('is-invalid');
-                }
+                input.classList.remove('is-invalid');
             }
-
-            // Validasi: Ensure all mandatory fields are filled
-            let isValid = true;
-            let errorMessage = '';
-
-            // Check all modal inputs
-            document.querySelectorAll('.qty-transfer-input, .plant-tujuan-input, .batch-source-select').forEach(function(input) {
-                if (!input.value || input.value.trim() === '') {
-                    isValid = false;
-                    const index = parseInt(input.dataset.index);
-                    const materialCode = transferItems[index].materialCode;
-                    const fieldName = input.classList.contains('qty-transfer-input') ? 'Transfer Quantity' :
-                                    input.classList.contains('plant-tujuan-input') ? 'Plant Destination' : 'Batch Source';
-                    errorMessage = fieldName + ' for ' + materialCode + ' is required';
-                    input.classList.add('is-invalid');
-                    input.focus();
-                    return false;
-                } else {
-                    input.classList.remove('is-invalid');
-                }
-            });
-
-            if (!isValid) {
-                showToast(errorMessage, 'error');
-                return;
-            }
-
-            // Validasi quantities berdasarkan batch quantity
-            transferItems.forEach(function(item, index) {
-                if (!item.qty || item.qty <= 0) {
-                    isValid = false;
-                    errorMessage = 'Quantity for ' + item.materialCode + ' must be greater than 0';
-                    return;
-                }
-
-                // Validasi: jumlah transfer tidak boleh melebihi batch quantity
-                if (item.qty > item.batchQty) {
-                    isValid = false;
-                    errorMessage = 'Quantity for ' + item.materialCode + ' (' + formatAngka(item.qty) + ') exceeds selected batch quantity (' + formatAngka(item.batchQty) + ')';
-                    return;
-                }
-            });
-
-            if (!isValid) {
-                showToast(errorMessage, 'error');
-                return;
-            }
-
-            // Update transferItems dengan data dari modal
-            document.querySelectorAll('.qty-transfer-input').forEach(function(input) {
-                const index = parseInt(input.dataset.index);
-                let value = input.value.trim();
-
-                if (value) {
-                    let parsedValue = parseAngka(value);
-                    transferItems[index].qty = parsedValue;
-                    transferItems[index].quantity = parsedValue;
-                }
-            });
-
-            // Update plant and sloc tujuan
-            document.querySelectorAll('.plant-tujuan-input').forEach(function(input) {
-                const index = parseInt(input.dataset.index);
-                transferItems[index].plantTujuan = input.value.toUpperCase();
-                transferItems[index].plant_dest = input.value.toUpperCase();
-            });
-
-            document.querySelectorAll('.sloc-tujuan-input').forEach(function(input) {
-                const index = parseInt(input.dataset.index);
-                transferItems[index].slocTujuan = input.value.toUpperCase();
-                transferItems[index].sloc_dest = input.value.toUpperCase();
-            });
-
-            // Update selected batch
-            document.querySelectorAll('.batch-source-select').forEach(function(select) {
-                const index = parseInt(select.dataset.index);
-                const selectedOption = select.options[select.selectedIndex];
-
-                if (selectedOption) {
-                    // Batch: nilai dari select (batch number)
-                    const batchValue = select.value;
-                    // Batch_sloc: dari data-sloc (storage location)
-                    const batchSloc = selectedOption.dataset.sloc || '';
-
-                    transferItems[index].selectedBatch = batchValue;
-                    transferItems[index].batch = batchValue;
-                    transferItems[index].batchSloc = batchSloc;
-                    transferItems[index].batchQty = parseFloat(selectedOption.dataset.qty) || 0;
-                }
-            });
-
-            // Save remarks to transfer items
-            transferItems.forEach(function(item) {
-                item.remarks = remarks;
-            });
-
-            // Ambil plant_supply atau sloc_supply dari document
-            const finalPlantSupplyForTransfer = finalPlantSupply;
-
-            // Struktur data yang dikirim ke Laravel
-            pendingTransferData = {
-                document_no: "{{ $document->document_no }}",
-                plant: "{{ $document->plant }}",
-                plant_supply: finalPlantSupplyForTransfer,
-                move_type: "311",
-                posting_date: new Date().toISOString().split('T')[0].replace(/-/g, ''),
-                header_text: "Transfer from Document {{ $document->document_no }}",
-                items: transferItems.map(function(item) {
-                    return {
-                        id: item.id,
-                        material_code: item.materialCode,
-                        material_desc: item.materialDesc,
-                        requested_qty: item.requestedQty,
-                        transferred_qty: item.transferredQty,
-                        remaining_qty: item.remainingQty,
-                        quantity: item.quantity,
-                        transfer_qty: item.quantity,
-                        unit: item.unit,
-                        plant_tujuan: item.plantTujuan,
-                        plant_dest: item.plant_dest,
-                        sloc_tujuan: item.slocTujuan,
-                        sloc_dest: item.sloc_dest,
-                        batch: item.batch || item.selectedBatch,
-                        batch_sloc: item.batchSloc,
-                        available_stock: item.batchQty,
-                        remarks: item.remarks
-                    };
-                }),
-                remarks: remarks
-            };
-
-            // Debug: Log data yang akan dikirim
-            console.log('Data transfer yang akan dikirim ke backend:', JSON.stringify(pendingTransferData, null, 2));
-
-            // Tutup modal transfer preview
-            const transferModalElement = document.getElementById('transferPreviewModal');
-            if (transferModalElement) {
-                const transferModal = bootstrap.Modal.getInstance(transferModalElement);
-                if (transferModal) {
-                    transferModal.hide();
-                }
-            }
-
-            // Tampilkan modal SAP credentials
-            const sapCredentialsModal = new bootstrap.Modal(document.getElementById('sapCredentialsModal'));
-            sapCredentialsModal.show();
         });
+
+        if (!slocDestValid) {
+            showToast(slocErrorMessage, 'error');
+            return;
+        }
+
+        // Validasi: Remarks
+        if (!remarks) {
+            showToast('Remarks is required. Please add remarks for this transfer.', 'error');
+            if (transferRemarks) {
+                transferRemarks.focus();
+                transferRemarks.classList.add('is-invalid');
+            }
+            return;
+        } else {
+            if (transferRemarks) {
+                transferRemarks.classList.remove('is-invalid');
+            }
+        }
+
+        // Validasi: Ensure all mandatory fields are filled
+        let isValid = true;
+        let errorMessage = '';
+
+        // Check all modal inputs
+        document.querySelectorAll('.qty-transfer-input, .plant-tujuan-input, .batch-source-select').forEach(function(input) {
+            if (!input.value || input.value.trim() === '') {
+                isValid = false;
+                const index = parseInt(input.dataset.index);
+                const materialCode = transferItems[index].materialCode;
+                const fieldName = input.classList.contains('qty-transfer-input') ? 'Transfer Quantity' :
+                                input.classList.contains('plant-tujuan-input') ? 'Plant Destination' : 'Batch Source';
+                errorMessage = fieldName + ' for ' + materialCode + ' is required';
+                input.classList.add('is-invalid');
+                input.focus();
+                return false;
+            } else {
+                input.classList.remove('is-invalid');
+            }
+        });
+
+        if (!isValid) {
+            showToast(errorMessage, 'error');
+            return;
+        }
+
+        // Validasi quantities berdasarkan batch quantity
+        transferItems.forEach(function(item, index) {
+            if (!item.qty || item.qty <= 0) {
+                isValid = false;
+                errorMessage = 'Quantity for ' + item.materialCode + ' must be greater than 0';
+                return;
+            }
+
+            // Validasi: jumlah transfer tidak boleh melebihi batch quantity
+            if (item.qty > item.batchQty) {
+                isValid = false;
+                errorMessage = 'Quantity for ' + item.materialCode + ' (' + formatAngka(item.qty) + ') exceeds selected batch quantity (' + formatAngka(item.batchQty) + ')';
+                return;
+            }
+        });
+
+        if (!isValid) {
+            showToast(errorMessage, 'error');
+            return;
+        }
+
+        // Update transferItems dengan data dari modal
+        document.querySelectorAll('.qty-transfer-input').forEach(function(input) {
+            const index = parseInt(input.dataset.index);
+            let value = input.value.trim();
+
+            if (value) {
+                let parsedValue = parseAngka(value);
+                transferItems[index].qty = parsedValue;
+                transferItems[index].quantity = parsedValue;
+            }
+        });
+
+        // Update plant and sloc tujuan
+        document.querySelectorAll('.plant-tujuan-input').forEach(function(input) {
+            const index = parseInt(input.dataset.index);
+            transferItems[index].plantTujuan = input.value.toUpperCase();
+            transferItems[index].plant_dest = input.value.toUpperCase();
+        });
+
+        document.querySelectorAll('.sloc-tujuan-input').forEach(function(input) {
+            const index = parseInt(input.dataset.index);
+            transferItems[index].slocTujuan = input.value.toUpperCase();
+            transferItems[index].sloc_dest = input.value.toUpperCase();
+        });
+
+        // Update selected batch
+        document.querySelectorAll('.batch-source-select').forEach(function(select) {
+            const index = parseInt(select.dataset.index);
+            const selectedOption = select.options[select.selectedIndex];
+
+            if (selectedOption) {
+                // Batch: nilai dari select (batch number)
+                const batchValue = select.value;
+                // Batch_sloc: dari data-sloc (storage location)
+                const batchSloc = selectedOption.dataset.sloc || '';
+
+                transferItems[index].selectedBatch = batchValue;
+                transferItems[index].batch = batchValue;
+                transferItems[index].batchSloc = batchSloc;
+                transferItems[index].batchQty = parseFloat(selectedOption.dataset.qty) || 0;
+            }
+        });
+
+        // Save remarks to transfer items
+        transferItems.forEach(function(item) {
+            item.remarks = remarks;
+        });
+
+        // Ambil plant_supply atau sloc_supply dari document
+        const finalPlantSupplyForTransfer = finalPlantSupply;
+
+        // Struktur data yang dikirim ke Laravel
+        pendingTransferData = {
+            document_no: "{{ $document->document_no }}",
+            plant: "{{ $document->plant }}",
+            plant_supply: finalPlantSupplyForTransfer,
+            move_type: "311",
+            posting_date: new Date().toISOString().split('T')[0].replace(/-/g, ''),
+            header_text: "Transfer from Document {{ $document->document_no }}",
+            items: transferItems.map(function(item) {
+                return {
+                    id: item.id,
+                    material_code: item.materialCode,
+                    material_desc: item.materialDesc,
+                    requested_qty: item.requestedQty,
+                    transferred_qty: item.transferredQty,
+                    remaining_qty: item.remainingQty,
+                    quantity: item.quantity,
+                    transfer_qty: item.quantity,
+                    unit: item.unit,
+                    plant_tujuan: item.plantTujuan,
+                    plant_dest: item.plant_dest,
+                    sloc_tujuan: item.slocTujuan,
+                    sloc_dest: item.sloc_dest,
+                    batch: item.batch || item.selectedBatch,
+                    batch_sloc: item.batchSloc,
+                    available_stock: item.batchQty,
+                    remarks: item.remarks
+                };
+            }),
+            remarks: remarks
+        };
+
+        // Debug: Log data yang akan dikirim
+        console.log('Data transfer yang akan dikirim ke backend:', JSON.stringify(pendingTransferData, null, 2));
+
+        // Tutup modal transfer preview
+        const transferModalElement = document.getElementById('transferPreviewModal');
+        if (transferModalElement) {
+            const transferModal = bootstrap.Modal.getInstance(transferModalElement);
+            if (transferModal) {
+                transferModal.hide();
+            }
+        }
+
+        // Tampilkan modal SAP credentials
+        const sapCredentialsModal = new bootstrap.Modal(document.getElementById('sapCredentialsModal'));
+        sapCredentialsModal.show();
     }
 
-    // Submit SAP credentials dan proses transfer
+    // Setup SAP credentials submit button
     const submitSapCredentialsBtn = document.getElementById('submitSapCredentials');
     if (submitSapCredentialsBtn) {
         submitSapCredentialsBtn.addEventListener('click', function() {
@@ -2557,8 +2354,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Show custom loading modal with transfer action
-            const loadingModal = showLoader('transfer', 'Processing Transfer...');
+            // Show loading
+            showLoading();
 
             // Struktur data sesuai dengan yang diharapkan Laravel controller
             const plantSupply = "{{ $document->plant_supply ?? '' }}";
@@ -2648,14 +2445,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(function(data) {
-                // Hide loading modal
-                const loadingModalElement = document.getElementById('customLoadingModal');
-                if (loadingModalElement) {
-                    const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
-                    if (loadingModal) {
-                        loadingModal.hide();
-                    }
-                }
+                // Hide loading
+                hideLoading();
 
                 if (data.success) {
                     // Show transfer number
@@ -2680,14 +2471,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(function(error) {
-                // Hide loading modal
-                const loadingModalElement = document.getElementById('customLoadingModal');
-                if (loadingModalElement) {
-                    const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
-                    if (loadingModal) {
-                        loadingModal.hide();
-                    }
-                }
+                // Hide loading
+                hideLoading();
 
                 console.error('Error:', error);
 
@@ -2718,19 +2503,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const checkStockForm = document.getElementById('checkStockForm');
     if (checkStockForm) {
         checkStockForm.addEventListener('submit', function(e) {
-            // Show custom loading modal with checking action
-            showLoader('checking', 'Checking Stock...');
+            // Show loading
+            showLoading();
         });
     }
 
-    // Handle reset stock form with custom loader
+    // Handle reset stock form
     const resetStockForm = document.getElementById('resetStockForm');
     if (resetStockForm) {
         resetStockForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
-            // Show custom loading modal with resetting action
-            const loadingModal = showLoader('resetting', 'Resetting Stock...');
+            // Show loading
+            showLoading();
 
             // Get form data
             const formData = new FormData(this);
@@ -2750,14 +2535,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(function(data) {
-                // Hide loading modal
-                const loadingModalElement = document.getElementById('customLoadingModal');
-                if (loadingModalElement) {
-                    const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
-                    if (loadingModal) {
-                        loadingModal.hide();
-                    }
-                }
+                // Hide loading
+                hideLoading();
 
                 if (data.success) {
                     showToast(data.message, 'success');
@@ -2770,14 +2549,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(function(error) {
-                // Hide loading modal
-                const loadingModalElement = document.getElementById('customLoadingModal');
-                if (loadingModalElement) {
-                    const loadingModal = bootstrap.Modal.getInstance(loadingModalElement);
-                    if (loadingModal) {
-                        loadingModal.hide();
-                    }
-                }
+                // Hide loading
+                hideLoading();
 
                 console.error('Error:', error);
                 showToast('Error resetting stock data: ' + error.message, 'error');
@@ -2785,9 +2558,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Handle focus untuk modal
+    function handleModalFocus() {
+        // Pastikan fokus dikembalikan ke body saat modal ditutup
+        document.querySelectorAll('.modal').forEach(function(modal) {
+            modal.addEventListener('hidden.bs.modal', function() {
+                // Kembalikan fokus ke body atau elemen yang aman
+                document.body.focus();
+                // Pastikan tidak ada elemen yang tetap fokus
+                if (document.activeElement && document.activeElement !== document.body) {
+                    document.activeElement.blur();
+                }
+            });
+
+            // Pastikan modal tidak mempertahankan fokus saat tersembunyi
+            modal.addEventListener('show.bs.modal', function() {
+                // Atur aria-hidden ke false saat modal ditampilkan
+                this.setAttribute('aria-hidden', 'false');
+            });
+
+            modal.addEventListener('hide.bs.modal', function() {
+                // Atur aria-hidden ke true saat modal disembunyikan
+                this.setAttribute('aria-hidden', 'true');
+            });
+        });
+    }
+
     // Initialize
     setupDragAndDrop();
     setupCheckboxSelection();
+    handleModalFocus(); // Inisialisasi handler fokus modal
 
     // Auto-hide alerts after 5 seconds
     setTimeout(function() {

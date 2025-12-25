@@ -100,6 +100,10 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{id}', [ReservationDocumentController::class, 'update'])->name('update');
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
+        Route::get('/{id}/items/{materialCode}/transfer-history',
+        [ReservationDocumentController::class, 'getItemTransferHistory'])
+        ->name('items.transfer-history');
+
         // routes/web.php atau routes/api.php
         Route::get('/documents/{document}/items/{item}/transfer-history',
         [ReservationDocumentController::class, 'getItemTransferHistory'])

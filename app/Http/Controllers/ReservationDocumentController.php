@@ -6,6 +6,8 @@ use App\Models\ReservationDocument;
 use App\Models\ReservationDocumentItem;
 use App\Models\ReservationStock;
 use App\Models\ReservationTransfer;
+use App\Models\TransferItem;
+use App\Models\Transfer;
 use Illuminate\Http\Request;
 use App\Exports\ReservationDocumentsSelectedExport;
 use App\Exports\DocumentItemsExport;
@@ -176,70 +178,69 @@ class ReservationDocumentController extends Controller
         }
 
                 /**
-         * Get transfer history for specific item
-         */
-        public function getItemTransferHistory($documentId, $itemId)
-        {
-            try {
-                $document = ReservationDocument::findOrFail($documentId);
-                $item = ReservationDocumentItem::findOrFail($itemId);
+                 * Get transfer history for specific item
+                 */
+                public function getItemTransferHistory($id, $materialCode)
+                {
+                    try {
+                        Log::info('=== START getItemTransferHistory ===');
+                        Log::info('Document ID: ' . $id);
+                        Log::info('Material Code: ' . $materialCode);
 
-                // Pastikan item ini milik dokumen yang benar
-                if ($item->document_id != $document->id) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Item not found in this document'
-                    ], 404);
+                        // Decode material code
+                        $materialCode = urldecode($materialCode);
+                        Log::info('Decoded Material Code: ' . $materialCode);
+
+                        // Cari document
+                        $document = \App\Models\ReservationDocument::find($id);
+                        if (!$document) {
+                            Log::error('Document not found: ' . $id);
+                            return response()->json([
+                                'error' => 'Document not found',
+                                'document_id' => $id
+                            ], 404);
+                        }
+
+                        Log::info('Document found: ' . $document->document_no);
+
+                        // PERBAIKAN: Gunakan model yang benar (ReservationTransfer dan ReservationTransferItem)
+                        $results = DB::table('reservation_transfer_items as rti')
+                            ->join('reservation_transfers as rt', 'rti.transfer_id', '=', 'rt.id')
+                            ->where('rt.document_no', $document->document_no)
+                            ->where('rti.material_code', 'LIKE', '%' . $materialCode . '%')
+                            ->select(
+                                'rt.transfer_no',
+                                'rti.material_code',
+                                'rti.batch',
+                                'rti.quantity',
+                                'rti.unit',
+                                'rti.created_at',
+                                'rt.status'
+                            )
+                            ->orderBy('rti.created_at', 'desc')
+                            ->get()
+                            ->map(function ($item) {
+                                // Format created_at
+                                if ($item->created_at) {
+                                    $item->created_at = \Carbon\Carbon::parse($item->created_at)->format('Y-m-d H:i:s');
+                                }
+                                return $item;
+                            });
+
+                        Log::info('Query results count: ' . $results->count());
+
+                        return response()->json($results);
+
+                    } catch (\Exception $e) {
+                        Log::error('Error in getItemTransferHistory: ' . $e->getMessage());
+                        Log::error('Trace: ' . $e->getTraceAsString());
+
+                        return response()->json([
+                            'error' => 'Internal Server Error',
+                            'message' => $e->getMessage()
+                        ], 500);
+                    }
                 }
-
-                // Ambil riwayat transfer untuk item ini
-                $transferHistory = DB::table('reservation_transfer_items')
-                    ->leftJoin('reservation_transfers', 'reservation_transfer_items.transfer_id', '=', 'reservation_transfers.id')
-                    ->select(
-                        'reservation_transfer_items.*',
-                        'reservation_transfers.transfer_no',
-                        'reservation_transfers.created_at as transfer_date',
-                        'reservation_transfers.created_by_name as transfer_by',
-                        'reservation_transfers.plant_supply',
-                        'reservation_transfers.plant_destination',
-                        'reservation_transfers.move_type'
-                    )
-                    ->where('reservation_transfer_items.document_item_id', $itemId)
-                    ->orderBy('reservation_transfer_items.created_at', 'desc')
-                    ->get();
-
-                // Format tanggal
-                $transferHistory->transform(function ($transfer) {
-                    $transfer->transfer_date_formatted = Carbon::parse($transfer->transfer_date)
-                        ->setTimezone('Asia/Jakarta')
-                        ->format('d/m/Y H:i:s');
-                    return $transfer;
-                });
-
-                return response()->json([
-                    'success' => true,
-                    'item' => [
-                        'id' => $item->id,
-                        'material_code' => $item->material_code,
-                        'material_description' => $item->material_description,
-                        'requested_qty' => $item->requested_qty,
-                        'transferred_qty' => $item->transferred_qty,
-                        'remaining_qty' => $item->remaining_qty,
-                        'unit' => $item->unit
-                    ],
-                    'transfer_history' => $transferHistory,
-                    'total_transfers' => count($transferHistory),
-                    'total_transferred' => $transferHistory->sum('quantity')
-                ]);
-
-            } catch (\Exception $e) {
-                Log::error('Error getting item transfer history: ' . $e->getMessage());
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to get transfer history: ' . $e->getMessage()
-                ], 500);
-            }
-        }
     /**
      * Calculate stock summary untuk document
      */
@@ -728,7 +729,7 @@ class ReservationDocumentController extends Controller
             if ($item && $item->document_id == $document->id) {
                 // Cek apakah quantity editable berdasarkan MRP
                 $isQtyEditable = true;
-                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2'];
+                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'D22', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2'];
 
                 if ($item->dispo && !in_array($item->dispo, $allowedMRP)) {
                     $isQtyEditable = false;

@@ -227,7 +227,7 @@ class ReservationController extends Controller
         if (!$dispo) return true;
 
         // MRP yang diperbolehkan untuk edit quantity
-        $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2', 'WE2'];
+        $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'D22', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2', 'WE2'];
 
         return in_array($dispo, $allowedMRP);
     }
@@ -1601,8 +1601,10 @@ class ReservationController extends Controller
 
                 Log::info('📝 CREATE DOCUMENT DATA PARSED', [
                     'data_keys' => array_keys($data),
+                    'plant_supply' => $data['plant_supply'] ?? null,
                     'materials_count' => isset($data['materials']) ? count($data['materials']) : 0,
-                    'pro_numbers_count' => isset($data['pro_numbers']) ? count($data['pro_numbers']) : 0
+                    'pro_numbers_count' => isset($data['pro_numbers']) ? count($data['pro_numbers']) : 0,
+                    'remarks' => isset($data['remarks']) ? 'Remarks provided' : 'No remarks'
                 ]);
 
                 // Validate CSRF token
@@ -1622,20 +1624,31 @@ class ReservationController extends Controller
 
                 try {
                     $plant = $data['plant'] ?? $request->input('plant');
+                    $plantSupply = $data['plant_supply'] ?? $request->input('plant_supply');
                     $materials = $data['materials'] ?? $request->input('materials', []);
                     $proNumbers = $data['pro_numbers'] ?? $request->input('pro_numbers', []);
                     $materialTypes = $data['material_types'] ?? $request->input('material_types', []);
-
+                    // PERUBAHAN: Ambil remarks dari data
+                    $remarks = $data['remarks'] ?? $request->input('remarks', '');
+                    if (empty($remarks)) {
+                        throw new \Exception('Document remarks are required');
+                    }
                     Log::info('🔧 Processing createDocument', [
                         'plant' => $plant,
+                        'plant_supply' => $plantSupply,
                         'materials_count' => is_array($materials) ? count($materials) : 0,
                         'pro_numbers_count' => is_array($proNumbers) ? count($proNumbers) : 0,
+                        'remarks_length' => strlen($remarks),
                         'materials_sample' => is_array($materials) && count($materials) > 0 ? $materials[0] : 'No materials'
                     ]);
 
                     // Validasi data yang diperlukan
                     if (empty($plant)) {
-                        throw new \Exception('Plant is required');
+                        throw new \Exception('Plant request is required');
+                    }
+
+                    if (empty($plantSupply)) {
+                        throw new \Exception('Plant supply is required');
                     }
 
                     if (empty($materials) || !is_array($materials)) {
@@ -1668,7 +1681,9 @@ class ReservationController extends Controller
 
                     Log::info('📄 Generated document number', [
                         'document_no' => $documentNo,
-                        'plant' => $plant
+                        'plant' => $plant,
+                        'plant_supply' => $plantSupply,
+                        'remarks' => $remarks ? 'Yes' : 'No'
                     ]);
 
                     // Calculate totals
@@ -1683,11 +1698,13 @@ class ReservationController extends Controller
                         throw new \Exception('Total requested quantity must be greater than 0');
                     }
 
-                    // Create document dengan status 'booked'
+                    // Create document dengan status 'booked' dan menyimpan plant supply dan remarks
                     $document = ReservationDocument::create([
                         'document_no' => $documentNo,
                         'plant' => $plant,
-                        'status' => 'booked', // Status awal diubah dari 'created' menjadi 'booked'
+                        'sloc_supply' => $plantSupply, // Simpan plant supply
+                        'remarks' => $remarks, // PERUBAHAN: Simpan remarks
+                        'status' => 'booked',
                         'total_items' => $totalItems,
                         'total_qty' => $totalQty,
                         'total_transferred' => 0,
@@ -1702,6 +1719,8 @@ class ReservationController extends Controller
                         'document_id' => $document->id,
                         'document_no' => $documentNo,
                         'plant' => $plant,
+                        'plant_supply' => $plantSupply,
+                        'remarks' => $remarks ? 'Yes' : 'No',
                         'total_items' => $totalItems,
                         'total_qty' => $totalQty,
                         'status' => 'booked'
@@ -1742,11 +1761,11 @@ class ReservationController extends Controller
                             'unit' => $material['unit'] ?? 'PC',
                             'sortf' => $material['sortf'] ?? null,
                             'dispo' => $dispo,
-                            'dispc' => $material['dispc'] ?? null, // TAMBAHAN: Simpan DISPC (MRP Comp)
+                            'dispc' => $material['dispc'] ?? null,
                             'is_qty_editable' => $isQtyEditable,
                             'requested_qty' => floatval($material['requested_qty']),
-                            'transferred_qty' => 0, // Default 0 untuk transferred quantity
-                            'remaining_qty' => floatval($material['requested_qty']), // Sama dengan requested qty awal
+                            'transferred_qty' => 0,
+                            'remaining_qty' => floatval($material['requested_qty']),
                             'sources' => json_encode($sources),
                             'sales_orders' => json_encode($salesOrders),
                             'pro_details' => json_encode($proDetails),
@@ -1788,6 +1807,8 @@ class ReservationController extends Controller
                     Log::info('🎉 Reservation document created successfully', [
                         'document_no' => $documentNo,
                         'document_id' => $document->id,
+                        'plant_supply' => $plantSupply,
+                        'remarks' => $remarks ? 'Yes' : 'No',
                         'total_items' => $totalItems,
                         'total_qty' => $totalQty,
                         'status' => 'booked',
@@ -1799,6 +1820,7 @@ class ReservationController extends Controller
                         'message' => 'Reservation document created successfully',
                         'document_no' => $documentNo,
                         'document_id' => $document->id,
+                        'plant_supply' => $plantSupply,
                         'total_items' => $totalItems,
                         'total_qty' => $totalQty,
                         'status' => 'booked',
@@ -1826,7 +1848,7 @@ class ReservationController extends Controller
      */
     private function getAllowedMRP()
     {
-        return ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2'];
+        return ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'D22', 'GF1', 'CH4', 'MF3', 'D28', 'D23', 'WE2'];
     }
 
     /**
