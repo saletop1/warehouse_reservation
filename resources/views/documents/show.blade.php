@@ -25,7 +25,7 @@
             <a href="{{ route('documents.index') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left me-1"></i> Back
             </a>
-            @if($document->status == 'booked')
+            @if(in_array($document->status, ['booked', 'partial']))
             <a href="{{ route('documents.edit', $document->id) }}" class="btn btn-outline-primary btn-sm">
                 <i class="fas fa-edit me-1"></i> Edit
             </a>
@@ -315,14 +315,16 @@
                                     0 selected
                                 </span>
                             </div>
-                            @if($document->status == 'booked')
+
+                            {{-- Ubah kondisi ini --}}
+                            @if(in_array($document->status, ['booked', 'partial']))
                             <form id="checkStockForm" action="{{ route('stock.fetch', $document->document_no) }}"
-                                  method="POST" class="d-inline">
+                                method="POST" class="d-inline">
                                 @csrf
                                 <div class="input-group input-group-sm" style="width: 180px;">
                                     <input type="text" class="form-control form-control-sm border-end-0"
-                                           name="plant" placeholder="Plant"
-                                           value="{{ request('plant', $document->plant) }}" required>
+                                        name="plant" placeholder="Plant"
+                                        value="{{ request('plant', $document->plant) }}" required>
                                     <button type="submit" class="btn btn-primary btn-sm px-2">
                                         <i class="fas fa-search"></i>
                                     </button>
@@ -341,10 +343,10 @@
 
                             @if($hasStockInfo)
                             <form id="resetStockForm" action="{{ route('stock.clear-cache', $document->document_no) }}"
-                                  method="POST" class="d-inline">
+                                method="POST" class="d-inline">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-outline-secondary btn-sm px-2">
+                                <button type="submit" class="btn btn-outline-secondary btn-sm px-2" title="Reset Stock Data">
                                     <i class="fas fa-redo"></i>
                                 </button>
                             </form>
@@ -376,262 +378,261 @@
                             </thead>
                             <tbody id="sortableItems">
                                 @foreach($document->items as $index => $item)
-                                    @php
-                                        // Format material code
-                                        $materialCode = $item->material_code;
-                                        if (ctype_digit($materialCode)) {
-                                            $materialCode = ltrim($materialCode, '0');
+                                @php
+                                    // Format material code
+                                    $materialCode = $item->material_code;
+                                    if (ctype_digit($materialCode)) {
+                                        $materialCode = ltrim($materialCode, '0');
+                                    }
+
+                                    // Convert unit
+                                    $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
+
+                                    // Get sources from 'sources' field
+                                    $sources = [];
+                                    if (isset($item->sources) && !empty($item->sources)) {
+                                        if (is_string($item->sources)) {
+                                            $decoded = json_decode($item->sources, true);
+                                            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                                                $sources = $decoded;
+                                            } elseif (!empty($item->sources)) {
+                                                $sources = array_map('trim', explode(',', $item->sources));
+                                            }
+                                        } elseif (is_array($item->sources)) {
+                                            $sources = $item->sources;
                                         }
+                                    }
 
-                                        // Convert unit
-                                        $unit = $item->unit == 'ST' ? 'PC' : $item->unit;
+                                    // Sales orders
+                                    $salesOrders = [];
+                                    if (is_string($item->sales_orders)) {
+                                        $salesOrders = json_decode($item->sales_orders, true) ?? [];
+                                    } elseif (is_array($item->sales_orders)) {
+                                        $salesOrders = $item->sales_orders;
+                                    }
 
-                                        // Get sources from 'sources' field
-                                        $sources = [];
-                                        if (isset($item->sources) && !empty($item->sources)) {
-                                            if (is_string($item->sources)) {
-                                                $decoded = json_decode($item->sources, true);
-                                                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                                                    $sources = $decoded;
-                                                } elseif (!empty($item->sources)) {
-                                                    $sources = array_map('trim', explode(',', $item->sources));
-                                                }
-                                            } elseif (is_array($item->sources)) {
-                                                $sources = $item->sources;
+                                    // Simple calculation
+                                    $requestedQty = isset($item->requested_qty) && is_numeric($item->requested_qty)
+                                        ? floatval($item->requested_qty)
+                                        : 0;
+
+                                    $transferredQty = isset($item->transferred_qty) && is_numeric($item->transferred_qty)
+                                        ? floatval($item->transferred_qty)
+                                        : 0;
+
+                                    $remainingQty = max(0, $requestedQty - $transferredQty);
+
+                                    // ✅ FIX: Cek history transfer dari database tanpa `use` statement
+                                    $hasTransferHistory = \Illuminate\Support\Facades\DB::table('reservation_transfer_items')
+                                        ->where('document_item_id', $item->id)
+                                        ->exists();
+
+                                    // Stock information
+                                    $stockInfo = $item->stock_info ?? null;
+                                    $totalStock = $stockInfo['total_stock'] ?? 0;
+                                    $stockDetails = $stockInfo['details'] ?? [];
+
+                                    // Batch info
+                                    $batchInfo = [];
+                                    if (!empty($stockDetails) && is_array($stockDetails)) {
+                                        foreach ($stockDetails as $detail) {
+                                            if (is_array($detail)) {
+                                                $batchInfo[] = [
+                                                    'batch' => $detail['charg'] ?? ($detail['batch'] ?? ''),
+                                                    'sloc' => $detail['lgort'] ?? ($detail['sloc'] ?? ''),
+                                                    'qty' => isset($detail['clabs']) ? (is_numeric($detail['clabs']) ? floatval($detail['clabs']) : 0) : 0,
+                                                    'clabs' => isset($detail['clabs']) ? (is_numeric($detail['clabs']) ? floatval($detail['clabs']) : 0) : 0
+                                                ];
                                             }
                                         }
+                                    }
 
-                                        // Sales orders
-                                        $salesOrders = [];
-                                        if (is_string($item->sales_orders)) {
-                                            $salesOrders = json_decode($item->sales_orders, true) ?? [];
-                                        } elseif (is_array($item->sales_orders)) {
-                                            $salesOrders = $item->sales_orders;
-                                        }
+                                    // Check if stock is available
+                                    $hasStock = $totalStock > 0;
+                                    $transferableQty = min($remainingQty, $totalStock);
+                                    $canTransfer = $remainingQty > 0 && $hasStock && $transferableQty > 0;
 
-                                        // Simple calculation
-                                        $requestedQty = isset($item->requested_qty) && is_numeric($item->requested_qty)
-                                            ? floatval($item->requested_qty)
-                                            : 0;
+                                    // MRP Comp (dispc)
+                                    $mrpComp = $item->dispc ?? ($item->mrp_comp ?? ($item->dispo ?? '-'));
 
-                                        $transferredQty = isset($item->transferred_qty) && is_numeric($item->transferred_qty)
-                                            ? floatval($item->transferred_qty)
-                                            : 0;
+                                    // ✅ PERBAIKAN: Logika status yang baru - semua status bisa diklik
+                                    if ($remainingQty == 0) {
+                                        // Completed (transferred >= requested)
+                                        $status = 'completed';
+                                        $badgeClass = 'bg-success';
+                                        $icon = 'fa-check-circle';
+                                        $label = 'Completed';
+                                    } elseif ($transferredQty > 0 && $remainingQty > 0) {
+                                        // Partial (sudah ada transfer tapi belum selesai)
+                                        $status = 'partial';
+                                        $badgeClass = 'bg-info';
+                                        $icon = 'fa-tasks';
+                                        $label = 'Partial';
+                                    } else {
+                                        // Pending (belum ada transfer sama sekali)
+                                        $status = 'pending';
+                                        $badgeClass = 'bg-secondary';
+                                        $icon = 'fa-clock';
+                                        $label = 'Pending';
+                                    }
 
-                                        $remainingQty = max(0, $requestedQty - $transferredQty);
-                                        $hasTransferHistory = $transferredQty > 0;
+                                    // Hapus variabel $showButton karena tidak digunakan lagi
+                                @endphp
 
-                                        // Stock information
-                                        $stockInfo = $item->stock_info ?? null;
-                                        $totalStock = $stockInfo['total_stock'] ?? 0;
-                                        $stockDetails = $stockInfo['details'] ?? [];
+                                <tr class="item-row draggable-row"
+                                    draggable="{{ $canTransfer ? 'true' : 'false' }}"
+                                    data-item-id="{{ $item->id }}"
+                                    data-material-code="{{ $materialCode }}"
+                                    data-material-description="{{ $item->material_description }}"
+                                    data-requested-qty="{{ $requestedQty }}"
+                                    data-transferred-qty="{{ $transferredQty }}"
+                                    data-remaining-qty="{{ $remainingQty }}"
+                                    data-available-stock="{{ $totalStock }}"
+                                    data-transferable-qty="{{ min($remainingQty, $totalStock) }}"
+                                    data-unit="{{ $unit }}"
+                                    data-sloc="{{ !empty($batchInfo) ? ($batchInfo[0]['sloc'] ?? '') : '' }}"
+                                    data-can-transfer="{{ $canTransfer ? 'true' : 'false' }}"
+                                    data-batch-info="{{ htmlspecialchars(json_encode($batchInfo), ENT_QUOTES, 'UTF-8') }}"
+                                    style="cursor: {{ $canTransfer ? 'move' : 'default' }};">
 
-                                        // Batch info
-                                        $batchInfo = [];
-                                        if (!empty($stockDetails) && is_array($stockDetails)) {
-                                            foreach ($stockDetails as $detail) {
-                                                if (is_array($detail)) {
-                                                    $batchInfo[] = [
-                                                        'batch' => $detail['charg'] ?? ($detail['batch'] ?? ''),
-                                                        'sloc' => $detail['lgort'] ?? ($detail['sloc'] ?? ''),
-                                                        'qty' => isset($detail['clabs']) ? (is_numeric($detail['clabs']) ? floatval($detail['clabs']) : 0) : 0,
-                                                        'clabs' => isset($detail['clabs']) ? (is_numeric($detail['clabs']) ? floatval($detail['clabs']) : 0) : 0
-                                                    ];
-                                                }
-                                            }
-                                        }
+                                    <td class="align-middle py-2 px-2">
+                                        <input type="checkbox" class="form-check-input row-select"
+                                            data-item-id="{{ $item->id }}"
+                                            {{ $canTransfer ? '' : 'disabled' }}>
+                                    </td>
 
-                                        // Check if stock is available
-                                        $hasStock = $totalStock > 0;
-                                        $transferableQty = min($remainingQty, $totalStock);
-                                        $canTransfer = $remainingQty > 0 && $hasStock && $transferableQty > 0;
+                                    <td class="align-middle text-muted py-2 px-2">
+                                        <span class="fw-medium small">{{ $index + 1 }}</span>
+                                    </td>
 
-                                        // MRP Comp (dispc)
-                                        $mrpComp = $item->dispc ?? ($item->mrp_comp ?? ($item->dispo ?? '-'));
-                                    @endphp
-                                    <tr class="item-row draggable-row"
-                                        draggable="{{ $canTransfer ? 'true' : 'false' }}"
-                                        data-item-id="{{ $item->id }}"
-                                        data-material-code="{{ $materialCode }}"
-                                        data-material-description="{{ $item->material_description }}"
-                                        data-requested-qty="{{ $requestedQty }}"
-                                        data-transferred-qty="{{ $transferredQty }}"
-                                        data-remaining-qty="{{ $remainingQty }}"
-                                        data-available-stock="{{ $totalStock }}"
-                                        data-transferable-qty="{{ min($remainingQty, $totalStock) }}"
-                                        data-unit="{{ $unit }}"
-                                        data-sloc="{{ !empty($batchInfo) ? ($batchInfo[0]['sloc'] ?? '') : '' }}"
-                                        data-can-transfer="{{ $canTransfer ? 'true' : 'false' }}"
-                                        data-batch-info="{{ htmlspecialchars(json_encode($batchInfo), ENT_QUOTES, 'UTF-8') }}"
-                                        style="cursor: {{ $canTransfer ? 'move' : 'default' }};">
+                                    <td class="align-middle py-2 px-2">
+                                        <div class="d-flex flex-column">
+                                            <span class="fw-semibold text-dark small">{{ $materialCode }}</span>
+                                            <small class="text-muted">{{ $mrpComp }}</small>
+                                        </div>
+                                    </td>
 
-                                        <td class="align-middle py-2 px-2">
-                                            <input type="checkbox" class="form-check-input row-select"
-                                                   data-item-id="{{ $item->id }}"
-                                                   {{ $canTransfer ? '' : 'disabled' }}>
-                                        </td>
+                                    <td class="align-middle py-2 px-2">
+                                        <div class="text-truncate" style="max-width: 180px;"
+                                            title="{{ $item->material_description }}">
+                                            <span class="small">{{ $item->material_description }}</span>
+                                        </div>
+                                    </td>
 
-                                        <td class="align-middle text-muted py-2 px-2">
-                                            <span class="fw-medium small">{{ $index + 1 }}</span>
-                                        </td>
+                                    <td class="align-middle text-center py-2 px-2">
+                                        <span class="fw-medium small">{{ \App\Helpers\NumberHelper::formatQuantity($requestedQty) }}</span>
+                                    </td>
 
-                                        <td class="align-middle py-2 px-2">
-                                            <div class="d-flex flex-column">
-                                                <span class="fw-semibold text-dark small">{{ $materialCode }}</span>
-                                                <small class="text-muted">{{ $mrpComp }}</small>
-                                            </div>
-                                        </td>
+                                    <td class="align-middle text-center py-2 px-2">
+                                        <span class="fw-bold small {{ $remainingQty > 0 ? 'text-primary' : 'text-success' }}">
+                                            {{ \App\Helpers\NumberHelper::formatQuantity($remainingQty) }}
+                                        </span>
+                                    </td>
 
-                                        <td class="align-middle py-2 px-2">
-                                            <div class="text-truncate" style="max-width: 180px;"
-                                                 title="{{ $item->material_description }}">
-                                                <span class="small">{{ $item->material_description }}</span>
-                                            </div>
-                                        </td>
+                                    <td class="align-middle text-center py-2 px-2">
+                                        <span class="text-muted small">{{ $unit }}</span>
+                                    </td>
 
-                                        <td class="align-middle text-center py-2 px-2">
-                                            <span class="fw-medium small">{{ \App\Helpers\NumberHelper::formatQuantity($requestedQty) }}</span>
-                                        </td>
-
-                                        <td class="align-middle text-center py-2 px-2">
-                                            <span class="fw-bold small {{ $remainingQty > 0 ? 'text-primary' : 'text-success' }}">
-                                                {{ \App\Helpers\NumberHelper::formatQuantity($remainingQty) }}
+                                    <td class="align-middle text-center py-2 px-2">
+                                        @if($totalStock > 0)
+                                            <span class="badge bg-{{ $remainingQty > 0 ? 'success' : 'warning' }} bg-opacity-10
+                                                text-{{ $remainingQty > 0 ? 'success' : 'warning' }} px-2 py-1 small">
+                                                {{ \App\Helpers\NumberHelper::formatStockNumber($totalStock) }}
                                             </span>
-                                        </td>
+                                        @else
+                                            <span class="badge bg-danger bg-opacity-10 text-danger px-2 py-1 small">
+                                                No Stock
+                                            </span>
+                                        @endif
+                                    </td>
 
-                                        <td class="align-middle text-center py-2 px-2">
-                                            <span class="text-muted small">{{ $unit }}</span>
-                                        </td>
+                                    <!-- ✅ PERBAIKAN: Kolom Status (kolom ke-9) - SEMUA STATUS BISA DIKLIK -->
+                                    <td class="align-middle text-center py-2 px-2">
+                                        <button class="badge {{ $badgeClass }} px-2 py-1 small view-transfer-details"
+                                                data-material-code="{{ $item->material_code }}"
+                                                data-material-description="{{ $item->material_description }}"
+                                                style="border: none; cursor: pointer;"
+                                                title="Click to view transfer details">
+                                            <i class="fas {{ $icon }} me-1"></i>{{ $label }}
+                                        </button>
+                                    </td>
 
-                                        <td class="align-middle text-center py-2 px-2">
-                                            @if($totalStock > 0)
-                                                <span class="badge bg-{{ $remainingQty > 0 ? 'success' : 'warning' }} bg-opacity-10
-                                                      text-{{ $remainingQty > 0 ? 'success' : 'warning' }} px-2 py-1 small">
-                                                    {{ \App\Helpers\NumberHelper::formatStockNumber($totalStock) }}
-                                                </span>
-                                            @else
-                                                <span class="badge bg-danger bg-opacity-10 text-danger px-2 py-1 small">
-                                                    No Stock
-                                                </span>
-                                            @endif
-                                        </td>
-
-                                        <td class="align-middle text-center py-2 px-2">
-                                            @if($remainingQty == 0)
-                                                @if($hasTransferHistory)
-                                                <button class="badge bg-success px-2 py-1 small view-transfer-details"
-                                                        data-material-code="{{ $item->material_code }}"
-                                                        data-material-description="{{ $item->material_description }}"
-                                                        style="border: none; cursor: pointer;">
-                                                    <i class="fas fa-check-circle me-1"></i>Completed
-                                                </button>
-                                                @else
-                                                <span class="badge bg-success px-2 py-1 small">
-                                                    <i class="fas fa-check-circle me-1"></i>Completed
-                                                </span>
-                                                @endif
-                                            @elseif($remainingQty < $requestedQty && $remainingQty > 0)
-                                                @if($hasTransferHistory)
-                                                <button class="badge bg-info px-2 py-1 small view-transfer-details"
-                                                        data-material-code="{{ $item->material_code }}"
-                                                        data-material-description="{{ $item->material_description }}"
-                                                        style="border: none; cursor: pointer;">
-                                                    <i class="fas fa-tasks me-1"></i>Partial
-                                                </button>
-                                                @else
-                                                <span class="badge bg-info px-2 py-1 small">
-                                                    <i class="fas fa-tasks me-1"></i>Partial
-                                                </span>
-                                                @endif
-                                            @else
-                                                @if($hasTransferHistory)
-                                                <button class="badge bg-secondary px-2 py-1 small view-transfer-details"
-                                                        data-material-code="{{ $item->material_code }}"
-                                                        data-material-description="{{ $item->material_description }}"
-                                                        style="border: none; cursor: pointer;">
-                                                    <i class="fas fa-clock me-1"></i>Pending
-                                                </button>
-                                                @else
-                                                <span class="badge bg-secondary px-2 py-1 small">
-                                                    <i class="fas fa-clock me-1"></i>Pending
-                                                </span>
-                                                @endif
-                                            @endif
-                                        </td>
-
-                                        <td class="align-middle text-center py-2 px-2">
-                                            @if(!empty($batchInfo))
-                                                @if(count($batchInfo) > 1)
-                                                    <select class="form-control form-control-sm batch-dropdown small"
-                                                            style="min-width: 150px; font-size: 0.85rem; padding: 2px 5px;"
-                                                            title="Batch Source">
-                                                        @foreach($batchInfo as $batch)
-                                                            <option value="{{ $batch['batch'] }}"
-                                                                    data-sloc="{{ $batch['sloc'] }}"
-                                                                    data-qty="{{ $batch['qty'] }}">
-                                                                {{ $batch['sloc'] }} | {{ $batch['batch'] }} | {{ \App\Helpers\NumberHelper::formatStockNumber($batch['qty']) }}
-                                                            </option>
-                                                        @endforeach
-                                                    </select>
-                                                @elseif(count($batchInfo) == 1)
-                                                    <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1 small">
-                                                        {{ $batchInfo[0]['batch'] ?? 'N/A' }}
-                                                    </span>
-                                                @else
-                                                    <span class="text-muted small">-</span>
-                                                @endif
-                                            @else
-                                                <span class="text-muted small">-</span>
-                                            @endif
-                                        </td>
-
-                                        <td class="align-middle text-center py-2 px-2">
-                                            @if(!empty($salesOrders))
-                                                @if(is_array($salesOrders))
-                                                    @foreach(array_slice($salesOrders, 0, 2) as $so)
-                                                        <span class="badge bg-info bg-opacity-10 text-info px-1 py-0 mb-1 small d-block">
-                                                            {{ $so }}
-                                                        </span>
+                                    <!-- Kolom Batch Source (kolom ke-10) -->
+                                    <td class="align-middle text-center py-2 px-2">
+                                        @if(!empty($batchInfo))
+                                            @if(count($batchInfo) > 1)
+                                                <select class="form-control form-control-sm batch-dropdown small"
+                                                        style="min-width: 150px; font-size: 0.85rem; padding: 2px 5px;"
+                                                        title="Batch Source">
+                                                    @foreach($batchInfo as $batch)
+                                                        <option value="{{ $batch['batch'] }}"
+                                                                data-sloc="{{ $batch['sloc'] }}"
+                                                                data-qty="{{ $batch['qty'] }}">
+                                                            {{ $batch['sloc'] }} | {{ $batch['batch'] }} | {{ \App\Helpers\NumberHelper::formatStockNumber($batch['qty']) }}
+                                                        </option>
                                                     @endforeach
-                                                    @if(count($salesOrders) > 2)
-                                                        <span class="badge bg-secondary bg-opacity-10 text-secondary px-1 py-0 small">
-                                                            +{{ count($salesOrders) - 2 }}
-                                                        </span>
-                                                    @endif
-                                                @else
-                                                    <span class="badge bg-info bg-opacity-10 text-info px-1 py-0 small">
-                                                        {{ $salesOrders }}
-                                                    </span>
-                                                @endif
+                                                </select>
+                                            @elseif(count($batchInfo) == 1)
+                                                <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1 small">
+                                                    {{ $batchInfo[0]['batch'] ?? 'N/A' }}
+                                                </span>
                                             @else
                                                 <span class="text-muted small">-</span>
                                             @endif
-                                        </td>
+                                        @else
+                                            <span class="text-muted small">-</span>
+                                        @endif
+                                    </td>
 
-                                        <td class="align-middle text-center py-2 px-2">
-                                            @if(!empty($sources))
-                                                @if(is_array($sources))
-                                                    @foreach(array_slice($sources, 0, 2) as $source)
-                                                        <span class="badge bg-warning bg-opacity-10 text-warning px-1 py-0 mb-1 small d-block">
-                                                            {{ $source }}
-                                                        </span>
-                                                    @endforeach
-                                                    @if(count($sources) > 2)
-                                                        <span class="badge bg-secondary bg-opacity-10 text-secondary px-1 py-0 small">
-                                                            +{{ count($sources) - 2 }}
-                                                        </span>
-                                                    @endif
-                                                @else
-                                                    <span class="badge bg-warning bg-opacity-10 text-warning px-1 py-0 small">
-                                                        {{ $sources }}
+                                    <!-- Kolom SO (kolom ke-11) -->
+                                    <td class="align-middle text-center py-2 px-2">
+                                        @if(!empty($salesOrders))
+                                            @if(is_array($salesOrders))
+                                                @foreach(array_slice($salesOrders, 0, 2) as $so)
+                                                    <span class="badge bg-info bg-opacity-10 text-info px-1 py-0 mb-1 small d-block">
+                                                        {{ $so }}
+                                                    </span>
+                                                @endforeach
+                                                @if(count($salesOrders) > 2)
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary px-1 py-0 small">
+                                                        +{{ count($salesOrders) - 2 }}
                                                     </span>
                                                 @endif
                                             @else
-                                                <span class="text-muted small">-</span>
+                                                <span class="badge bg-info bg-opacity-10 text-info px-1 py-0 small">
+                                                    {{ $salesOrders }}
+                                                </span>
                                             @endif
-                                        </td>
-                                    </tr>
-                                @endforeach
+                                        @else
+                                            <span class="text-muted small">-</span>
+                                        @endif
+                                    </td>
+
+                                    <!-- Kolom Source PRO (kolom ke-12) -->
+                                    <td class="align-middle text-center py-2 px-2">
+                                        @if(!empty($sources))
+                                            @if(is_array($sources))
+                                                @foreach(array_slice($sources, 0, 2) as $source)
+                                                    <span class="badge bg-warning bg-opacity-10 text-warning px-1 py-0 mb-1 small d-block">
+                                                        {{ $source }}
+                                                    </span>
+                                                @endforeach
+                                                @if(count($sources) > 2)
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary px-1 py-0 small">
+                                                        +{{ count($sources) - 2 }}
+                                                    </span>
+                                                @endif
+                                            @else
+                                                <span class="badge bg-warning bg-opacity-10 text-warning px-1 py-0 small">
+                                                    {{ $sources }}
+                                                </span>
+                                            @endif
+                                        @else
+                                            <span class="text-muted small">-</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
                             </tbody>
                         </table>
                     </div>

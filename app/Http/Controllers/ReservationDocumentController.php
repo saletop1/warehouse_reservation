@@ -69,32 +69,52 @@ class ReservationDocumentController extends Controller
         return view('documents.index', compact('documents', 'totalCount'));
     }
 
-    public function show($id)
-    {
-        try {
-            $document = ReservationDocument::with(['items', 'transfers'])->findOrFail($id);
+                public function show($id)
+                {
+                    try {
+                        $document = ReservationDocument::with(['items', 'transfers'])->findOrFail($id);
 
-            $this->loadStockDataForDocument($document);
+                        $this->loadStockDataForDocument($document);
 
-            $user = Auth::user();
-            $allowedRoles = ['warehouse', 'developer', 'admin', 'supervisor'];
-            $userRole = $user->role ?? 'user';
-            $canGenerateTransfer = in_array($userRole, $allowedRoles);
+                        // Ambil semua transfer item IDs untuk dokumen ini
+                        $transferItemIds = DB::table('reservation_transfer_items')
+                            ->join('reservation_transfers', 'reservation_transfer_items.transfer_id', '=', 'reservation_transfers.id')
+                            ->where('reservation_transfers.document_id', $document->id)
+                            ->pluck('reservation_transfer_items.document_item_id')
+                            ->toArray();
 
-            $hasTransferableItems = $this->hasTransferableItems($document);
+                        // Set flag untuk setiap item
+                        foreach ($document->items as $item) {
+                            $item->has_transfer_history = in_array($item->id, $transferItemIds);
 
-            return view('documents.show', compact(
-                'document',
-                'canGenerateTransfer',
-                'hasTransferableItems'
-            ));
+                            // Pastikan transferred_qty dihitung dengan benar
+                            $transferredQty = DB::table('reservation_transfer_items')
+                                ->where('document_item_id', $item->id)
+                                ->sum('quantity');
 
-        } catch (\Exception $e) {
-            Log::error('Error in show document: ' . $e->getMessage());
-            return redirect()->route('documents.index')
-                ->with('error', 'Document not found: ' . $e->getMessage());
-        }
-    }
+                            $item->transferred_qty = $transferredQty;
+                            $item->remaining_qty = max(0, $item->requested_qty - $transferredQty);
+                        }
+
+                        $user = Auth::user();
+                        $allowedRoles = ['warehouse', 'developer', 'admin', 'supervisor'];
+                        $userRole = $user->role ?? 'user';
+                        $canGenerateTransfer = in_array($userRole, $allowedRoles);
+
+                        $hasTransferableItems = $this->hasTransferableItems($document);
+
+                        return view('documents.show', compact(
+                            'document',
+                            'canGenerateTransfer',
+                            'hasTransferableItems'
+                        ));
+
+                    } catch (\Exception $e) {
+                        Log::error('Error in show document: ' . $e->getMessage());
+                        return redirect()->route('documents.index')
+                            ->with('error', 'Document not found: ' . $e->getMessage());
+                    }
+                }
 
     private function loadStockDataForDocument($document)
     {
