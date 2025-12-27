@@ -3,8 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Transfer extends Model
 {
@@ -38,10 +36,5 @@ class Transfer extends Model
     public function document()
     {
         return $this->belongsTo(ReservationDocument::class, 'document_id');
-    }
-
-    public function creator()
-    {
-        return $this->belongsTo(User::class, 'created_by');
     }
 }

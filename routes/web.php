@@ -92,34 +92,35 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/create-document', [ReservationController::class, 'createDocument'])->name('createDocument');
     });
 
-    // Document Routes
+    // Document Routes - FIX: Hapus duplikasi
     Route::prefix('documents')->name('documents.')->group(function () {
         Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
         Route::get('/{id}/edit', [ReservationDocumentController::class, 'edit'])->name('edit');
-        Route::put('/{id}', [ReservationDocumentController::class, 'update'])->name('update');
+        Route::put('/{id}', [ReservationDocumentControllerController::class, 'update'])->name('update');
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
-        Route::get('/{id}/items/{materialCode}/transfer-history',
-        [ReservationDocumentController::class, 'getItemTransferHistory'])
-        ->name('items.transfer-history');
 
-        // routes/web.php atau routes/api.php
-        Route::get('/documents/{document}/items/{item}/transfer-history',
-        [ReservationDocumentController::class, 'getItemTransferHistory'])
-        ->name('documents.items.transfer-history');
+        // Transfer process route - HANYA SATU ROUTE
+        Route::post('/{id}/transfers/process', [TransferController::class, 'createTransfer'])
+            ->name('transfers.process');
 
-        // Print selected items - DIPERBAIKI: POST bukan GET
-        Route::post('/{id}/print-selected', [ReservationDocumentController::class, 'printSelected'])->name('print-selected');
+        // Transfer history
+        Route::get('/{document}/items/{materialCode}/transfer-history',
+            [ReservationDocumentController::class, 'getItemTransferHistory'])
+            ->name('items.transfer-history');
+
+        // Print selected items
+        Route::post('/{id}/print-selected', [ReservationDocumentController::class, 'printSelected'])
+            ->name('print-selected');
 
         // Export Excel
-        Route::post('/{id}/export-excel', [ReservationDocumentController::class, 'exportExcel'])->name('export-excel');
+        Route::post('/{id}/export-excel', [ReservationDocumentController::class, 'exportExcel'])
+            ->name('export-excel');
 
         // Delete selected items
-        Route::delete('/{id}/items/delete-selected', [ReservationDocumentController::class, 'deleteSelectedItems'])->name('items.delete-selected');
-
-        // Transfer from document
-        Route::post('/{id}/create-transfer', [TransferController::class, 'createTransfer'])->name('create-transfer');
+        Route::delete('/{id}/items/delete-selected', [ReservationDocumentController::class, 'deleteSelectedItems'])
+            ->name('items.delete-selected');
 
         // Toggle document status (OPEN/CLOSED)
         Route::patch('/{id}/toggle-status', [ReservationDocumentController::class, 'toggleStatus'])
@@ -148,9 +149,6 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{id}/status', [TransferController::class, 'updateStatus'])->name('update-status');
         Route::delete('/{id}', [TransferController::class, 'destroy'])->name('destroy');
     });
-
-    // Single route untuk create transfer (bisa dari mana saja)
-    Route::post('/transfer/create', [TransferController::class, 'createTransfer'])->name('transfer.create');
 
     // Additional utility routes
     Route::get('/settings', function () {

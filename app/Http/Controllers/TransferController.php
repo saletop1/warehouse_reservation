@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use App\Models\ReservationDocument;
 use App\Models\Transfer;
 use App\Models\TransferItem;
@@ -21,7 +22,7 @@ class TransferController extends Controller
             // Dapatkan document dari route parameter
             $document = ReservationDocument::findOrFail($id);
 
-            // Validasi input - disederhanakan dan sesuai dengan data frontend
+            // Validasi input
             $validated = $request->validate([
                 'plant' => 'required|string|max:10',
                 'sloc_supply' => 'required|string|max:10',
@@ -56,6 +57,15 @@ class TransferController extends Controller
             $remarks = $validated['remarks'] ?? "Transfer from Document {$documentNo}";
             $headerText = $validated['header_text'] ?? "Transfer from Document {$documentNo}";
 
+            // Log untuk debugging
+            Log::info('Starting transfer process', [
+                'document_id' => $document->id,
+                'document_no' => $documentNo,
+                'user' => $user->name,
+                'item_count' => count($validated['items']),
+                'total_quantity' => array_sum(array_column($validated['items'], 'quantity'))
+            ]);
+
             // Prepare data for Python service
             $transferData = [
                 'transfer_info' => [
@@ -71,17 +81,29 @@ class TransferController extends Controller
             ];
 
             // Map items to SAP RFC format
-            foreach ($validated['items'] as $item) {
+            foreach ($validated['items'] as $index => $item) {
                 // Parse batch_sloc - format: "SLOC:XXXX" or just "XXXX"
                 $batchSloc = $item['batch_sloc'] ?? '';
                 if ($batchSloc && strpos($batchSloc, 'SLOC:') === 0) {
                     $batchSloc = substr($batchSloc, 5); // Remove 'SLOC:'
                 }
 
+                $quantity = (float) $item['quantity'];
+
+                // Log setiap item yang akan ditransfer
+                Log::debug('Transfer item details', [
+                    'material_code' => $item['material_code'],
+                    'quantity' => $quantity,
+                    'batch' => $item['batch'] ?? '',
+                    'batch_sloc' => $batchSloc,
+                    'plant_tujuan' => $item['plant_tujuan'],
+                    'sloc_tujuan' => $item['sloc_tujuan']
+                ]);
+
                 $transferData['items'][] = [
                     'material_code' => $item['material_code'],
                     'material_desc' => $item['material_desc'],
-                    'quantity' => (float) $item['quantity'],
+                    'quantity' => $quantity,
                     'unit' => $item['unit'],
                     'plant_tujuan' => $item['plant_tujuan'],
                     'sloc_tujuan' => $item['sloc_tujuan'],
@@ -102,14 +124,8 @@ class TransferController extends Controller
                 'url' => $pythonServiceUrl,
                 'document_no' => $documentNo,
                 'item_count' => count($transferData['items']),
-                'user' => $user->name,
-                'sap_host' => $sapCredentials['ashost'] ?? 'N/A',
-                'sap_client' => $sapCredentials['client'] ?? 'N/A'
-            ]);
-
-            Log::debug('Transfer data details:', [
-                'transfer_info' => $transferData['transfer_info'],
-                'first_item' => $transferData['items'][0] ?? 'No items'
+                'total_quantity' => array_sum(array_column($transferData['items'], 'quantity')),
+                'user' => $user->name
             ]);
 
             $response = Http::timeout(120)->post("{$pythonServiceUrl}/api/sap/transfer", [
@@ -122,9 +138,32 @@ class TransferController extends Controller
             if ($response->successful()) {
                 $result = $response->json();
 
-                Log::info('Python service response:', $result);
+                Log::info('Python service response received', [
+                    'success' => $result['success'] ?? false,
+                    'transfer_no' => $result['transfer_no'] ?? null,
+                    'status' => $result['status'] ?? null,
+                    'message' => $result['message'] ?? ''
+                ]);
 
                 if (isset($result['success']) && $result['success']) {
+                    // Cek apakah transfer sudah ada sebelumnya (prevent duplicate)
+                    $existingTransfer = Transfer::where('document_id', $document->id)
+                        ->where('transfer_no', $result['transfer_no'] ?? '')
+                        ->first();
+
+                    if ($existingTransfer) {
+                        Log::warning('Duplicate transfer attempt detected', [
+                            'transfer_no' => $result['transfer_no'],
+                            'document_id' => $document->id
+                        ]);
+
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Transfer already exists. Please refresh the page.',
+                            'transfer_no' => $result['transfer_no']
+                        ], 409);
+                    }
+
                     // Save transfer record to database
                     $transfer = Transfer::create([
                         'document_id' => $document->id,
@@ -164,6 +203,9 @@ class TransferController extends Controller
                             'item_number' => $index + 1
                         ]);
                     }
+
+                    // Update document transferred quantities
+                    $this->updateDocumentTransferredQuantities($document, $validated['items']);
 
                     // Log success
                     Log::info('Transfer created successfully', [
@@ -220,7 +262,7 @@ class TransferController extends Controller
             // Validation error
             Log::error('Transfer validation error', [
                 'errors' => $e->errors(),
-                'request_data' => $request->except(['sap_credentials.passwd']) // Exclude password for security
+                'request_data' => $request->except(['sap_credentials.passwd'])
             ]);
 
             return response()->json([
@@ -255,8 +297,70 @@ class TransferController extends Controller
     }
 
     /**
+     * Update document transferred quantities after successful transfer
+     */
+    private function updateDocumentTransferredQuantities($document, $transferItems)
+    {
+        try {
+            // Group items by material code and sum quantities
+            $groupedItems = [];
+            foreach ($transferItems as $item) {
+                $materialCode = $item['material_code'];
+                if (!isset($groupedItems[$materialCode])) {
+                    $groupedItems[$materialCode] = 0;
+                }
+                $groupedItems[$materialCode] += (float) $item['quantity'];
+            }
+
+            // Update document items
+            foreach ($groupedItems as $materialCode => $transferredQty) {
+                DB::table('reservation_document_items')
+                    ->where('document_id', $document->id)
+                    ->where('material_code', $materialCode)
+                    ->increment('transferred_qty', $transferredQty);
+            }
+
+            // Recalculate document totals
+            $totalTransferred = DB::table('reservation_document_items')
+                ->where('document_id', $document->id)
+                ->sum('transferred_qty');
+
+            $totalRequested = DB::table('reservation_document_items')
+                ->where('document_id', $document->id)
+                ->sum('requested_qty');
+
+            $completionRate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
+
+            // Update document
+            $document->total_transferred = $totalTransferred;
+            $document->completion_rate = $completionRate;
+
+            // Update status if needed
+            if ($totalTransferred >= $totalRequested && $document->status != 'closed') {
+                $document->status = 'closed';
+            } elseif ($totalTransferred > 0 && $document->status == 'booked') {
+                $document->status = 'partial';
+            }
+
+            $document->save();
+
+            Log::info('Document quantities updated', [
+                'document_id' => $document->id,
+                'total_transferred' => $totalTransferred,
+                'completion_rate' => $completionRate,
+                'new_status' => $document->status
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error updating document quantities', [
+                'error' => $e->getMessage(),
+                'document_id' => $document->id
+            ]);
+        }
+    }
+
+    /**
      * Get SAP credentials for user
-     * Priority: 1. Request credentials, 2. Environment variables
      */
     private function getSapCredentials($user, $requestCredentials = null)
     {
@@ -334,7 +438,7 @@ class TransferController extends Controller
     public function show($id)
     {
         try {
-            $transfer = Transfer::with(['items', 'document', 'creator'])->findOrFail($id);
+            $transfer = Transfer::with(['items', 'document'])->findOrFail($id);
 
             return response()->json([
                 'success' => true,
@@ -456,7 +560,7 @@ class TransferController extends Controller
     }
 
     /**
-     * Delete a transfer (with items)
+     * Delete transfer
      */
     public function destroy($id)
     {

@@ -283,13 +283,13 @@
                                                         <th width="10%" class="text-center">Material PRO</th>
                                                         <th width="10%" class="text-center">Desc PRO</th>
                                                         <th width="8%" class="text-center">MRP</th>
-                                                        <!-- TAMBAHAN: Kolom MRP Comp (DISPC) -->
-                                                        <th width="8%" class="text-center">MRP Comp</th>
                                                         <th width="10%" class="text-center">Sales Order</th>
                                                         <th width="10%" class="text-center">Material Req</th>
                                                         <th width="15%" class="text-center">Description</th>
                                                         <!-- Add Info column - akan disembunyikan jika tidak ada data -->
                                                         <th width="8%" class="text-center add-info-column" id="add-info-header">Add Info</th>
+                                                        <!-- PERUBAHAN: MRP Comp dipindahkan ke sini (sebelum Required Qty) -->
+                                                        <th width="8%" class="text-center">MRP Comp</th>
                                                         <th width="10%" class="text-center">Required Qty</th>
                                                         <th width="12%" class="text-center">Requested Qty *</th>
                                                         <!-- PERUBAHAN: Unit menjadi UOM -->
@@ -314,21 +314,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Loading Modal -->
-<div class="modal fade" id="loadingModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-body text-center py-4">
-                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <h5 class="mt-3" id="loading-message">Processing...</h5>
-                <p class="text-muted small" id="loading-details">Please wait</p>
             </div>
         </div>
     </div>
@@ -363,7 +348,7 @@
     }
 
     /* Description column */
-    #materials-table td:nth-child(9) {
+    #materials-table td:nth-child(8) {
         min-width: 250px;
         max-width: 300px;
     }
@@ -1130,20 +1115,6 @@
     }
 
     // ============================
-    // LOADING MODAL FUNCTIONS
-    // ============================
-
-    function showLoading(message, details) {
-        $('#loading-message').text(message);
-        $('#loading-details').text(details);
-        $('#loadingModal').modal('show');
-    }
-
-    function hideLoading() {
-        $('#loadingModal').modal('hide');
-    }
-
-    // ============================
     // STEP NAVIGATION FUNCTIONS
     // ============================
 
@@ -1622,8 +1593,6 @@
             console.log('🚀 Proceeding to Step 4 - Loading PRO numbers');
             console.log('Selected materials:', selectedMaterials);
 
-            showLoading('Loading PRO numbers...', 'Please wait');
-
             const materialsForAPI = selectedMaterials.map(m => formatMaterialCodeForDB(m));
             console.log('Materials for API (formatted):', materialsForAPI);
 
@@ -1637,7 +1606,6 @@
                     _token: csrfToken
                 },
                 success: function(response) {
-                    hideLoading();
                     console.log('✅ PRO numbers response:', response);
 
                     if (response.success) {
@@ -1668,7 +1636,6 @@
                     }
                 },
                 error: function(xhr) {
-                    hideLoading();
                     console.error('❌ PRO numbers AJAX error:', xhr);
                     let errorMsg = 'Failed to load PRO numbers. ';
                     if (xhr.responseJSON && xhr.responseJSON.message) {
@@ -1800,8 +1767,6 @@
                 proNumbers: selectedProNumbers.length
             });
 
-            showLoading('Loading material data...', 'Formatting data for database matching');
-
             $.ajax({
                 url: '/reservations/load-multiple-pro',
                 method: 'POST',
@@ -1817,12 +1782,10 @@
                         console.log(`✅ Successfully loaded ${loadedMaterials.length} materials`);
                         console.log('Sample material:', loadedMaterials[0]);
 
-                        hideLoading();
                         currentStep = 5;
                         updateStepNavigation();
                         populateMaterialsTable();
                     } else {
-                        hideLoading();
                         let errorMsg = response.message || 'No material data found.';
                         console.error('❌ Error:', errorMsg);
                         showNotification(errorMsg, 'warning', 4000);
@@ -1837,7 +1800,6 @@
                         error: error,
                         responseText: xhr.responseText
                     });
-                    hideLoading();
 
                     let errorMsg = 'Server error occurred.';
                     if (xhr.responseJSON && xhr.responseJSON.message) {
@@ -1871,7 +1833,7 @@
             console.warn('⚠️ No loaded materials data');
             html = `
                 <tr>
-                    <td colspan="14" class="text-center text-muted py-3">
+                    <td colspan="13" class="text-center text-muted py-3">
                         <h6>No materials data available</h6>
                         <small class="text-danger">Debug: loadedMaterials is empty or undefined</small>
                         <br><small>Please go back and select PRO numbers again</small>
@@ -2043,14 +2005,14 @@
                     <td class="text-center">
                         ${material.dispo ? `<span class="badge mrp-badge">${material.dispo}</span>` : '-'}
                     </td>
-                    <!-- TAMBAHAN: Kolom MRP Comp (DISPC) -->
-                    <td class="text-center">
-                        ${material.dispc ? `<span class="badge mrp-comp-badge">${material.dispc}</span>` : '-'}
-                    </td>
                     <td class="text-center">${salesOrderBadges}</td>
                     <td class="text-center"><code>${formatMaterialCodeForUI(material.material_code)}</code></td>
                     <td class="table-description full-description">${material.material_description || 'No description'}</td>
                     <td class="additional-info-cell ${addInfoClass}">${additionalInfo}</td>
+                    <!-- PERUBAHAN: Kolom MRP Comp dipindahkan ke sini (sebelum Required Qty) -->
+                    <td class="text-center">
+                        ${material.dispc ? `<span class="badge mrp-comp-badge">${material.dispc}</span>` : '-'}
+                    </td>
                     <td class="text-center quantity-cell">${formattedOriginalQtyForDisplay}</td>
                     <td class="text-center">
                         <input type="number" class="form-control quantity-input requested-qty text-center ${!isQtyEditable ? 'qty-disabled' : ''}"
@@ -2185,8 +2147,6 @@
             } : 'No data'
         });
 
-        showLoading('Creating reservation document...', 'Used sync data will be deleted automatically');
-
         // Format data untuk dikirim
         const requestData = {
             plant: selectedPlant,
@@ -2220,7 +2180,6 @@
             timeout: 300000, // 5 minutes timeout for large data
             success: function(response) {
                 console.log('✅ CREATE DOCUMENT SUCCESS Response:', response);
-                hideLoading();
 
                 if (response.success) {
                     showNotification(
@@ -2252,7 +2211,6 @@
                     error: error,
                     responseText: xhr.responseText
                 });
-                hideLoading();
 
                 let errorMessage = 'Failed to create document. ';
 
@@ -2368,4 +2326,3 @@
 </script>
 @endpush
 @endsection
-
