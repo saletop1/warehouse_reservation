@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\Document;
 
 class ReservationDocumentController extends Controller
 {
@@ -179,84 +180,122 @@ class ReservationDocumentController extends Controller
         }
     }
 
-                    public function getItemTransferHistory($id, $materialCode)
-{
-    try {
-        $materialCode = urldecode($materialCode);
-        $document = ReservationDocument::find($id);
+                        /**
+                         * Get transfer history for specific item - DIPERBAIKI
+                         */
+                        public function getItemTransferHistory($documentId, $materialCode)
+                        {
+                            try {
+                                Log::info('Getting transfer history', [
+                                    'document_id' => $documentId,
+                                    'material_code' => $materialCode
+                                ]);
 
-        if (!$document) {
-            return response()->json([
-                'error' => 'Document not found',
-                'document_id' => $id
-            ], 404);
-        }
+                                // Decode material code (jika ada encoding di URL)
+                                $materialCode = urldecode($materialCode);
 
-        // Gunakan query yang lebih spesifik untuk menghindari duplikasi
-        $results = DB::table('reservation_transfer_items as rti')
-            ->join('reservation_transfers as rt', 'rti.transfer_id', '=', 'rt.id')
-            ->where('rt.document_no', $document->document_no)
-            ->where('rti.material_code', 'LIKE', '%' . $materialCode . '%')
-            ->select(
-                'rt.transfer_no',
-                'rti.material_code',
-                'rti.batch',
-                DB::raw('SUM(rti.quantity) as quantity'),
-                'rti.unit',
-                DB::raw('MAX(rti.created_at) as created_at'), // Ambil created_at terbaru
-                DB::raw('MAX(rt.created_at) as transfer_created_at')
-            )
-            ->groupBy('rt.transfer_no', 'rti.material_code', 'rti.batch', 'rti.unit')
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($item) {
-                // Debug: Log raw data untuk melihat format tanggal
-                Log::info('Raw date values:', [
-                    'created_at' => $item->created_at,
-                    'transfer_created_at' => $item->transfer_created_at,
-                    'type_created_at' => gettype($item->created_at),
-                    'type_transfer_created_at' => gettype($item->transfer_created_at)
-                ]);
+                                // Find document - GUNAKAN MODEL Document DENGAN NAMESPACE YANG BENAR
+                                $document = Document::find($documentId);
 
-                // Prioritas 1: Gunakan created_at dari transfer item
-                // Prioritas 2: Gunakan created_at dari transfer
-                $dateToFormat = $item->created_at ?? $item->transfer_created_at;
+                                if (!$document) {
+                                    Log::warning('Document not found', ['document_id' => $documentId]);
+                                    return response()->json(['error' => 'Document not found'], 404);
+                                }
 
-                if ($dateToFormat) {
-                    try {
-                        // Coba parse dengan berbagai format
-                        $formattedDate = $this->formatDate($dateToFormat);
-                    } catch (\Exception $e) {
-                        Log::warning('Date parsing failed, using current date:', [
-                            'date' => $dateToFormat,
-                            'error' => $e->getMessage()
-                        ]);
-                        // Fallback jika parsing gagal
-                        $formattedDate = Carbon::now('Asia/Jakarta')
-                            ->format('d/m/Y, H.i.s');
-                    }
-                } else {
-                    // Jika kedua tanggal null
-                    $formattedDate = 'Tanggal tidak tersedia';
-                }
+                                // Find the item
+                                $item = $document->items()
+                                    ->where('material_code', 'LIKE', '%' . $materialCode . '%')
+                                    ->orWhere('material_code', 'LIKE', '%' . ltrim($materialCode, '0') . '%')
+                                    ->first();
 
-                // Hapus field transfer_created_at yang tidak perlu
-                unset($item->transfer_created_at);
-                $item->created_at = $formattedDate;
+                                if (!$item) {
+                                    Log::warning('Item not found', [
+                                        'document_id' => $documentId,
+                                        'material_code' => $materialCode
+                                    ]);
+                                    return response()->json(['error' => 'Item not found'], 404);
+                                }
 
-                return $item;
-            });
+                                Log::info('Found item', [
+                                    'item_id' => $item->id,
+                                    'material_code' => $item->material_code
+                                ]);
 
-        return response()->json($results);
+                                // Get transfer history - OPTION 1: Via Eloquent relationships
+                                try {
+                                    // Coba dengan join jika ada relationship
+                                    $transferHistory = DB::table('reservation_transfer_items')
+                                        ->leftJoin('reservation_transfers', 'reservation_transfer_items.transfer_id', '=', 'reservation_transfers.id')
+                                        ->select(
+                                            'reservation_transfers.transfer_no',
+                                            'reservation_transfer_items.material_code',
+                                            'reservation_transfer_items.batch',
+                                            'reservation_transfer_items.quantity',
+                                            'reservation_transfer_items.unit',
+                                            'reservation_transfer_items.created_at'
+                                        )
+                                        ->where('reservation_transfer_items.document_item_id', $item->id)
+                                        ->orderBy('reservation_transfer_items.created_at', 'desc')
+                                        ->get()
+                                        ->map(function ($transfer) {
+                                            return [
+                                                'transfer_no' => $transfer->transfer_no ?? 'N/A',
+                                                'material_code' => $transfer->material_code,
+                                                'batch' => $transfer->batch ?? 'N/A',
+                                                'quantity' => (float) $transfer->quantity,
+                                                'unit' => $transfer->unit ?? 'PC',
+                                                'created_at' => $transfer->created_at ?
+                                                    \Carbon\Carbon::parse($transfer->created_at)->format('d/m/Y H:i:s') :
+                                                    'Tanggal tidak tersedia'
+                                            ];
+                                        });
 
-    } catch (\Exception $e) {
-        Log::error('Error in getItemTransferHistory: ' . $e->getMessage());
-        return response()->json([
-            'error' => 'Internal Server Error',
-            'message' => $e->getMessage()
-        ], 500);
-    }
-}
+                                } catch (\Exception $e) {
+                                    Log::error('Error with join query: ' . $e->getMessage());
+
+                                    // OPTION 2: Query sederhana tanpa join
+                                    $transferHistory = DB::table('reservation_transfer_items')
+                                        ->select(
+                                            DB::raw("'N/A' as transfer_no"),
+                                            'material_code',
+                                            'batch',
+                                            'quantity',
+                                            'unit',
+                                            'created_at'
+                                        )
+                                        ->where('document_item_id', $item->id)
+                                        ->orderBy('created_at', 'desc')
+                                        ->get()
+                                        ->map(function ($transfer) {
+                                            return [
+                                                'transfer_no' => $transfer->transfer_no,
+                                                'material_code' => $transfer->material_code,
+                                                'batch' => $transfer->batch ?? 'N/A',
+                                                'quantity' => (float) $transfer->quantity,
+                                                'unit' => $transfer->unit ?? 'PC',
+                                                'created_at' => $transfer->created_at ?
+                                                    \Carbon\Carbon::parse($transfer->created_at)->format('d/m/Y H:i') :
+                                                    'Tanggal tidak tersedia'
+                                            ];
+                                        });
+                                }
+
+                                Log::info('Transfer history found', [
+                                    'count' => $transferHistory->count(),
+                                    'item_id' => $item->id
+                                ]);
+
+                                return response()->json($transferHistory);
+
+                            } catch (\Exception $e) {
+                                Log::error('Error getting item transfer history: ' . $e->getMessage(), [
+                                    'document_id' => $documentId,
+                                    'material_code' => $materialCode,
+                                    'trace' => $e->getTraceAsString()
+                                ]);
+                                return response()->json([]);
+                            }
+                        }
 
             /**
              * Helper method untuk format tanggal dari berbagai format input

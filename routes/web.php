@@ -8,6 +8,7 @@ use App\Http\Controllers\ReservationDocumentController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\TransferController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\DocumentController;
 
 // Redirect root to login page
 Route::get('/', function () {
@@ -92,50 +93,45 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/create-document', [ReservationController::class, 'createDocument'])->name('createDocument');
     });
 
-    // Document Routes - FIX: Hapus duplikasi
+    // Document Routes - PERBAIKAN: Consolidate all document routes
     Route::prefix('documents')->name('documents.')->group(function () {
+        // Document CRUD Routes (using ReservationDocumentController for most operations)
         Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
-        Route::get('/{id}/edit', [ReservationDocumentController::class, 'edit'])->name('edit');
-        Route::put('/{id}', [ReservationDocumentControllerController::class, 'update'])->name('update');
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
-        Route::get('/documents/{id}/items/{materialCode}/transfer-history', [ReservationDocumentController::class, 'getItemTransferHistory'])
-        ->name('documents.item-transfer-history');
-        Route::post('/documents/{id}/fix-transfer-data',
-        [ReservationDocumentController::class, 'fixTransferData'])
-        ->name('documents.fix-transfer-data');
-        // Route untuk memperbaiki status item
-        Route::post('/documents/{id}/fix-status', [ReservationDocumentController::class, 'fixItemStatuses'])
-        ->name('documents.fix-status');
 
-        // Transfer process route - HANYA SATU ROUTE
+        // Item Management Routes (using DocumentController for edit/update/delete/force-complete)
+        Route::get('/{id}/edit', [DocumentController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [DocumentController::class, 'update'])->name('update');
+
+        // Item Selection Operations
+        Route::post('/{id}/print-selected', [ReservationDocumentController::class, 'printSelected'])->name('print-selected');
+        Route::post('/{id}/export-excel', [ReservationDocumentController::class, 'exportExcel'])->name('export-excel');
+
+        // Item Management Routes (Delete and Force Complete)
+        Route::delete('/{id}/items/delete-selected', [DocumentController::class, 'deleteSelectedItems'])->name('items.delete-selected');
+        Route::post('/{id}/items/force-complete', [DocumentController::class, 'forceCompleteItems'])->name('items.force-complete');
+
+        // Transfer Process Route
         Route::post('/{id}/transfers/process', [TransferController::class, 'createTransfer'])
             ->name('transfers.process');
 
-        // Transfer history
+        // Transfer History
         Route::get('/{document}/items/{materialCode}/transfer-history',
             [ReservationDocumentController::class, 'getItemTransferHistory'])
-            ->name('items.transfer-history');
+            ->name('item-transfer-history');
 
-        // Print selected items
-        Route::post('/{id}/print-selected', [ReservationDocumentController::class, 'printSelected'])
-            ->name('print-selected');
-
-        // Export Excel
-        Route::post('/{id}/export-excel', [ReservationDocumentController::class, 'exportExcel'])
-            ->name('export-excel');
-
-        // Delete selected items
-        Route::delete('/{id}/items/delete-selected', [ReservationDocumentController::class, 'deleteSelectedItems'])
-            ->name('items.delete-selected');
-
-        // Toggle document status (OPEN/CLOSED)
+        // Document Status Management
         Route::patch('/{id}/toggle-status', [ReservationDocumentController::class, 'toggleStatus'])
             ->name('toggle-status')
             ->middleware('can:toggle_document_status');
 
-        // Log unauthorized SAP attempt
+        // System Maintenance Routes
+        Route::post('/{id}/fix-transfer-data', [ReservationDocumentController::class, 'fixTransferData'])
+            ->name('fix-transfer-data');
+        Route::post('/{id}/fix-status', [ReservationDocumentController::class, 'fixItemStatuses'])
+            ->name('fix-status');
         Route::post('/{id}/log-unauthorized-attempt', [ReservationDocumentController::class, 'logUnauthorizedAttempt'])
             ->name('log-unauthorized-attempt');
     });
@@ -168,8 +164,3 @@ Route::middleware(['auth'])->group(function () {
 Route::fallback(function () {
     return response()->view('errors.404', [], 404);
 });
-Route::controller(ReservationDocumentController::class)->group(function () {
-        Route::get('/documents/{id}/items/{materialCode}/transfer-history', 'getItemTransferHistory')
-            ->name('documents.item-transfer-history');
-    });
-

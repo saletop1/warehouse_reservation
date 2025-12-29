@@ -1269,8 +1269,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 // Construct the URL dengan route yang benar
-                const url = `{{ route('documents.item-transfer-history', ['id' => $document->id, 'materialCode' => ':materialCode']) }}`
-                    .replace(':materialCode', encodeURIComponent(materialCode));
+                const url = `{{ route('documents.item-transfer-history', ['document' => $document->id, 'materialCode' => ':materialCode']) }}`
+    .replace(':materialCode', encodeURIComponent(materialCode));
 
                 console.log('Fetching URL:', url);
 
