@@ -143,11 +143,11 @@
         <div class="document-title">RESERVATION DOCUMENT</div>
         <div class="company-info">
             <strong>PT. Kayu Mebel Indonesia</strong><br>
-                                Jl. Manunggaljati KM No, 23, Jatikalang,
-                                Kec. Krian, Kabupaten Sidoarjo, Jawa Timur 61262, Indonesia<br>
-                                Factory. Jl. Jend. Urip Sumoharjo No.134 50244 Ngaliyan Jawa Tengah
-                                Phone: (031) 8971048. | Phone: (024) 8665996
-                            </div>
+            Jl. Manunggaljati KM No, 23, Jatikalang,
+            Kec. Krian, Kabupaten Sidoarjo, Jawa Timur 61262, Indonesia<br>
+            Factory. Jl. Jend. Urip Sumoharjo No.134 50244 Ngaliyan Jawa Tengah
+            Phone: (031) 8971048. | Phone: (024) 8665996
+        </div>
 
         <div style="float: right; text-align: right;">
             <div class="document-title" style="color: {{ $document->plant == '3000' ? '#0d6efd' : '#198754' }}; font-size: 12pt;">
@@ -205,6 +205,21 @@
                 @php
                     // PERBAIKAN: Gunakan null coalescing untuk sortf
                     $addInfo = $item->sortf ?? '-';
+
+                    // PERBAIKAN: AMBIL SOURCES DENGAN CARA YANG SAMA SEPERTI DI SHOW.BLADE.PHP
+                    $sources = [];
+                    if (isset($item->sources) && !empty($item->sources)) {
+                        if (is_string($item->sources)) {
+                            $decoded = json_decode($item->sources, true);
+                            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                                $sources = $decoded;
+                            } elseif (!empty($item->sources)) {
+                                $sources = array_map('trim', explode(',', $item->sources));
+                            }
+                        } elseif (is_array($item->sources)) {
+                            $sources = $item->sources;
+                        }
+                    }
                 @endphp
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
@@ -213,13 +228,14 @@
                     <td class="text-center">{{ $addInfo }}</td>
                     <td class="text-right">{{ \App\Helpers\NumberHelper::formatQuantity($item->requested_qty) }}</td>
                     <td class="text-center">{{ $item->unit == 'ST' ? 'PC' : $item->unit }}</td>
-                    <td>
-                        @if(!empty($item->processed_sources))
-                            @foreach($item->processed_sources as $source)
-                                <span class="source-badge">{{ $source }}</span>
+                    <!-- PERBAIKAN KOLOM PRO NUMBERS DI SINI -->
+                    <td style="font-size: 8pt;">
+                        @if(!empty($sources))
+                            @foreach($sources as $source)
+                                <span class="badge bg-light text-dark border compact-badge">{{ $source }}</span>
                             @endforeach
                         @else
-                            <span class="text-muted" style="font-size: 7pt;">No sources</span>
+                            <span style="font-size: 8pt; color: #6c757d;">No sources</span>
                         @endif
                     </td>
                 </tr>

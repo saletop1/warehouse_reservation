@@ -519,6 +519,21 @@
                                         $salesOrders = $item->sales_orders;
                                     }
 
+                                    // AMBIL SOURCES (PRO NUMBERS) DENGAN CARA YANG SAMA SEPERTI DI SHOW.BLADE.PHP
+                                    $sources = [];
+                                    if (isset($item->sources) && !empty($item->sources)) {
+                                        if (is_string($item->sources)) {
+                                            $decoded = json_decode($item->sources, true);
+                                            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                                                $sources = $decoded;
+                                            } elseif (!empty($item->sources)) {
+                                                $sources = array_map('trim', explode(',', $item->sources));
+                                            }
+                                        } elseif (is_array($item->sources)) {
+                                            $sources = $item->sources;
+                                        }
+                                    }
+
                                     // Ambil data dari pro_details jika ada (untuk kolom lainnya)
                                     $addInfo = '-';
                                     $groes = '-';
@@ -569,7 +584,7 @@
                                     data-material-code="{{ strtolower($materialCode) }}"
                                     data-description="{{ strtolower($item->material_description) }}"
                                     data-sales-orders="{{ !empty($salesOrders) ? strtolower(implode(' ', $salesOrders)) : '' }}"
-                                    data-pro-numbers="{{ !empty($item->processed_sources) ? strtolower(implode(' ', $item->processed_sources)) : '' }}"
+                                    data-pro-numbers="{{ !empty($sources) ? strtolower(implode(' ', $sources)) : '' }}"
                                     data-add-info="{{ strtolower($addInfo) }}"
                                     data-groes="{{ strtolower($groes) }}"
                                     data-ferth="{{ strtolower($ferth) }}"
@@ -595,9 +610,10 @@
                                             <span style="font-size: 8pt; color: #6c757d;">-</span>
                                         @endif
                                     </td>
+                                    <!-- PERBAIKAN KOLOM PRO NUMBERS DI SINI -->
                                     <td style="font-size: 8pt;">
-                                        @if(!empty($item->processed_sources))
-                                            @foreach($item->processed_sources as $source)
+                                        @if(!empty($sources))
+                                            @foreach($sources as $source)
                                                 <span class="badge bg-light text-dark border compact-badge">{{ $source }}</span>
                                             @endforeach
                                         @else
