@@ -10,15 +10,28 @@ class ReservationTransferItem extends Model
         'transfer_id',
         'document_item_id',
         'material_code',
+        'material_code_raw',       // Tambahkan field ini
         'material_description',
         'unit',
         'quantity',
         'batch',
-        'storage_location'
+        'storage_location',
+        'plant_supply',
+        'plant_destination',
+        'sloc_destination',
+        'item_number',
+        'sap_status',
+        'sap_message',
+        'material_formatted',
+        'requested_qty',
+        'available_stock',
+        'created_at',
+        'updated_at'
     ];
 
     protected $casts = [
-        'quantity' => 'decimal:3'
+        'quantity' => 'decimal:3',
+        'material_formatted' => 'boolean'
     ];
 
     public function transfer()

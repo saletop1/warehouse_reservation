@@ -230,6 +230,40 @@ class MySQLHandler:
         except Exception as e:
             return None
 
+    def check_transfer_exists(self, document_no, plant_supply):
+        """Cek apakah transfer sudah ada"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+
+        cursor = conn.cursor()
+
+        try:
+            sql = """
+                SELECT id, status, transfer_no
+                FROM reservation_transfers
+                WHERE document_no = %s AND plant_supply = %s
+                LIMIT 1
+            """
+
+            cursor.execute(sql, (document_no, plant_supply))
+            result = cursor.fetchone()
+
+            if result:
+                return {
+                    'id': result[0],
+                    'status': result[1],
+                    'transfer_no': result[2]
+                }
+            return None
+
+        except Exception as e:
+            logger.error(f"Error checking transfer exists: {e}")
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+
     def save_transfer_to_db(self, transfer_data, sap_response, item_results, user_id=None, user_name=None):
         """Save transfer data to MySQL reservation_transfers table"""
         conn = self.get_connection()
@@ -243,7 +277,7 @@ class MySQLHandler:
             transfer_info = transfer_data.get('transfer_info', {})
             items = transfer_data.get('items', [])
 
-            # PERBAIKAN: Ambil plant_supply dari transfer_info dengan fallback yang aman
+            # Ambil plant_supply dari transfer_info dengan fallback yang aman
             plant_supply = transfer_info.get('plant_supply', '')
 
             # Jika tidak ada di transfer_info, coba dari items pertama
@@ -276,11 +310,10 @@ class MySQLHandler:
             total_items = len([item for item in items if item.get('material_code')])
             total_quantity = sum(float(item.get('quantity', 0)) for item in items if item.get('quantity'))
 
-            # PERBAIKAN: Check jika document_id valid, jika tidak gunakan NULL
+            # Check jika document_id valid, jika tidak gunakan NULL
             document_id = transfer_info.get('document_id')
 
-            # PERBAIKAN: Cek apakah document_id valid dengan mencoba mencari di reservation_documents
-            # Jika tidak valid, kita akan set NULL atau skip document_id
+            # Cek apakah document_id valid dengan mencoba mencari di reservation_documents
             valid_document_id = None
             if document_id:
                 try:
@@ -291,10 +324,26 @@ class MySQLHandler:
                 except Exception as e:
                     logger.warning(f"Error checking document_id {document_id}: {e}")
 
-            # PERBAIKAN: Siapkan data untuk INSERT
-            # Kita akan mencoba INSERT tanpa document_id jika tidak valid
+            # Check for errors in SAP response to determine status
+            has_errors = False
+            if sap_response and 'RETURN' in sap_response:
+                for msg in sap_response['RETURN']:
+                    msg_type = msg.get('TYPE', '')
+                    if msg_type in ['E', 'A', 'X']:  # Error, Abort, Exception
+                        has_errors = True
+                        break
+
+            # Determine status
+            if has_errors:
+                status = 'FAILED'
+            elif material_doc:
+                status = 'COMPLETED'
+            else:
+                status = 'SUBMITTED'
+
+            # Siapkan data untuk INSERT
             insert_data = {
-                'plant': plant_supply,  # PERBAIKAN: gunakan plant_supply yang sudah didefinisikan
+                'plant': plant_supply,
                 'document_no': transfer_info.get('document_no', 'TRF-' + datetime.now().strftime('%Y%m%d-%H%M%S')),
                 'transfer_no': material_doc,
                 'plant_supply': plant_supply,
@@ -302,7 +351,7 @@ class MySQLHandler:
                 'move_type': transfer_info.get('move_type', '311'),
                 'total_items': total_items,
                 'total_quantity': total_quantity,
-                'status': 'COMPLETED' if material_doc else 'SUBMITTED',
+                'status': status,
                 'sap_message': json.dumps(sap_response.get('RETURN', []), ensure_ascii=False, default=str) if sap_response else '',
                 'remarks': transfer_info.get('remarks', ''),
                 'created_by': user_id if user_id else 0,
@@ -313,13 +362,12 @@ class MySQLHandler:
                 'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
 
-            # PERBAIKAN: Tambahkan document_id hanya jika valid
+            # Tambahkan document_id hanya jika valid
             if valid_document_id:
                 insert_data['document_id'] = valid_document_id
 
-            # PERBAIKAN: Check struktur tabel untuk menghindari error kolom tidak ada
+            # Check struktur tabel untuk menghindari error kolom tidak ada
             try:
-                # PERUBAHAN: Ganti dari 'transfers' menjadi 'reservation_transfers'
                 cursor.execute("SHOW COLUMNS FROM reservation_transfers")
                 columns_info = cursor.fetchall()
                 table_columns = [col[0] for col in columns_info]
@@ -330,9 +378,6 @@ class MySQLHandler:
                     if key in table_columns:
                         filtered_data[key] = value
 
-                # Jika document_id tidak ada di filtered_data, berarti kita tidak menyertakannya
-                # Ini akan membuat database menggunakan nilai default atau NULL
-
                 columns = list(filtered_data.keys())
                 values = list(filtered_data.values())
 
@@ -342,7 +387,6 @@ class MySQLHandler:
 
                 placeholders = ['%s'] * len(columns)
 
-                # PERUBAHAN: Ganti dari 'transfers' menjadi 'reservation_transfers'
                 sql = f"""
                     INSERT INTO reservation_transfers ({', '.join(columns)})
                     VALUES ({', '.join(placeholders)})
@@ -355,7 +399,7 @@ class MySQLHandler:
                 # Get the inserted ID
                 transfer_id = cursor.lastrowid
 
-                logger.info(f"Transfer saved to database with ID: {transfer_id}, Material Doc: {material_doc}")
+                logger.info(f"Transfer saved to database with ID: {transfer_id}, Material Doc: {material_doc}, Status: {status}")
 
                 # Save transfer items if table exists
                 try:
@@ -369,7 +413,8 @@ class MySQLHandler:
                     'material_doc': material_doc,
                     'total_items': total_items,
                     'total_quantity': total_quantity,
-                    'document_id_included': 'document_id' in filtered_data
+                    'document_id_included': 'document_id' in filtered_data,
+                    'status': status
                 }
 
             except Exception as e:
@@ -377,7 +422,7 @@ class MySQLHandler:
                 raise
 
         except mysql.connector.errors.IntegrityError as ie:
-            # PERBAIKAN: Handle foreign key constraint error secara spesifik
+            # Handle foreign key constraint error secara spesifik
             logger.error(f"IntegrityError saving transfer: {ie}")
             conn.rollback()
 
@@ -388,7 +433,6 @@ class MySQLHandler:
                     del insert_data['document_id']
 
                 # Filter hanya kolom yang ada di tabel
-                # PERUBAHAN: Ganti dari 'transfers' menjadi 'reservation_transfers'
                 cursor.execute("SHOW COLUMNS FROM reservation_transfers")
                 columns_info = cursor.fetchall()
                 table_columns = [col[0] for col in columns_info]
@@ -404,7 +448,6 @@ class MySQLHandler:
                 if columns:
                     placeholders = ['%s'] * len(columns)
 
-                    # PERUBAHAN: Ganti dari 'transfers' menjadi 'reservation_transfers'
                     sql = f"""
                         INSERT INTO reservation_transfers ({', '.join(columns)})
                         VALUES ({', '.join(placeholders)})
@@ -423,7 +466,8 @@ class MySQLHandler:
                         'total_items': total_items,
                         'total_quantity': total_quantity,
                         'document_id_included': False,
-                        'retry_success': True
+                        'retry_success': True,
+                        'status': status
                     }
                 else:
                     logger.error("No columns to insert after removing document_id")
@@ -453,7 +497,6 @@ class MySQLHandler:
         saved_count = 0
 
         try:
-            # PERUBAHAN: Ganti dari 'transfer_items' menjadi 'reservation_transfer_items'
             cursor.execute("SHOW TABLES LIKE 'reservation_transfer_items'")
             table_exists = cursor.fetchone()
 
@@ -494,7 +537,6 @@ class MySQLHandler:
                 values = list(insert_data.values())
                 placeholders = ['%s'] * len(columns)
 
-                # PERUBAHAN: Ganti dari 'transfer_items' menjadi 'reservation_transfer_items'
                 sql = f"""
                     INSERT INTO reservation_transfer_items ({', '.join(columns)})
                     VALUES ({', '.join(placeholders)})
@@ -512,6 +554,135 @@ class MySQLHandler:
             logger.error(traceback.format_exc())
             conn.rollback()
             return 0
+        finally:
+            cursor.close()
+            conn.close()
+
+    def update_transfer_status(self, transfer_id, status, material_doc=None, sap_response=None, errors=None):
+        """Update status transfer setelah ada feedback dari SAP"""
+        conn = self.get_connection()
+        if not conn:
+            return False
+
+        cursor = conn.cursor()
+
+        try:
+            update_fields = {
+                'status': status,
+                'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+
+            if material_doc:
+                update_fields['transfer_no'] = material_doc
+                update_fields['completed_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            if sap_response:
+                update_fields['sap_response'] = json.dumps(sap_response, ensure_ascii=False, default=str)
+                if 'RETURN' in sap_response:
+                    update_fields['sap_message'] = json.dumps(sap_response.get('RETURN', []), ensure_ascii=False, default=str)
+
+            if errors:
+                update_fields['error_details'] = json.dumps(errors, ensure_ascii=False, default=str)
+
+            set_clause = ', '.join([f"{key} = %s" for key in update_fields.keys()])
+            values = list(update_fields.values())
+            values.append(transfer_id)
+
+            sql = f"""
+                UPDATE reservation_transfers
+                SET {set_clause}
+                WHERE id = %s
+            """
+
+            cursor.execute(sql, values)
+            conn.commit()
+
+            logger.info(f"Transfer {transfer_id} updated to status: {status}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating transfer {transfer_id}: {e}")
+            conn.rollback()
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    def update_transfer_item_status(self, transfer_id, item_number, status, sap_status, sap_message):
+        """Update status item transfer"""
+        conn = self.get_connection()
+        if not conn:
+            return False
+
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("SHOW TABLES LIKE 'reservation_transfer_items'")
+            table_exists = cursor.fetchone()
+
+            if not table_exists:
+                return False
+
+            sql = """
+                UPDATE reservation_transfer_items
+                SET sap_status = %s, sap_message = %s, status = %s, updated_at = NOW()
+                WHERE transfer_id = %s AND item_number = %s
+            """
+
+            cursor.execute(sql, (sap_status, sap_message, status, transfer_id, item_number))
+            conn.commit()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating transfer item: {e}")
+            conn.rollback()
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_transfer_by_id(self, transfer_id):
+        """Get transfer data by ID"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            sql = """
+                SELECT * FROM reservation_transfers
+                WHERE id = %s
+            """
+
+            cursor.execute(sql, (transfer_id,))
+            transfer = cursor.fetchone()
+
+            if transfer:
+                # Get items if exists
+                try:
+                    cursor.execute("SHOW TABLES LIKE 'reservation_transfer_items'")
+                    table_exists = cursor.fetchone()
+
+                    if table_exists:
+                        sql_items = """
+                            SELECT * FROM reservation_transfer_items
+                            WHERE transfer_id = %s
+                            ORDER BY item_number
+                        """
+                        cursor.execute(sql_items, (transfer_id,))
+                        items = cursor.fetchall()
+                        transfer['items'] = items
+                except Exception as e:
+                    logger.warning(f"Could not fetch transfer items: {e}")
+                    transfer['items'] = []
+
+            return transfer
+
+        except Exception as e:
+            logger.error(f"Error getting transfer {transfer_id}: {e}")
+            return None
         finally:
             cursor.close()
             conn.close()
@@ -793,14 +964,13 @@ def create_sap_transfer():
             item_results = []
 
             transfer_info = transfer_data.get('transfer_info', {})
-            # PERBAIKAN: Ambil plant_supply dari transfer_info
             plant_supply = transfer_info.get('plant_supply', '')
 
-            # PERBAIKAN: Jika tidak ada di transfer_info, coba dari item pertama
+            # Jika tidak ada di transfer_info, coba dari item pertama
             if not plant_supply and items:
                 plant_supply = items[0].get('plant_supply', '') if items else ''
 
-            # PERBAIKAN: Log plant_supply untuk debugging
+            # Log plant_supply untuk debugging
             logger.info(f"Transfer plant_supply: {plant_supply}")
 
             for idx, item in enumerate(items, start=1):
@@ -839,14 +1009,11 @@ def create_sap_transfer():
                     batch = item.get('batch', '')
 
                     # Get plant supply, plant tujuan dan sloc tujuan
-                    # Gunakan plant_supply dari item jika ada, jika tidak gunakan dari transfer_info
                     plant_supply_item = item.get('plant_supply', plant_supply)
                     plant_tujuan = item.get('plant_tujuan', '')
                     sloc_tujuan = item.get('sloc_tujuan', '')
 
                     # Tentukan MOVE_TYPE berdasarkan perbandingan plant supply dan plant tujuan
-                    # Jika sama -> 311 (transfer dalam plant yang sama)
-                    # Jika berbeda -> 301 (transfer antar plant)
                     if plant_supply_item and plant_tujuan:
                         if plant_supply_item == plant_tujuan:
                             move_type = '311'
@@ -1029,12 +1196,23 @@ def create_sap_transfer():
             if errors:
                 error_message = 'SAP transfer failed: ' + ' | '.join(errors[:3])
                 logger.error(f"Transfer failed with errors: {errors}")
+
+                # Update transfer status to FAILED if already saved
+                if db_result and db_result.get('transfer_id'):
+                    db.update_transfer_status(
+                        transfer_id=db_result['transfer_id'],
+                        status='FAILED',
+                        sap_response=result,
+                        errors=errors
+                    )
+
                 return jsonify({
                     'success': False,
                     'message': error_message,
                     'errors': errors,
                     'item_results': item_results,
                     'db_saved': db_result is not None,
+                    'transfer_id': db_result.get('transfer_id') if db_result else None,
                     'processing_time': round(time.time() - start_time, 2)
                 }), 400
 
@@ -1054,6 +1232,15 @@ def create_sap_transfer():
                     response_data['db_saved'] = True
                     response_data['transfer_id'] = db_result.get('transfer_id')
                     response_data['document_id_included'] = db_result.get('document_id_included', False)
+
+                    # Update transfer dengan material_doc jika belum ada
+                    if not db_result.get('material_doc'):
+                        db.update_transfer_status(
+                            transfer_id=db_result['transfer_id'],
+                            status='COMPLETED',
+                            material_doc=material_doc,
+                            sap_response=result
+                        )
                 else:
                     response_data['db_saved'] = False
                     response_data['message'] += ' (but failed to save to database)'
@@ -1088,11 +1275,20 @@ def create_sap_transfer():
 
                     return jsonify(response_data)
                 else:
+                    # Update transfer status to FAILED if no material doc and no success messages
+                    if db_result and db_result.get('transfer_id'):
+                        db.update_transfer_status(
+                            transfer_id=db_result['transfer_id'],
+                            status='FAILED',
+                            sap_response=result
+                        )
+
                     return jsonify({
                         'success': False,
                         'message': 'Transfer failed: No material document created',
                         'item_results': item_results,
                         'db_saved': db_result is not None,
+                        'transfer_id': db_result.get('transfer_id') if db_result else None,
                         'processing_time': round(time.time() - start_time, 2)
                     }), 400
 
@@ -1141,6 +1337,108 @@ def create_sap_transfer():
         return jsonify({
             'success': False,
             'message': f'Transfer failed: {e}'
+        }), 500
+
+@app.route('/api/sap/transfer/update/<int:transfer_id>', methods=['PUT'])
+def update_sap_transfer(transfer_id):
+    """Update status transfer yang sudah ada"""
+    try:
+        data = request.get_json()
+        status = data.get('status')
+        material_doc = data.get('material_doc')
+        sap_response = data.get('sap_response')
+        errors = data.get('errors')
+
+        if not status:
+            return jsonify({
+                'success': False,
+                'message': 'Status is required'
+            }), 400
+
+        success = db.update_transfer_status(transfer_id, status, material_doc, sap_response, errors)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Transfer {transfer_id} updated to {status}',
+                'transfer_id': transfer_id,
+                'status': status
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Failed to update transfer {transfer_id}'
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Update transfer error: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Update failed: {e}'
+        }), 500
+
+@app.route('/api/sap/transfer/<int:transfer_id>', methods=['GET'])
+def get_transfer(transfer_id):
+    """Get transfer data by ID"""
+    try:
+        transfer = db.get_transfer_by_id(transfer_id)
+
+        if transfer:
+            return jsonify({
+                'success': True,
+                'transfer': transfer
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Transfer {transfer_id} not found'
+            }), 404
+
+    except Exception as e:
+        logger.error(f"Get transfer error: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get transfer: {e}'
+        }), 500
+
+@app.route('/api/sap/transfer/item/update', methods=['PUT'])
+def update_transfer_item():
+    """Update status item transfer"""
+    try:
+        data = request.get_json()
+        transfer_id = data.get('transfer_id')
+        item_number = data.get('item_number')
+        status = data.get('status')
+        sap_status = data.get('sap_status')
+        sap_message = data.get('sap_message')
+
+        if not all([transfer_id, item_number, status]):
+            return jsonify({
+                'success': False,
+                'message': 'transfer_id, item_number, and status are required'
+            }), 400
+
+        success = db.update_transfer_item_status(transfer_id, item_number, status, sap_status, sap_message)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Item {item_number} of transfer {transfer_id} updated',
+                'transfer_id': transfer_id,
+                'item_number': item_number,
+                'status': status
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Failed to update item {item_number} of transfer {transfer_id}'
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Update transfer item error: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Update failed: {e}'
         }), 500
 
 if __name__ == '__main__':

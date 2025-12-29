@@ -34,7 +34,7 @@ class ReservationDocument extends Model
 
     public function transfers()
     {
-        return $this->hasMany(Transfer::class, 'document_id');
+        return $this->hasMany(ReservationTransfer::class, 'document_id');
     }
 
     /**
@@ -109,5 +109,24 @@ class ReservationDocument extends Model
             $this->total_qty = $totalRequested;
             $this->completion_rate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
             $this->save();
+        }
+        /**
+         * Recalculate all item transfer quantities and statuses
+         */
+        public function recalculateItemStatuses()
+        {
+            foreach ($this->items as $item) {
+                // Hitung transferred_qty dari reservation_transfer_items
+                $transferredQty = DB::table('reservation_transfer_items')
+                    ->where('document_item_id', $item->id)
+                    ->sum('quantity');
+
+                $item->transferred_qty = (float)$transferredQty;
+                $item->remaining_qty = max(0, (float)$item->requested_qty - (float)$transferredQty);
+                $item->save();
+            }
+
+            $this->recalculateTotals();
+            return $this;
         }
 }

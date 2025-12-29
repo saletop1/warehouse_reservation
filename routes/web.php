@@ -100,6 +100,14 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{id}', [ReservationDocumentControllerController::class, 'update'])->name('update');
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
+        Route::get('/documents/{id}/items/{materialCode}/transfer-history', [ReservationDocumentController::class, 'getItemTransferHistory'])
+        ->name('documents.item-transfer-history');
+        Route::post('/documents/{id}/fix-transfer-data',
+        [ReservationDocumentController::class, 'fixTransferData'])
+        ->name('documents.fix-transfer-data');
+        // Route untuk memperbaiki status item
+        Route::post('/documents/{id}/fix-status', [ReservationDocumentController::class, 'fixItemStatuses'])
+        ->name('documents.fix-status');
 
         // Transfer process route - HANYA SATU ROUTE
         Route::post('/{id}/transfers/process', [TransferController::class, 'createTransfer'])
@@ -160,3 +168,8 @@ Route::middleware(['auth'])->group(function () {
 Route::fallback(function () {
     return response()->view('errors.404', [], 404);
 });
+Route::controller(ReservationDocumentController::class)->group(function () {
+        Route::get('/documents/{id}/items/{materialCode}/transfer-history', 'getItemTransferHistory')
+            ->name('documents.item-transfer-history');
+    });
+

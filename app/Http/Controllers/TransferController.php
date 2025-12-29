@@ -8,8 +8,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\ReservationDocument;
-use App\Models\Transfer;
-use App\Models\TransferItem;
+use App\Models\ReservationTransfer;
+use App\Models\ReservationTransferItem;
+use App\Models\ReservationDocumentItem;
+use Carbon\Carbon;
 
 class TransferController extends Controller
 {
@@ -21,6 +23,9 @@ class TransferController extends Controller
         try {
             // Dapatkan document dari route parameter
             $document = ReservationDocument::findOrFail($id);
+
+            // **PERBAIKAN: Set timezone ke Asia/Jakarta**
+            date_default_timezone_set('Asia/Jakarta');
 
             // Validasi input
             $validated = $request->validate([
@@ -34,7 +39,7 @@ class TransferController extends Controller
                 'items.*.plant_tujuan' => 'required|string|max:10',
                 'items.*.sloc_tujuan' => 'required|string|max:10',
                 'items.*.batch' => 'nullable|string',
-                'items.*.batch_sloc' => 'nullable|string',
+                'items.*.batch_sloc' => 'required|string|max:10',
                 'items.*.requested_qty' => 'nullable|numeric',
                 'items.*.available_stock' => 'nullable|numeric',
                 'sap_credentials' => 'required|array',
@@ -53,9 +58,12 @@ class TransferController extends Controller
             // Gunakan data dari document jika tidak ada di request
             $documentNo = $document->document_no;
             $plant = $validated['plant'] ?? $document->plant;
-            $slocSupply = $validated['sloc_supply'] ?? $document->sloc_supply;
+            $plantSupply = $validated['sloc_supply'] ?? $document->sloc_supply;
             $remarks = $validated['remarks'] ?? "Transfer from Document {$documentNo}";
             $headerText = $validated['header_text'] ?? "Transfer from Document {$documentNo}";
+
+            // **PERBAIKAN: Gunakan Carbon dengan timezone Jakarta**
+            $now = Carbon::now('Asia/Jakarta');
 
             // Log untuk debugging
             Log::info('Starting transfer process', [
@@ -63,19 +71,23 @@ class TransferController extends Controller
                 'document_no' => $documentNo,
                 'user' => $user->name,
                 'item_count' => count($validated['items']),
-                'total_quantity' => array_sum(array_column($validated['items'], 'quantity'))
+                'total_quantity' => array_sum(array_column($validated['items'], 'quantity')),
+                'plant_supply' => $plantSupply,
+                'plant' => $plant,
+                'timezone' => date_default_timezone_get(),
+                'current_time' => $now->toDateTimeString()
             ]);
 
             // Prepare data for Python service
             $transferData = [
                 'transfer_info' => [
                     'document_no' => $documentNo,
-                    'plant_supply' => $slocSupply,
+                    'plant_supply' => $plantSupply,
                     'move_type' => '311',
-                    'posting_date' => now()->format('Ymd'),
+                    'posting_date' => $now->format('Ymd'),
                     'header_text' => $headerText,
                     'created_by' => $user->name,
-                    'created_at' => now()->format('Y-m-d H:i:s')
+                    'created_at' => $now->format('Y-m-d H:i:s')
                 ],
                 'items' => []
             ];
@@ -85,20 +97,10 @@ class TransferController extends Controller
                 // Parse batch_sloc - format: "SLOC:XXXX" or just "XXXX"
                 $batchSloc = $item['batch_sloc'] ?? '';
                 if ($batchSloc && strpos($batchSloc, 'SLOC:') === 0) {
-                    $batchSloc = substr($batchSloc, 5); // Remove 'SLOC:'
+                    $batchSloc = substr($batchSloc, 5);
                 }
 
                 $quantity = (float) $item['quantity'];
-
-                // Log setiap item yang akan ditransfer
-                Log::debug('Transfer item details', [
-                    'material_code' => $item['material_code'],
-                    'quantity' => $quantity,
-                    'batch' => $item['batch'] ?? '',
-                    'batch_sloc' => $batchSloc,
-                    'plant_tujuan' => $item['plant_tujuan'],
-                    'sloc_tujuan' => $item['sloc_tujuan']
-                ]);
 
                 $transferData['items'][] = [
                     'material_code' => $item['material_code'],
@@ -125,7 +127,8 @@ class TransferController extends Controller
                 'document_no' => $documentNo,
                 'item_count' => count($transferData['items']),
                 'total_quantity' => array_sum(array_column($transferData['items'], 'quantity')),
-                'user' => $user->name
+                'user' => $user->name,
+                'time_sent' => $now->toDateTimeString()
             ]);
 
             $response = Http::timeout(120)->post("{$pythonServiceUrl}/api/sap/transfer", [
@@ -142,19 +145,21 @@ class TransferController extends Controller
                     'success' => $result['success'] ?? false,
                     'transfer_no' => $result['transfer_no'] ?? null,
                     'status' => $result['status'] ?? null,
-                    'message' => $result['message'] ?? ''
+                    'message' => $result['message'] ?? '',
+                    'received_at' => $now->toDateTimeString()
                 ]);
 
                 if (isset($result['success']) && $result['success']) {
-                    // Cek apakah transfer sudah ada sebelumnya (prevent duplicate)
-                    $existingTransfer = Transfer::where('document_id', $document->id)
+                    // Cek apakah transfer sudah ada sebelumnya
+                    $existingTransfer = ReservationTransfer::where('document_id', $document->id)
                         ->where('transfer_no', $result['transfer_no'] ?? '')
                         ->first();
 
                     if ($existingTransfer) {
                         Log::warning('Duplicate transfer attempt detected', [
                             'transfer_no' => $result['transfer_no'],
-                            'document_id' => $document->id
+                            'document_id' => $document->id,
+                            'existing_created_at' => $existingTransfer->created_at
                         ]);
 
                         return response()->json([
@@ -164,43 +169,75 @@ class TransferController extends Controller
                         ], 409);
                     }
 
-                    // Save transfer record to database
-                    $transfer = Transfer::create([
+                    // **PERBAIKAN: Save transfer dengan timezone Jakarta**
+                    $transfer = ReservationTransfer::create([
                         'document_id' => $document->id,
                         'document_no' => $documentNo,
                         'transfer_no' => $result['transfer_no'] ?? 'PENDING',
-                        'plant_supply' => $slocSupply,
+                        'plant_supply' => $plantSupply,
                         'plant_destination' => $plant,
                         'move_type' => '311',
                         'total_items' => count($transferData['items']),
-                        'total_quantity' => array_sum(array_column($transferData['items'], 'quantity')),
+                        'total_qty' => array_sum(array_column($transferData['items'], 'quantity')),
                         'status' => $result['status'] ?? 'SUBMITTED',
                         'sap_message' => $result['message'] ?? '',
                         'remarks' => $remarks,
                         'created_by' => $user->id,
                         'created_by_name' => $user->name,
-                        'completed_at' => $result['status'] === 'COMPLETED' ? now() : null,
+                        'completed_at' => $result['status'] === 'COMPLETED' ? $now : null,
                         'sap_response' => json_encode($result)
                     ]);
 
                     // Save transfer items
                     foreach ($validated['items'] as $index => $item) {
-                        TransferItem::create([
+                        // Cari document_item_id berdasarkan material_code
+                        $documentItem = ReservationDocumentItem::where('document_id', $document->id)
+                            ->where('material_code', $item['material_code'])
+                            ->first();
+
+                        if (!$documentItem) {
+                            Log::warning('Document item not found for transfer', [
+                                'material_code' => $item['material_code'],
+                                'document_id' => $document->id
+                            ]);
+                            continue;
+                        }
+
+                        // Parse batch_sloc untuk storage_location
+                        $batchSloc = $item['batch_sloc'] ?? '';
+                        if ($batchSloc && strpos($batchSloc, 'SLOC:') === 0) {
+                            $batchSloc = substr($batchSloc, 5);
+                        }
+
+                        // Format material code
+                        $materialCodeRaw = $item['material_code'];
+                        $materialCodeFormatted = false;
+
+                        if (ctype_digit($materialCodeRaw)) {
+                            $materialCodeFormatted = true;
+                        }
+                        // Di dalam method createTransfer(), bagian save transfer items:
+                        ReservationTransferItem::create([
                             'transfer_id' => $transfer->id,
+                            'document_item_id' => $documentItem->id,
                             'material_code' => $item['material_code'],
+                            'material_code_raw' => $item['material_code'],
                             'material_description' => $item['material_desc'],
                             'batch' => $item['batch'] ?? '',
-                            'batch_sloc' => $item['batch_sloc'] ?? '',
-                            'quantity' => (float) $item['quantity'],
-                            'unit' => $item['unit'],
-                            'plant_supply' => $slocSupply,
+                            'storage_location' => $batchSloc,
+                            'plant_supply' => $plantSupply,
                             'plant_destination' => $item['plant_tujuan'],
                             'sloc_destination' => $item['sloc_tujuan'],
-                            'requested_qty' => (float) ($item['requested_qty'] ?? 0),
-                            'available_stock' => (float) ($item['available_stock'] ?? 0),
+                            'quantity' => (float) $item['quantity'],
+                            'unit' => $item['unit'],
+                            'item_number' => $index + 1,
                             'sap_status' => $result['item_results'][$index]['status'] ?? 'SUBMITTED',
                             'sap_message' => $result['item_results'][$index]['message'] ?? '',
-                            'item_number' => $index + 1
+                            'material_formatted' => $materialCodeFormatted,
+                            'requested_qty' => (float) ($item['requested_qty'] ?? 0),
+                            'available_stock' => (float) ($item['available_stock'] ?? 0),
+                            'created_at' => $now, // Pastikan ini diisi
+                            'updated_at' => $now  // Pastikan ini diisi
                         ]);
                     }
 
@@ -212,7 +249,8 @@ class TransferController extends Controller
                         'transfer_id' => $transfer->id,
                         'transfer_no' => $result['transfer_no'] ?? 'PENDING',
                         'document_no' => $documentNo,
-                        'status' => $result['status'] ?? 'SUBMITTED'
+                        'status' => $result['status'] ?? 'SUBMITTED',
+                        'created_at' => $now->toDateTimeString()
                     ]);
 
                     return response()->json([
@@ -221,72 +259,17 @@ class TransferController extends Controller
                         'transfer_no' => $result['transfer_no'] ?? 'PENDING',
                         'transfer_id' => $transfer->id,
                         'status' => $result['status'] ?? 'SUBMITTED',
+                        'created_at' => $now->toDateTimeString(),
                         'data' => $result
                     ]);
-                } else {
-                    // Log SAP transfer failure
-                    Log::error('SAP transfer failed', [
-                        'document_no' => $documentNo,
-                        'errors' => $result['errors'] ?? [],
-                        'message' => $result['message'] ?? 'Unknown error',
-                        'error_type' => $result['error_type'] ?? 'UNKNOWN'
-                    ]);
-
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'SAP transfer failed: ' . ($result['message'] ?? 'Unknown error'),
-                        'errors' => $result['errors'] ?? [],
-                        'error_type' => $result['error_type'] ?? 'UNKNOWN'
-                    ], 400);
                 }
-            } else {
-                // Log connection failure
-                $errorBody = $response->body();
-                $errorStatus = $response->status();
-
-                Log::error('Failed to connect to Python service', [
-                    'status' => $errorStatus,
-                    'body' => $errorBody,
-                    'document_no' => $documentNo,
-                    'python_url' => $pythonServiceUrl
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to connect to SAP service. HTTP Status: ' . $errorStatus,
-                    'error_details' => $errorBody
-                ], 500);
             }
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            // Validation error
-            Log::error('Transfer validation error', [
-                'errors' => $e->errors(),
-                'request_data' => $request->except(['sap_credentials.passwd'])
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors' => $e->errors()
-            ], 422);
-
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            Log::error('Document not found', [
-                'document_id' => $id,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Document not found'
-            ], 404);
 
         } catch (\Exception $e) {
             Log::error('Transfer creation error', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'document_id' => $id
+                'document_id' => $id,
+                'timezone' => date_default_timezone_get()
             ]);
 
             return response()->json([
@@ -359,6 +342,38 @@ class TransferController extends Controller
         }
     }
 
+        /**
+     * Cek duplikasi transfer dengan validasi ketat
+     */
+    private function checkForDuplicateTransfer($documentId, $transferNo)
+    {
+        // Cari transfer dengan nomor yang sama
+        $existingTransfers = ReservationTransfer::where('transfer_no', $transferNo)->get();
+
+        if ($existingTransfers->isEmpty()) {
+            return ['is_duplicate' => false];
+        }
+
+        // Cek jika ada transfer untuk document yang sama
+        foreach ($existingTransfers as $existing) {
+            if ($existing->document_id == $documentId) {
+                return [
+                    'is_duplicate' => true,
+                    'existing_id' => $existing->id,
+                    'transfer_no' => $existing->transfer_no,
+                    'document_id' => $existing->document_id
+                ];
+            }
+        }
+
+        // Jika transfer_no sama tapi untuk document berbeda, masih dianggap duplicate
+        // karena transfer_no harus unik di seluruh sistem
+        return [
+            'is_duplicate' => true,
+            'existing_id' => $existingTransfers->first()->id,
+            'transfer_no' => $existingTransfers->first()->transfer_no
+        ];
+    }
     /**
      * Get SAP credentials for user
      */
@@ -409,7 +424,7 @@ class TransferController extends Controller
         try {
             $perPage = $request->get('per_page', 20);
 
-            $transfers = Transfer::with(['items', 'document'])
+            $transfers = ReservationTransfer::with(['items', 'document'])
                 ->orderBy('created_at', 'desc')
                 ->paginate($perPage);
 
@@ -438,7 +453,7 @@ class TransferController extends Controller
     public function show($id)
     {
         try {
-            $transfer = Transfer::with(['items', 'document'])->findOrFail($id);
+            $transfer = ReservationTransfer::with(['items', 'document'])->findOrFail($id);
 
             return response()->json([
                 'success' => true,
@@ -472,7 +487,7 @@ class TransferController extends Controller
     public function getTransfersByDocument($documentId)
     {
         try {
-            $transfers = Transfer::with(['items'])
+            $transfers = ReservationTransfer::with(['items'])
                 ->where('document_id', $documentId)
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -509,7 +524,7 @@ class TransferController extends Controller
                 'transfer_no' => 'nullable|string'
             ]);
 
-            $transfer = Transfer::findOrFail($id);
+            $transfer = ReservationTransfer::findOrFail($id);
 
             $updateData = [
                 'status' => $request->status,
@@ -565,10 +580,10 @@ class TransferController extends Controller
     public function destroy($id)
     {
         try {
-            $transfer = Transfer::findOrFail($id);
+            $transfer = ReservationTransfer::findOrFail($id);
 
             // Delete transfer items first
-            TransferItem::where('transfer_id', $id)->delete();
+            ReservationTransferItem::where('transfer_id', $id)->delete();
 
             // Delete the transfer
             $transfer->delete();

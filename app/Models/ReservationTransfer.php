@@ -19,11 +19,15 @@ class ReservationTransfer extends Model
         'total_items',
         'remarks',
         'created_by',
-        'created_by_name'
+        'created_by_name',
+        'completed_at',
+        'sap_message',
+        'sap_response'  // Tambahkan ini jika belum ada
     ];
 
     protected $casts = [
-        'total_qty' => 'decimal:3'
+        'total_qty' => 'decimal:3',
+        'completed_at' => 'datetime'
     ];
 
     public function items(): HasMany
