@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
-use App\Models\Document;
 
 class ReservationDocumentController extends Controller
 {
@@ -89,23 +88,8 @@ class ReservationDocumentController extends Controller
             foreach ($document->items as $item) {
                 $item->has_transfer_history = in_array($item->id, $transferItemIds);
 
-                // Hitung status transfer per item (dipindahkan dari view ke controller)
-                if ($item->remaining_qty == 0) {
-                    $item->transfer_status = 'completed';
-                    $item->transfer_badge_class = 'bg-success';
-                    $item->transfer_icon = 'fa-check-circle';
-                    $item->transfer_label = 'Completed';
-                } elseif ($item->transferred_qty > 0 && $item->remaining_qty > 0) {
-                    $item->transfer_status = 'partial';
-                    $item->transfer_badge_class = 'bg-info';
-                    $item->transfer_icon = 'fa-tasks';
-                    $item->transfer_label = 'Partial';
-                } else {
-                    $item->transfer_status = 'pending';
-                    $item->transfer_badge_class = 'bg-secondary';
-                    $item->transfer_icon = 'fa-clock';
-                    $item->transfer_label = 'Pending';
-                }
+                // Hitung status transfer per item
+                $this->calculateItemTransferStatus($item);
             }
 
             $user = Auth::user();
@@ -125,6 +109,36 @@ class ReservationDocumentController extends Controller
             Log::error('Error in show document: ' . $e->getMessage());
             return redirect()->route('documents.index')
                 ->with('error', 'Document not found: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Calculate item transfer status
+     */
+    private function calculateItemTransferStatus($item)
+    {
+        // Prioritaskan force completed
+        if ($item->force_completed) {
+            $item->transfer_status = 'force_completed';
+            $item->transfer_badge_class = 'bg-success';
+            $item->transfer_icon = 'fa-check-double';
+            $item->transfer_label = 'Force Completed';
+            $item->has_transfer_history = true; // Tetap bisa lihat history
+        } elseif ($item->remaining_qty == 0) {
+            $item->transfer_status = 'completed';
+            $item->transfer_badge_class = 'bg-success';
+            $item->transfer_icon = 'fa-check-circle';
+            $item->transfer_label = 'Completed';
+        } elseif ($item->transferred_qty > 0 && $item->remaining_qty > 0) {
+            $item->transfer_status = 'partial';
+            $item->transfer_badge_class = 'bg-info';
+            $item->transfer_icon = 'fa-tasks';
+            $item->transfer_label = 'Partial';
+        } else {
+            $item->transfer_status = 'pending';
+            $item->transfer_badge_class = 'bg-secondary';
+            $item->transfer_icon = 'fa-clock';
+            $item->transfer_label = 'Pending';
         }
     }
 
@@ -166,7 +180,7 @@ class ReservationDocumentController extends Controller
 
             $transferredQty = $transferItems->sum('quantity');
 
-            // Calculate remaining quantity
+            // Calculate remaining quantity - JANGAN ubah jika force completed
             $remainingQty = max(0, $item->requested_qty - $transferredQty);
 
             // Prepare arrays for view
@@ -176,243 +190,258 @@ class ReservationDocumentController extends Controller
             $item->sources_array = $sources;
             $item->sales_orders_array = $salesOrders;
             $item->transferred_qty = $transferredQty;
-            $item->remaining_qty = $remainingQty;
+            $item->remaining_qty = $remainingQty; // Pertahankan nilai asli
         }
     }
 
-                        /**
-                 * Get transfer history for specific item - DIPERBAIKI
-                 */
-                public function getItemTransferHistory($documentId, $materialCode)
-                {
-                    try {
-                        Log::info('Getting transfer history', [
-                            'document_id' => $documentId,
-                            'material_code' => $materialCode
-                        ]);
+    /**
+     * Get transfer history for specific item - DIPERBAIKI
+     */
+    public function getItemTransferHistory($documentId, $materialCode)
+    {
+        try {
+            Log::info('Getting transfer history', [
+                'document_id' => $documentId,
+                'material_code' => $materialCode
+            ]);
 
-                        // Decode material code (jika ada encoding di URL)
-                        $materialCode = urldecode($materialCode);
+            // Decode material code
+            $materialCode = urldecode($materialCode);
 
-                        Log::info('Decoded material code:', ['material_code' => $materialCode]);
+            Log::info('Decoded material code:', ['material_code' => $materialCode]);
 
-                        // PERBAIKAN: Gunakan model yang benar - ReservationDocument
-                        $document = ReservationDocument::find($documentId);
+            // PERBAIKAN: Gunakan model yang benar - ReservationDocument
+            $document = ReservationDocument::find($documentId);
 
-                        if (!$document) {
-                            Log::warning('Document not found', ['document_id' => $documentId]);
-                            return response()->json(['error' => 'Document not found'], 404);
-                        }
-
-                        Log::info('Document found:', [
-                            'document_no' => $document->document_no,
-                            'total_items' => $document->items()->count()
-                        ]);
-
-                        // PERBAIKAN: Query pencarian item yang lebih akurat
-                        $item = ReservationDocumentItem::where('document_id', $documentId)
-                            ->where(function($query) use ($materialCode) {
-                                // Exact match
-                                $query->where('material_code', $materialCode)
-                                    // Match dengan atau tanpa leading zeros
-                                    ->orWhereRaw("TRIM(LEADING '0' FROM material_code) = ?", [ltrim($materialCode, '0')])
-                                    // Match jika material code mengandung kode
-                                    ->orWhere('material_code', 'LIKE', '%' . $materialCode . '%');
-                            })
-                            ->first();
-
-                        if (!$item) {
-                            Log::warning('Item not found', [
-                                'document_id' => $documentId,
-                                'material_code' => $materialCode,
-                                'search_patterns' => [
-                                    'exact' => $materialCode,
-                                    'without_zeros' => ltrim($materialCode, '0'),
-                                    'like' => '%' . $materialCode . '%'
-                                ]
-                            ]);
-                            return response()->json(['error' => 'Item not found'], 404);
-                        }
-
-                        Log::info('Found item:', [
-                            'item_id' => $item->id,
-                            'material_code' => $item->material_code,
-                            'material_description' => $item->material_description
-                        ]);
-
-                        // Get transfer history
-                        $transferHistory = DB::table('reservation_transfer_items')
-                            ->leftJoin('reservation_transfers', 'reservation_transfer_items.transfer_id', '=', 'reservation_transfers.id')
-                            ->select(
-                                'reservation_transfers.transfer_no',
-                                'reservation_transfer_items.material_code',
-                                'reservation_transfer_items.batch',
-                                'reservation_transfer_items.quantity',
-                                'reservation_transfer_items.unit',
-                                'reservation_transfer_items.created_at'
-                            )
-                            ->where('reservation_transfer_items.document_item_id', $item->id)
-                            ->orderBy('reservation_transfer_items.created_at', 'desc')
-                            ->get()
-                            ->map(function ($transfer) {
-                                $createdAt = null;
-
-                                if ($transfer->created_at) {
-                                    try {
-                                        $createdAt = Carbon::parse($transfer->created_at)
-                                            ->setTimezone('Asia/Jakarta')
-                                            ->format('d/m/Y H:i:s');
-                                    } catch (\Exception $e) {
-                                        $createdAt = 'Tanggal tidak valid';
-                                    }
-                                } else {
-                                    $createdAt = 'Tanggal tidak tersedia';
-                                }
-
-                                return [
-                                    'transfer_no' => $transfer->transfer_no ?? 'N/A',
-                                    'material_code' => $transfer->material_code,
-                                    'batch' => $transfer->batch ?? 'N/A',
-                                    'quantity' => (float) $transfer->quantity,
-                                    'unit' => $transfer->unit ?? 'PC',
-                                    'created_at' => $createdAt
-                                ];
-                            });
-
-                        Log::info('Transfer history found:', [
-                            'count' => $transferHistory->count(),
-                            'item_id' => $item->id,
-                            'data' => $transferHistory->toArray()
-                        ]);
-
-                        // Jika tidak ada history, cek apakah ada transfer items dengan material code yang sama
-                        if ($transferHistory->isEmpty()) {
-                            Log::info('No transfer history via document_item_id, trying material_code match...');
-
-                            $transferHistory = DB::table('reservation_transfer_items')
-                                ->leftJoin('reservation_transfers', 'reservation_transfer_items.transfer_id', '=', 'reservation_transfers.id')
-                                ->where('reservation_transfers.document_id', $documentId)
-                                ->where(function($query) use ($item) {
-                                    $query->where('reservation_transfer_items.material_code', $item->material_code)
-                                        ->orWhere('reservation_transfer_items.material_code', 'LIKE', '%' . ltrim($item->material_code, '0') . '%');
-                                })
-                                ->select(
-                                    'reservation_transfers.transfer_no',
-                                    'reservation_transfer_items.material_code',
-                                    'reservation_transfer_items.batch',
-                                    'reservation_transfer_items.quantity',
-                                    'reservation_transfer_items.unit',
-                                    'reservation_transfer_items.created_at'
-                                )
-                                ->orderBy('reservation_transfer_items.created_at', 'desc')
-                                ->get()
-                                ->map(function ($transfer) {
-                                    $createdAt = null;
-
-                                    if ($transfer->created_at) {
-                                        try {
-                                            $createdAt = Carbon::parse($transfer->created_at)
-                                                ->setTimezone('Asia/Jakarta')
-                                                ->format('d/m/Y H:i:s');
-                                        } catch (\Exception $e) {
-                                            $createdAt = 'Tanggal tidak valid';
-                                        }
-                                    } else {
-                                        $createdAt = 'Tanggal tidak tersedia';
-                                    }
-
-                                    return [
-                                        'transfer_no' => $transfer->transfer_no ?? 'N/A',
-                                        'material_code' => $transfer->material_code,
-                                        'batch' => $transfer->batch ?? 'N/A',
-                                        'quantity' => (float) $transfer->quantity,
-                                        'unit' => $transfer->unit ?? 'PC',
-                                        'created_at' => $createdAt
-                                    ];
-                                });
-
-                            Log::info('Transfer history via material_code match:', [
-                                'count' => $transferHistory->count()
-                            ]);
-                        }
-
-                        return response()->json($transferHistory);
-
-                    } catch (\Exception $e) {
-                        Log::error('Error getting item transfer history: ' . $e->getMessage(), [
-                            'document_id' => $documentId,
-                            'material_code' => $materialCode,
-                            'trace' => $e->getTraceAsString()
-                        ]);
-
-                        return response()->json([
-                            'error' => 'Internal server error: ' . $e->getMessage()
-                        ], 500);
-                    }
-                }
-
-            /**
-             * Helper method untuk format tanggal dari berbagai format input
-             */
-            private function formatDate($dateValue)
-            {
-                if (!$dateValue) {
-                    return 'Tanggal tidak tersedia';
-                }
-
-                // Jika sudah string kosong atau null
-                if (is_null($dateValue) || $dateValue === '') {
-                    return 'Tanggal tidak tersedia';
-                }
-
-                // Coba deteksi jika sudah dalam format Indonesia
-                if (preg_match('/^\d{2}\/\d{2}\/\d{4}/', $dateValue)) {
-                    // Format: dd/mm/YYYY
-                    $carbonDate = Carbon::createFromFormat('d/m/Y H:i:s', $dateValue);
-                    return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
-                }
-
-                // Coba format MySQL datetime
-                if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/', $dateValue)) {
-                    // Format: YYYY-MM-DD HH:MM:SS
-                    $carbonDate = Carbon::createFromFormat('Y-m-d H:i:s', $dateValue);
-                    return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
-                }
-
-                // Coba format MySQL date only
-                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateValue)) {
-                    // Format: YYYY-MM-DD
-                    $carbonDate = Carbon::createFromFormat('Y-m-d', $dateValue);
-                    return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
-                }
-
-                // Coba format timestamp
-                if (is_numeric($dateValue)) {
-                    // Unix timestamp
-                    $carbonDate = Carbon::createFromTimestamp($dateValue);
-                    return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
-                }
-
-                // Coba parsing umum dengan Carbon
-                try {
-                    $carbonDate = Carbon::parse($dateValue);
-                    return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
-                } catch (\Exception $e) {
-                    Log::warning('Carbon parse failed for date:', [
-                        'date' => $dateValue,
-                        'error' => $e->getMessage()
-                    ]);
-                    throw $e;
-                }
+            if (!$document) {
+                Log::warning('Document not found', ['document_id' => $documentId]);
+                return response()->json(['error' => 'Document not found'], 404);
             }
+
+            Log::info('Document found:', [
+                'document_no' => $document->document_no,
+                'total_items' => $document->items()->count()
+            ]);
+
+            // PERBAIKAN: Query pencarian item yang lebih akurat
+            $item = ReservationDocumentItem::where('document_id', $documentId)
+                ->where(function($query) use ($materialCode) {
+                    // Exact match
+                    $query->where('material_code', $materialCode)
+                        // Match dengan atau tanpa leading zeros
+                        ->orWhereRaw("TRIM(LEADING '0' FROM material_code) = ?", [ltrim($materialCode, '0')])
+                        // Match jika material code mengandung kode
+                        ->orWhere('material_code', 'LIKE', '%' . $materialCode . '%');
+                })
+                ->first();
+
+            if (!$item) {
+                Log::warning('Item not found', [
+                    'document_id' => $documentId,
+                    'material_code' => $materialCode,
+                    'search_patterns' => [
+                        'exact' => $materialCode,
+                        'without_zeros' => ltrim($materialCode, '0'),
+                        'like' => '%' . $materialCode . '%'
+                    ]
+                ]);
+                return response()->json(['error' => 'Item not found'], 404);
+            }
+
+            Log::info('Found item:', [
+                'item_id' => $item->id,
+                'material_code' => $item->material_code,
+                'material_description' => $item->material_description,
+                'force_completed' => $item->force_completed
+            ]);
+
+            // Get transfer history
+            $transferHistory = DB::table('reservation_transfer_items')
+                ->leftJoin('reservation_transfers', 'reservation_transfer_items.transfer_id', '=', 'reservation_transfers.id')
+                ->select(
+                    'reservation_transfers.transfer_no',
+                    'reservation_transfer_items.material_code',
+                    'reservation_transfer_items.batch',
+                    'reservation_transfer_items.quantity',
+                    'reservation_transfer_items.unit',
+                    'reservation_transfer_items.created_at'
+                )
+                ->where('reservation_transfer_items.document_item_id', $item->id)
+                ->orderBy('reservation_transfer_items.created_at', 'desc')
+                ->get()
+                ->map(function ($transfer) {
+                    $createdAt = null;
+
+                    if ($transfer->created_at) {
+                        try {
+                            $createdAt = Carbon::parse($transfer->created_at)
+                                ->setTimezone('Asia/Jakarta')
+                                ->format('d/m/Y H:i:s');
+                        } catch (\Exception $e) {
+                            $createdAt = 'Tanggal tidak valid';
+                        }
+                    } else {
+                        $createdAt = 'Tanggal tidak tersedia';
+                    }
+
+                    return [
+                        'transfer_no' => $transfer->transfer_no ?? 'N/A',
+                        'material_code' => $transfer->material_code,
+                        'batch' => $transfer->batch ?? 'N/A',
+                        'quantity' => (float) $transfer->quantity,
+                        'unit' => $transfer->unit ?? 'PC',
+                        'created_at' => $createdAt
+                    ];
+                });
+
+            Log::info('Transfer history found:', [
+                'count' => $transferHistory->count(),
+                'item_id' => $item->id,
+                'data' => $transferHistory->toArray()
+            ]);
+
+            // Jika tidak ada history, cek apakah ada transfer items dengan material code yang sama
+            if ($transferHistory->isEmpty()) {
+                Log::info('No transfer history via document_item_id, trying material_code match...');
+
+                $transferHistory = DB::table('reservation_transfer_items')
+                    ->leftJoin('reservation_transfers', 'reservation_transfer_items.transfer_id', '=', 'reservation_transfers.id')
+                    ->where('reservation_transfers.document_id', $documentId)
+                    ->where(function($query) use ($item) {
+                        $query->where('reservation_transfer_items.material_code', $item->material_code)
+                            ->orWhere('reservation_transfer_items.material_code', 'LIKE', '%' . ltrim($item->material_code, '0') . '%');
+                    })
+                    ->select(
+                        'reservation_transfers.transfer_no',
+                        'reservation_transfer_items.material_code',
+                        'reservation_transfer_items.batch',
+                        'reservation_transfer_items.quantity',
+                        'reservation_transfer_items.unit',
+                        'reservation_transfer_items.created_at'
+                    )
+                    ->orderBy('reservation_transfer_items.created_at', 'desc')
+                    ->get()
+                    ->map(function ($transfer) {
+                        $createdAt = null;
+
+                        if ($transfer->created_at) {
+                            try {
+                                $createdAt = Carbon::parse($transfer->created_at)
+                                    ->setTimezone('Asia/Jakarta')
+                                    ->format('d/m/Y H:i:s');
+                            } catch (\Exception $e) {
+                                $createdAt = 'Tanggal tidak valid';
+                            }
+                        } else {
+                            $createdAt = 'Tanggal tidak tersedia';
+                        }
+
+                        return [
+                            'transfer_no' => $transfer->transfer_no ?? 'N/A',
+                            'material_code' => $transfer->material_code,
+                            'batch' => $transfer->batch ?? 'N/A',
+                            'quantity' => (float) $transfer->quantity,
+                            'unit' => $transfer->unit ?? 'PC',
+                            'created_at' => $createdAt
+                        ];
+                    });
+
+                Log::info('Transfer history via material_code match:', [
+                    'count' => $transferHistory->count()
+                ]);
+            }
+
+            return response()->json($transferHistory);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting item transfer history: ' . $e->getMessage(), [
+                'document_id' => $documentId,
+                'material_code' => $materialCode,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Internal server error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Helper method untuk format tanggal dari berbagai format input
+     */
+    private function formatDate($dateValue)
+    {
+        if (!$dateValue) {
+            return 'Tanggal tidak tersedia';
+        }
+
+        // Jika sudah string kosong atau null
+        if (is_null($dateValue) || $dateValue === '') {
+            return 'Tanggal tidak tersedia';
+        }
+
+        // Coba deteksi jika sudah dalam format Indonesia
+        if (preg_match('/^\d{2}\/\d{2}\/\d{4}/', $dateValue)) {
+            // Format: dd/mm/YYYY
+            $carbonDate = Carbon::createFromFormat('d/m/Y H:i:s', $dateValue);
+            return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
+        }
+
+        // Coba format MySQL datetime
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/', $dateValue)) {
+            // Format: YYYY-MM-DD HH:MM:SS
+            $carbonDate = Carbon::createFromFormat('Y-m-d H:i:s', $dateValue);
+            return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
+        }
+
+        // Coba format MySQL date only
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateValue)) {
+            // Format: YYYY-MM-DD
+            $carbonDate = Carbon::createFromFormat('Y-m-d', $dateValue);
+            return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
+        }
+
+        // Coba format timestamp
+        if (is_numeric($dateValue)) {
+            // Unix timestamp
+            $carbonDate = Carbon::createFromTimestamp($dateValue);
+            return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
+        }
+
+        // Coba parsing umum dengan Carbon
+        try {
+            $carbonDate = Carbon::parse($dateValue);
+            return $carbonDate->setTimezone('Asia/Jakarta')->format('d/m/Y, H.i.s');
+        } catch (\Exception $e) {
+            Log::warning('Carbon parse failed for date:', [
+                'date' => $dateValue,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Check if item is transferable (tidak force completed)
+     */
+    private function isItemTransferable($item)
+    {
+        // Jika item sudah force completed, tidak bisa ditransfer
+        if ($item->force_completed ?? false) {
+            return false;
+        }
+
+        // Cek remaining quantity dan stock
+        $remainingQty = $item->remaining_qty ?? 0;
+        $totalStock = $item->stock_info['total_stock'] ?? 0;
+
+        return $remainingQty > 0 && $totalStock > 0;
+    }
 
     private function hasTransferableItems($document)
     {
         foreach ($document->items as $item) {
-            $totalStock = $item->stock_info['total_stock'] ?? 0;
-            $remainingQty = $item->remaining_qty ?? 0;
-
-            if ($remainingQty > 0 && $totalStock > 0) {
+            if ($this->isItemTransferable($item)) {
                 return true;
             }
         }
@@ -475,6 +504,19 @@ class ReservationDocumentController extends Controller
                     ], 400);
                 }
 
+                // **PERBAIKAN: Cek apakah item force completed**
+                if ($dbItem->force_completed ?? false) {
+                    Log::error('Item is force completed, cannot transfer:', [
+                        'item_id' => $dbItem->id,
+                        'material_code' => $dbItem->material_code
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot transfer force completed item: ' . $item['material_code']
+                    ], 400);
+                }
+
                 $validItems[] = array_merge($item, [
                     'db_item_id' => $dbItem->id,
                     'db_material_code' => $dbItem->material_code
@@ -499,48 +541,48 @@ class ReservationDocumentController extends Controller
     }
 
     private function updateDocumentTransferQuantities($document, $transferItems)
-{
-    try {
-        Log::info('=== START TRANSFER QUANTITIES UPDATE ===');
+    {
+        try {
+            Log::info('=== START TRANSFER QUANTITIES UPDATE ===');
 
-        // Set timezone ke Asia/Jakarta
-        date_default_timezone_set('Asia/Jakarta');
+            // Set timezone ke Asia/Jakarta
+            date_default_timezone_set('Asia/Jakarta');
 
-        // **PERBAIKAN: Generate transfer number dengan cek duplikasi**
-        $transferNo = $this->generateUniqueTransferNumber($document->plant);
+            // **PERBAIKAN: Generate transfer number dengan cek duplikasi**
+            $transferNo = $this->generateUniqueTransferNumber($document->plant);
 
-        if (!$transferNo) {
-            throw new \Exception('Failed to generate unique transfer number');
-        }
+            if (!$transferNo) {
+                throw new \Exception('Failed to generate unique transfer number');
+            }
 
-        // **PERBAIKAN: Cek apakah transfer sudah ada sebelumnya**
-        $existingTransfer = ReservationTransfer::where('transfer_no', $transferNo)->first();
-        if ($existingTransfer) {
-            Log::warning('Transfer number already exists, skipping duplicate', [
-                'transfer_no' => $transferNo,
-                'existing_id' => $existingTransfer->id
-            ]);
+            // **PERBAIKAN: Cek apakah transfer sudah ada sebelumnya**
+            $existingTransfer = ReservationTransfer::where('transfer_no', $transferNo)->first();
+            if ($existingTransfer) {
+                Log::warning('Transfer number already exists, skipping duplicate', [
+                    'transfer_no' => $transferNo,
+                    'existing_id' => $existingTransfer->id
+                ]);
 
-            // Update items ke existing transfer
-            $transfer = $existingTransfer;
-        } else {
-            // Create transfer record dengan data lengkap
-            $transfer = ReservationTransfer::create([
-                'transfer_no' => $transferNo,
-                'document_id' => $document->id,
-                'document_no' => $document->document_no,
-                'plant_supply' => request()->sloc_supply,
-                'plant_destination' => $document->plant,
-                'move_type' => '311',
-                'status' => 'completed',
-                'created_by' => Auth::user()->id,
-                'created_by_name' => Auth::user()->name,
-                'total_qty' => array_sum(array_column($transferItems, 'quantity')),
-                'total_items' => count($transferItems),
-                'remarks' => request()->input('remarks', ''),
-                'sap_message' => 'Transfer created from document',
-            ]);
-        }
+                // Update items ke existing transfer
+                $transfer = $existingTransfer;
+            } else {
+                // Create transfer record dengan data lengkap
+                $transfer = ReservationTransfer::create([
+                    'transfer_no' => $transferNo,
+                    'document_id' => $document->id,
+                    'document_no' => $document->document_no,
+                    'plant_supply' => request()->sloc_supply,
+                    'plant_destination' => $document->plant,
+                    'move_type' => '311',
+                    'status' => 'completed',
+                    'created_by' => Auth::user()->id,
+                    'created_by_name' => Auth::user()->name,
+                    'total_qty' => array_sum(array_column($transferItems, 'quantity')),
+                    'total_items' => count($transferItems),
+                    'remarks' => request()->input('remarks', ''),
+                    'sap_message' => 'Transfer created from document',
+                ]);
+            }
 
             Log::info('Transfer created', [
                 'transfer_id' => $transfer->id,
@@ -633,50 +675,50 @@ class ReservationDocumentController extends Controller
             Log::info('=== END TRANSFER QUANTITIES UPDATE ===');
 
         } catch (\Exception $e) {
-        Log::error('ERROR in updateDocumentTransferQuantities: ' . $e->getMessage());
-        throw $e;
+            Log::error('ERROR in updateDocumentTransferQuantities: ' . $e->getMessage());
+            throw $e;
         }
     }
 
-            /**
-         * Generate unique transfer number dengan cek duplikasi
-         */
-        private function generateUniqueTransferNumber($plant)
-        {
-            $prefix = ($plant == '3000') ? 'TRMG' : 'TRBY';
+    /**
+     * Generate unique transfer number dengan cek duplikasi
+     */
+    private function generateUniqueTransferNumber($plant)
+    {
+        $prefix = ($plant == '3000') ? 'TRMG' : 'TRBY';
 
-            // Cari sequence terakhir yang unik
-            $latestSeq = DB::table('reservation_transfers')
-                ->select(DB::raw('COALESCE(MAX(CAST(SUBSTRING(transfer_no, 5) AS UNSIGNED)), 0) as max_seq'))
-                ->where('transfer_no', 'LIKE', $prefix . '%')
-                ->where('transfer_no', 'NOT LIKE', '%DUP%') // Abaikan yang sudah ditandai duplicate
-                ->value('max_seq');
+        // Cari sequence terakhir yang unik
+        $latestSeq = DB::table('reservation_transfers')
+            ->select(DB::raw('COALESCE(MAX(CAST(SUBSTRING(transfer_no, 5) AS UNSIGNED)), 0) as max_seq'))
+            ->where('transfer_no', 'LIKE', $prefix . '%')
+            ->where('transfer_no', 'NOT LIKE', '%DUP%') // Abaikan yang sudah ditandai duplicate
+            ->value('max_seq');
 
-            $sequence = $latestSeq + 1;
+        $sequence = $latestSeq + 1;
+        $transferNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
+
+        // Cek duplikasi
+        $counter = 0;
+        while (ReservationTransfer::where('transfer_no', $transferNo)->exists()) {
+            // Jika ditemukan duplikasi, generate nomor baru
+            $sequence++;
             $transferNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
+            $counter++;
 
-            // Cek duplikasi
-            $counter = 0;
-            while (ReservationTransfer::where('transfer_no', $transferNo)->exists()) {
-                // Jika ditemukan duplikasi, generate nomor baru
-                $sequence++;
-                $transferNo = $prefix . str_pad($sequence, 6, '0', STR_PAD_LEFT);
-                $counter++;
+            if ($counter > 100) {
+                // Fallback: tambahkan timestamp
+                $timestamp = date('His');
+                $transferNo = $prefix . str_pad($sequence, 4, '0', STR_PAD_LEFT) . $timestamp;
 
-                if ($counter > 100) {
-                    // Fallback: tambahkan timestamp
-                    $timestamp = date('His');
-                    $transferNo = $prefix . str_pad($sequence, 4, '0', STR_PAD_LEFT) . $timestamp;
-
-                    // Cek lagi
-                    if (ReservationTransfer::where('transfer_no', $transferNo)->exists()) {
-                        throw new \Exception('Failed to generate unique transfer number after multiple attempts');
-                    }
+                // Cek lagi
+                if (ReservationTransfer::where('transfer_no', $transferNo)->exists()) {
+                    throw new \Exception('Failed to generate unique transfer number after multiple attempts');
                 }
             }
-
-            return $transferNo;
         }
+
+        return $transferNo;
+    }
 
     // **ADD THESE HELPER METHODS TO THE CONTROLLER:**
 
@@ -773,6 +815,15 @@ class ReservationDocumentController extends Controller
             $item = ReservationDocumentItem::find($itemId);
             if (!$item) {
                 Log::error("Item not found: {$itemId}");
+                return;
+            }
+
+            // **PERBAIKAN: Jika force completed, skip recalculating quantities**
+            if ($item->force_completed) {
+                Log::info("Item is force completed, skipping quantity recalculation", [
+                    'item_id' => $itemId,
+                    'force_completed' => $item->force_completed
+                ]);
                 return;
             }
 

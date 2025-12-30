@@ -316,7 +316,6 @@
                                 </span>
                             </div>
 
-                            {{-- Ubah kondisi ini --}}
                             @if(in_array($document->status, ['booked', 'partial']))
                             <form id="checkStockForm" action="{{ route('stock.fetch', $document->document_no) }}"
                                 method="POST" class="d-inline">
@@ -416,34 +415,6 @@
                                     $transferredQty = $item->transferred_qty ?? 0;
                                     $remainingQty = $item->remaining_qty ?? 0;
 
-                                    // ✅ PERBAIKAN: Hitung status dengan benar
-                                    $hasTransferHistory = \Illuminate\Support\Facades\DB::table('reservation_transfer_items')
-                                        ->where('document_item_id', $item->id)
-                                        ->exists();
-
-                                    // ✅ PERBAIKAN: Tentukan status berdasarkan kondisi aktual
-                                    $transfer_status = 'pending';
-                                    $transfer_badge_class = 'bg-secondary';
-                                    $transfer_icon = 'fa-clock';
-                                    $transfer_label = 'Pending';
-
-                                    if ($item->force_completed) {
-                                        $transfer_status = 'force_completed';
-                                        $transfer_badge_class = 'bg-success';
-                                        $transfer_icon = 'fa-check-double';
-                                        $transfer_label = 'Force Completed';
-                                    } elseif ($item->transferred_qty >= $item->requested_qty) {
-                                        $transfer_status = 'completed';
-                                        $transfer_badge_class = 'bg-success';
-                                        $transfer_icon = 'fa-check-circle';
-                                        $transfer_label = 'Completed';
-                                    } elseif ($item->transferred_qty > 0 && $item->transferred_qty < $item->requested_qty) {
-                                        $transfer_status = 'partial';
-                                        $transfer_badge_class = 'bg-info';
-                                        $transfer_icon = 'fa-tasks';
-                                        $transfer_label = 'Partial';
-                                    }
-
                                     // Stock information
                                     $stockInfo = $item->stock_info ?? null;
                                     $totalStock = $stockInfo['total_stock'] ?? 0;
@@ -467,32 +438,38 @@
                                     // Check if stock is available
                                     $hasStock = $totalStock > 0;
                                     $transferableQty = min($remainingQty, $totalStock);
-                                    $canTransfer = $remainingQty > 0 && $hasStock && $transferableQty > 0;
+
+                                    // PERBAIKAN: Cek force completed
+                                    $isForceCompleted = $item->force_completed ?? false;
+
+                                    // PERBAIKAN: Check if item is transferable
+                                    $isTransferable = !$isForceCompleted && $remainingQty > 0 && $hasStock && $transferableQty > 0;
 
                                     // MRP Comp (dispc)
                                     $mrpComp = $item->dispc ?? ($item->mrp_comp ?? ($item->dispo ?? '-'));
                                 @endphp
 
                                 <tr class="item-row draggable-row"
-                                    draggable="{{ $canTransfer ? 'true' : 'false' }}"
+                                    draggable="{{ $isTransferable ? 'true' : 'false' }}"
                                     data-item-id="{{ $item->id }}"
-                                    data-material-code="{{ $item->material_code }}" {{-- ✅ Gunakan kode material original --}}
+                                    data-material-code="{{ $item->material_code }}"
                                     data-material-description="{{ $item->material_description }}"
                                     data-requested-qty="{{ $requestedQty }}"
                                     data-transferred-qty="{{ $transferredQty }}"
                                     data-remaining-qty="{{ $remainingQty }}"
                                     data-available-stock="{{ $totalStock }}"
-                                    data-transferable-qty="{{ min($remainingQty, $totalStock) }}"
+                                    data-transferable-qty="{{ $isTransferable ? min($remainingQty, $totalStock) : 0 }}"
                                     data-unit="{{ $unit }}"
                                     data-sloc="{{ !empty($batchInfo) ? ($batchInfo[0]['sloc'] ?? '') : '' }}"
-                                    data-can-transfer="{{ $canTransfer ? 'true' : 'false' }}"
+                                    data-can-transfer="{{ $isTransferable ? 'true' : 'false' }}"
+                                    data-force-completed="{{ $isForceCompleted ? 'true' : 'false' }}"
                                     data-batch-info="{{ htmlspecialchars(json_encode($batchInfo), ENT_QUOTES, 'UTF-8') }}"
-                                    style="cursor: {{ $canTransfer ? 'move' : 'default' }};">
+                                    style="cursor: {{ $isTransferable ? 'move' : 'default' }}; background-color: {{ $isForceCompleted ? 'rgba(40, 167, 69, 0.05)' : 'transparent' }};">
 
                                     <td class="align-middle py-2 px-2">
                                         <input type="checkbox" class="form-check-input row-select"
                                             data-item-id="{{ $item->id }}"
-                                            {{ $canTransfer ? '' : 'disabled' }}>
+                                            {{ $isTransferable ? '' : 'disabled' }}>
                                     </td>
 
                                     <td class="align-middle text-muted py-2 px-2">
@@ -540,9 +517,13 @@
                                         @endif
                                     </td>
 
-                                    <!-- ✅ PERBAIKAN: Kolom Status (kolom ke-9) -->
+                                    <!-- Kolom Status -->
                                     <td class="align-middle text-center py-2 px-2">
-                                        <button class="badge {{ $transfer_badge_class }} px-2 py-1 small view-transfer-details"
+                                        @php
+                                            // Gunakan status yang sudah dihitung di controller
+                                            $hasTransferHistory = $item->has_transfer_history ?? false;
+                                        @endphp
+                                        <button class="badge {{ $item->transfer_badge_class ?? 'bg-secondary' }} px-2 py-1 small view-transfer-details"
                                                 data-item-id="{{ $item->id }}"
                                                 data-material-code="{{ $item->material_code }}"
                                                 data-material-description="{{ $item->material_description }}"
@@ -550,11 +531,11 @@
                                                 style="border: none; cursor: {{ $hasTransferHistory ? 'pointer' : 'default' }};"
                                                 title="{{ $hasTransferHistory ? 'Click to view transfer details' : 'No transfer history' }}"
                                                 {{ $hasTransferHistory ? '' : 'disabled' }}>
-                                            <i class="fas {{ $transfer_icon }} me-1"></i>{{ $transfer_label }}
+                                            <i class="fas {{ $item->transfer_icon ?? 'fa-clock' }} me-1"></i>{{ $item->transfer_label ?? 'Pending' }}
                                         </button>
                                     </td>
 
-                                    <!-- Kolom Batch Source (kolom ke-10) -->
+                                    <!-- Kolom Batch Source -->
                                     <td class="align-middle text-center py-2 px-2">
                                         @if(!empty($batchInfo))
                                             @if(count($batchInfo) > 1)
@@ -581,7 +562,7 @@
                                         @endif
                                     </td>
 
-                                    <!-- Kolom SO (kolom ke-11) -->
+                                    <!-- Kolom SO -->
                                     <td class="align-middle text-center py-2 px-2">
                                         @if(!empty($salesOrders))
                                             @if(is_array($salesOrders))
@@ -605,7 +586,7 @@
                                         @endif
                                     </td>
 
-                                    <!-- Kolom Source PRO (kolom ke-12) -->
+                                    <!-- Kolom Source PRO -->
                                     <td class="align-middle text-center py-2 px-2">
                                         @if(!empty($sources))
                                             @if(is_array($sources))
@@ -629,7 +610,7 @@
                                         @endif
                                     </td>
                                 </tr>
-                            @endforeach
+                                @endforeach
                             </tbody>
                         </table>
                     </div>
@@ -1102,6 +1083,11 @@ body {
     border-left: 3px solid var(--primary-color);
 }
 
+/* Force completed row style */
+.force-completed-row {
+    background-color: rgba(40, 167, 69, 0.05) !important;
+}
+
 /* Modal fixes */
 .modal-content {
     border-radius: 8px;
@@ -1175,7 +1161,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Variables
     let transferItems = [];
     let selectedItems = new Set();
-    let isProcessingTransfer = false; // Flag untuk mencegah duplikasi
+    let isProcessingTransfer = false;
 
     // Helper functions
     function formatAngka(num, decimalDigits = 2) {
@@ -1254,11 +1240,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // ✅ PERBAIKAN: Setup event listener untuk view transfer details
+    // Setup event listener untuk view transfer details
     function setupTransferDetailsListeners() {
         console.log('Setting up transfer details listeners...');
 
-        // Gunakan event delegation untuk semua tombol view-transfer-details
+        // Debug: Tampilkan semua tombol transfer details
+        const transferButtons = document.querySelectorAll('.view-transfer-details');
+        console.log(`Found ${transferButtons.length} transfer detail buttons`);
+
+        transferButtons.forEach((btn, index) => {
+            console.log(`Button ${index + 1}:`, {
+                itemId: btn.getAttribute('data-item-id'),
+                materialCode: btn.getAttribute('data-material-code'),
+                hasHistory: btn.getAttribute('data-has-history'),
+                disabled: btn.disabled
+            });
+        });
+
+        // Event delegation
         document.addEventListener('click', function(e) {
             const target = e.target.closest('.view-transfer-details');
 
@@ -1273,27 +1272,28 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             e.stopPropagation();
 
-            console.log('Transfer details button clicked');
-
             const itemId = target.getAttribute('data-item-id');
             const materialCode = target.getAttribute('data-material-code');
             const materialDescription = target.getAttribute('data-material-description');
             const hasHistory = target.getAttribute('data-has-history') === 'true';
 
-            console.log('Item ID:', itemId);
-            console.log('Material Code:', materialCode);
-            console.log('Material Description:', materialDescription);
-            console.log('Has History:', hasHistory);
+            console.log('Fetching transfer history for:', {
+                itemId,
+                materialCode,
+                materialDescription,
+                hasHistory
+            });
 
             // Jika tidak ada history, tidak perlu fetch
             if (!hasHistory) {
+                console.log('No transfer history flag set');
                 showToast('No transfer history available for this item', 'info');
                 return;
             }
 
             showLoading();
 
-            // Gunakan route dengan parameter yang benar
+            // Gunakan route yang benar
             const url = `/documents/{{ $document->id }}/items/${encodeURIComponent(materialCode)}/transfer-history`;
 
             console.log('Fetching URL:', url);
@@ -1309,12 +1309,14 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => {
                 console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
 
                 if (!response.ok) {
-                    if (response.status === 404) {
-                        throw new Error('Transfer history not found');
-                    }
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    console.error('Response not OK:', response.status);
+                    return response.text().then(text => {
+                        console.error('Response body:', text);
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    });
                 }
                 return response.json();
             })
@@ -1323,11 +1325,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 hideLoading();
 
                 if (data.error) {
+                    console.error('Error in response:', data.error);
                     showToast(data.error, 'error');
                     return;
                 }
 
                 if (!Array.isArray(data) || data.length === 0) {
+                    console.warn('No transfer history array or empty');
                     showToast('No transfer history found for this item', 'info');
                     return;
                 }
@@ -1337,13 +1341,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => {
                 console.error('Error loading transfer details:', error);
                 hideLoading();
-
-                // Tampilkan pesan yang lebih user-friendly
-                if (error.message.includes('404')) {
-                    showToast('Transfer history not found for this item', 'info');
-                } else {
-                    showToast('Error loading transfer details: ' + error.message, 'error');
-                }
+                showToast('Error loading transfer details. Please check console for details.', 'error');
             });
         });
     }
@@ -1449,8 +1447,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         rows.forEach(function(row) {
             const canTransfer = row.dataset.canTransfer === 'true';
+            const isForceCompleted = row.dataset.forceCompleted === 'true';
 
-            if (canTransfer) {
+            // Force completed items tidak bisa didrag
+            if (canTransfer && !isForceCompleted) {
                 row.draggable = true;
 
                 row.addEventListener('dragstart', function(e) {
@@ -1486,6 +1486,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         e.dataTransfer.dropEffect = 'copy';
                     }
                 });
+            } else {
+                row.draggable = false;
             }
         });
 
@@ -1629,6 +1631,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get item data from row
     function getItemDataFromRow(rowElement) {
         const row = rowElement;
+        const isForceCompleted = row.dataset.forceCompleted === 'true';
+
+        // Jika force completed, return null
+        if (isForceCompleted) {
+            return null;
+        }
+
         const batchInfoData = row.dataset.batchInfo;
 
         let batchInfo = [];
@@ -1683,11 +1692,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let addedCount = 0;
         let alreadyAddedCount = 0;
+        let forceCompletedCount = 0;
 
         selectedItems.forEach(function(itemId) {
             const itemRow = document.querySelector('.draggable-row[data-item-id="' + itemId + '"]');
             if (itemRow) {
+                const isForceCompleted = itemRow.dataset.forceCompleted === 'true';
+
+                // Skip jika force completed
+                if (isForceCompleted) {
+                    forceCompletedCount++;
+                    return;
+                }
+
                 const itemData = getItemDataFromRow(itemRow);
+
+                if (!itemData) return;
 
                 if (!transferItems.some(item => item.id === itemData.id)) {
                     if (itemData.remainingQty > 0 && itemData.availableStock > 0) {
@@ -1708,7 +1728,11 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast(alreadyAddedCount + ' items already in transfer list', 'info');
         }
 
-        if (addedCount === 0 && alreadyAddedCount === 0) {
+        if (forceCompletedCount > 0) {
+            showToast(forceCompletedCount + ' force completed items skipped', 'warning');
+        }
+
+        if (addedCount === 0 && alreadyAddedCount === 0 && forceCompletedCount === 0) {
             showToast('No transferable items selected', 'warning');
         }
     }
@@ -1727,7 +1751,20 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        const isForceCompleted = itemRow.dataset.forceCompleted === 'true';
+
+        // Skip jika force completed
+        if (isForceCompleted) {
+            showToast('Cannot add force completed item to transfer list', 'error');
+            return;
+        }
+
         const itemData = getItemDataFromRow(itemRow);
+
+        if (!itemData) {
+            showToast('Item data not found', 'error');
+            return;
+        }
 
         if (transferItems.some(item => item.id === itemData.id)) {
             showToast('Item already in transfer list', 'warning');
@@ -2317,7 +2354,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Setup SAP form submission - HANYA SATU EVENT HANDLER
+    // Setup SAP form submission
     function setupSapFormSubmission() {
         const sapForm = document.getElementById('sapCredentialsForm');
         if (!sapForm) return;
@@ -2381,13 +2418,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     return {
                         material_code: item.materialCode,
                         material_desc: item.materialDesc,
-                        quantity: parseFloat(item.quantity || item.qty || 0), // Jumlah yang di-entry di modal
+                        quantity: parseFloat(item.quantity || item.qty || 0),
                         unit: item.unit,
                         plant_tujuan: item.plantTujuan || "{{ $document->plant }}",
                         sloc_tujuan: item.slocTujuan || '',
                         batch: item.selectedBatch || '',
                         batch_sloc: item.batchSloc || '',
-                        requested_qty: parseFloat(item.remainingQty || 0), // Jumlah remaining (hanya info)
+                        requested_qty: parseFloat(item.remainingQty || 0),
                         available_stock: parseFloat(item.batchQty || 0)
                     };
                 }),
@@ -2566,12 +2603,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // ✅ PERBAIKAN: Initialize all functions
+    // Initialize all functions
     function initialize() {
         console.log('Initializing document show page...');
 
         try {
-            // 1. Setup transfer details listeners (DIPERBAIKI)
+            // 1. Setup transfer details listeners
             setupTransferDetailsListeners();
             console.log('✅ Transfer details listeners setup complete');
 

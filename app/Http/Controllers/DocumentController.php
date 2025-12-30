@@ -147,72 +147,74 @@ class DocumentController extends Controller
     }
 
     /**
-     * Force complete selected items
-     */
-    public function forceCompleteItems(Request $request, $id)
-    {
-        DB::beginTransaction();
+                     * Force complete selected items - DIPERBAIKI
+                     */
+                    public function forceCompleteItems(Request $request, $id)
+                    {
+                        DB::beginTransaction();
 
-        try {
-            $document = Document::findOrFail($id);
+                        try {
+                            $document = Document::findOrFail($id);
 
-            // Check if user is authorized to edit (only creator can edit)
-            if (Auth::id() != $document->created_by) {
-                return back()->with('error', 'You are not authorized to force complete items from this document.');
-            }
+                            // Check if user is authorized to edit (only creator can edit)
+                            if (Auth::id() != $document->created_by) {
+                                return back()->with('error', 'You are not authorized to force complete items from this document.');
+                            }
 
-            // Check if document is editable (only booked or partial status)
-            if (!in_array($document->status, ['booked', 'partial'])) {
-                return back()->with('error', 'Cannot force complete items from a document with status: ' . $document->status);
-            }
+                            // Check if document is editable (only booked or partial status)
+                            if (!in_array($document->status, ['booked', 'partial'])) {
+                                return back()->with('error', 'Cannot force complete items from a document with status: ' . $document->status);
+                            }
 
-            // Get selected items from request
-            $selectedItems = json_decode($request->input('selected_items', '[]'), true);
+                            // Get selected items from request
+                            $selectedItems = json_decode($request->input('selected_items', '[]'), true);
 
-            if (empty($selectedItems)) {
-                return back()->with('error', 'Please select items to force complete.');
-            }
+                            if (empty($selectedItems)) {
+                                return back()->with('error', 'Please select items to force complete.');
+                            }
 
-            // Get reason
-            $reason = $request->input('reason');
-            if (empty($reason)) {
-                return back()->with('error', 'Please provide a reason for force completing items.');
-            }
+                            // Get reason
+                            $reason = $request->input('reason');
+                            if (empty($reason)) {
+                                return back()->with('error', 'Please provide a reason for force completing items.');
+                            }
 
-            // Log before force complete
-            Log::info('Attempting to force complete items', [
-                'document_id' => $document->id,
-                'document_no' => $document->document_no,
-                'selected_items' => $selectedItems,
-                'user_id' => auth()->id(),
-                'reason' => $reason
-            ]);
+                            // Log before force complete
+                            Log::info('Attempting to force complete items', [
+                                'document_id' => $document->id,
+                                'document_no' => $document->document_no,
+                                'selected_items' => $selectedItems,
+                                'user_id' => auth()->id(),
+                                'reason' => $reason
+                            ]);
 
-            // Force complete selected items
-            $forceCompletedCount = 0;
-            foreach ($selectedItems as $itemId) {
-                $item = DocumentItem::where('id', $itemId)
-                    ->where('document_id', $document->id)
-                    ->first();
+                            // Force complete selected items
+                            $forceCompletedCount = 0;
+                            foreach ($selectedItems as $itemId) {
+                                $item = DocumentItem::where('id', $itemId)
+                                    ->where('document_id', $document->id)
+                                    ->first();
 
-                if ($item && !$item->force_completed) {
-                    $item->force_completed = true;
-                    $item->force_complete_reason = $reason;
-                    $item->force_completed_by = Auth::id();
-                    $item->force_completed_at = now();
-                    $item->transferred_qty = $item->requested_qty; // Set transferred qty equal to requested qty
-                    $item->remaining_qty = 0; // Set remaining qty to 0
-                    $item->save();
+                                if ($item && !$item->force_completed) {
+                                    // **PERBAIKAN: HANYA set flag force_completed, JANGAN ubah quantity**
+                                    $item->force_completed = true;
+                                    $item->force_complete_reason = $reason;
+                                    $item->force_completed_by = Auth::id();
+                                    $item->force_completed_at = now();
+                                    // **JANGAN ubah transferred_qty atau remaining_qty**
+                                    $item->save();
 
-                    $forceCompletedCount++;
+                                    $forceCompletedCount++;
 
-                    Log::info('Item force completed', [
-                        'item_id' => $item->id,
-                        'material_code' => $item->material_code,
-                        'requested_qty' => $item->requested_qty
-                    ]);
-                }
-            }
+                                    Log::info('Item force completed', [
+                                        'item_id' => $item->id,
+                                        'material_code' => $item->material_code,
+                                        'requested_qty' => $item->requested_qty,
+                                        'transferred_qty' => $item->transferred_qty,
+                                        'remaining_qty' => $item->remaining_qty
+                                    ]);
+                                }
+                            }
 
             // Recalculate document totals
             $this->recalculateDocumentTotals($document);
@@ -269,52 +271,65 @@ class DocumentController extends Controller
                 $completionRate = ($totalTransferred / $totalQty) * 100;
             }
 
-            // Check document status
-            $status = $document->status;
-            $allCompleted = true;
-            $hasForceCompleted = false;
+            // Check document status - PERBAIKAN: logic baru
+        $status = $document->status;
 
-            foreach ($items as $item) {
-                if ($item->force_completed) {
-                    $hasForceCompleted = true;
-                }
+        // Cek apakah semua item sudah selesai (ditransfer atau force completed)
+        $allItemsFinalized = true;
+        $hasForceCompleted = false;
+        $hasTransfers = false;
 
-                if (!$item->force_completed && $item->transferred_qty < $item->requested_qty) {
-                    $allCompleted = false;
-                }
+        foreach ($items as $item) {
+            if ($item->force_completed) {
+                $hasForceCompleted = true;
+                // Item force completed dianggap "selesai"
+                continue;
             }
 
-            // Update status if needed
-            if ($allCompleted) {
-                $status = 'closed';
-            } elseif ($hasForceCompleted && $document->status == 'booked') {
-                $status = 'partial';
+            if ($item->transferred_qty > 0) {
+                $hasTransfers = true;
             }
 
-            // Update document
-            $document->update([
-                'total_qty' => $totalQty,
-                'total_transferred' => $totalTransferred,
-                'completion_rate' => round($completionRate, 2),
-                'status' => $status
-            ]);
-
-            Log::info('Document totals recalculated', [
-                'document_id' => $document->id,
-                'document_no' => $document->document_no,
-                'total_qty' => $totalQty,
-                'total_transferred' => $totalTransferred,
-                'completion_rate' => $completionRate,
-                'status' => $status
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error recalculating document totals: ' . $e->getMessage(), [
-                'document_id' => $document->id
-            ]);
-            throw $e;
+            // Jika tidak force completed dan masih ada remaining_qty > 0
+            if (!$item->force_completed && $item->remaining_qty > 0) {
+                $allItemsFinalized = false;
+            }
         }
+
+        // Update status
+        if ($allItemsFinalized) {
+            $status = 'closed';
+        } elseif ($hasForceCompleted && $document->status == 'booked') {
+            $status = 'partial';
+        } elseif ($hasTransfers && $document->status == 'booked') {
+            $status = 'partial';
+        }
+
+        // Update document - JANGAN update total_transferred dari force completed
+        $document->update([
+            'total_qty' => $totalQty,
+            'total_transferred' => $totalTransferred, // Hanya dari transfer sebenarnya
+            'completion_rate' => round($completionRate, 2),
+            'status' => $status
+        ]);
+
+        Log::info('Document totals recalculated', [
+            'document_id' => $document->id,
+            'document_no' => $document->document_no,
+            'total_qty' => $totalQty,
+            'total_transferred' => $totalTransferred,
+            'completion_rate' => $completionRate,
+            'status' => $status,
+            'all_items_finalized' => $allItemsFinalized
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error recalculating document totals: ' . $e->getMessage(), [
+            'document_id' => $document->id
+        ]);
+        throw $e;
     }
+}
 
     /**
      * Check and update document status based on item completion
