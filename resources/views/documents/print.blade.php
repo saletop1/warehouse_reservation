@@ -691,236 +691,243 @@
         </div>
     </div>
 
-    <script>
-        // Fungsi untuk menutup window dengan cara yang lebih reliable
-        function closeWindow() {
-            // Coba beberapa metode untuk menutup window
-            if (window.history.length > 1) {
-                // Jika ada history, gunakan back
-                window.history.back();
-            } else if (window.opener) {
-                // Jika window dibuka oleh window lain, tutup saja
-                window.close();
-            } else {
-                // Jika tidak ada history dan bukan window popup, redirect ke halaman sebelumnya
-                window.location.href = "{{ route('documents.index') }}";
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            // Variables
-            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-            const itemCheckboxes = document.querySelectorAll('.item-checkbox');
-            const printSelectedBtn = document.getElementById('printSelectedBtn');
-            const exportExcelBtn = document.getElementById('exportExcelBtn');
-            const clearSelectionBtn = document.getElementById('clearSelectionBtn');
-            const selectionInfo = document.getElementById('selectionInfo');
-            const selectedCount = document.getElementById('selectedCount');
-            const selectedItemsInputPrint = document.getElementById('selectedItemsInputPrint');
-            const selectedItemsInputExcel = document.getElementById('selectedItemsInputExcel');
-            const printSelectedForm = document.getElementById('printSelectedForm');
-            const exportExcelForm = document.getElementById('exportExcelForm');
-
-            // Live Search Variables
-            const liveSearch = document.getElementById('liveSearch');
-            const clearSearch = document.getElementById('clearSearch');
-            const searchStats = document.getElementById('searchStats');
-            const itemsTableBody = document.getElementById('itemsTableBody');
-            const allRows = itemsTableBody.querySelectorAll('tr');
-            const totalItems = allRows.length;
-
-            // Update selection count and button states
-            function updateSelection() {
-                const visibleCheckboxes = Array.from(itemsTableBody.querySelectorAll('tr:not([style*="display: none"]) .item-checkbox'));
-                const selectedItems = visibleCheckboxes.filter(cb => cb.checked);
-                const count = selectedItems.length;
-
-                selectedCount.textContent = count;
-
-                if (count > 0) {
-                    selectionInfo.style.display = 'block';
-                    printSelectedBtn.disabled = false;
-                    exportExcelBtn.disabled = false;
-
-                    // Update select all checkbox state
-                    const allVisibleCheckboxes = itemsTableBody.querySelectorAll('tr:not([style*="display: none"]) .item-checkbox');
-                    selectAllCheckbox.checked = count === allVisibleCheckboxes.length && allVisibleCheckboxes.length > 0;
-                    selectAllCheckbox.indeterminate = count > 0 && count < allVisibleCheckboxes.length;
-
-                    // Update selected items for form submission
-                    const selectedIds = Array.from(document.querySelectorAll('.item-checkbox:checked')).map(cb => cb.value);
-                    selectedItemsInputPrint.value = JSON.stringify(selectedIds);
-                    selectedItemsInputExcel.value = JSON.stringify(selectedIds);
+            <script>
+            // Fungsi untuk menutup window dengan cara yang lebih reliable
+            function closeWindow() {
+                // TUTUP WINDOW SAJA, TIDAK REDIRECT KE HALAMAN EDIT
+                if (window.opener && !window.opener.closed) {
+                    // Jika dibuka dari popup, tutup saja
+                    window.close();
+                } else if (window.history.length > 1) {
+                    // Jika ada history, kembali
+                    window.history.back();
                 } else {
-                    selectionInfo.style.display = 'none';
-                    printSelectedBtn.disabled = true;
-                    exportExcelBtn.disabled = true;
-                    selectAllCheckbox.checked = false;
-                    selectAllCheckbox.indeterminate = false;
-
-                    // Clear selected items for form submission
-                    selectedItemsInputPrint.value = '[]';
-                    selectedItemsInputExcel.value = '[]';
+                    // Jika tidak ada history, tutup window
+                    window.close();
                 }
+
+                // Fallback: jika window tidak bisa ditutup, redirect ke index
+                setTimeout(function() {
+                    if (!window.closed) {
+                        window.location.href = "{{ route('documents.index') }}";
+                    }
+                }, 100);
             }
 
-            // Select all checkbox handler
-            selectAllCheckbox.addEventListener('change', function() {
-                const visibleRows = itemsTableBody.querySelectorAll('tr:not([style*="display: none"])');
-                visibleRows.forEach(row => {
-                    const checkbox = row.querySelector('.item-checkbox');
-                    if (checkbox) {
-                        checkbox.checked = this.checked;
+            document.addEventListener('DOMContentLoaded', function() {
+                // Variables
+                const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+                const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+                const printSelectedBtn = document.getElementById('printSelectedBtn');
+                const exportExcelBtn = document.getElementById('exportExcelBtn');
+                const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+                const selectionInfo = document.getElementById('selectionInfo');
+                const selectedCount = document.getElementById('selectedCount');
+                const selectedItemsInputPrint = document.getElementById('selectedItemsInputPrint');
+                const selectedItemsInputExcel = document.getElementById('selectedItemsInputExcel');
+                const printSelectedForm = document.getElementById('printSelectedForm');
+                const exportExcelForm = document.getElementById('exportExcelForm');
+
+                // Live Search Variables
+                const liveSearch = document.getElementById('liveSearch');
+                const clearSearch = document.getElementById('clearSearch');
+                const searchStats = document.getElementById('searchStats');
+                const itemsTableBody = document.getElementById('itemsTableBody');
+                const allRows = itemsTableBody.querySelectorAll('tr');
+                const totalItems = allRows.length;
+
+                // Update selection count and button states
+                function updateSelection() {
+                    const visibleCheckboxes = Array.from(itemsTableBody.querySelectorAll('tr:not([style*="display: none"]) .item-checkbox'));
+                    const selectedItems = visibleCheckboxes.filter(cb => cb.checked);
+                    const count = selectedItems.length;
+
+                    selectedCount.textContent = count;
+
+                    if (count > 0) {
+                        selectionInfo.style.display = 'block';
+                        printSelectedBtn.disabled = false;
+                        exportExcelBtn.disabled = false;
+
+                        // Update select all checkbox state
+                        const allVisibleCheckboxes = itemsTableBody.querySelectorAll('tr:not([style*="display: none"]) .item-checkbox');
+                        selectAllCheckbox.checked = count === allVisibleCheckboxes.length && allVisibleCheckboxes.length > 0;
+                        selectAllCheckbox.indeterminate = count > 0 && count < allVisibleCheckboxes.length;
+
+                        // Update selected items for form submission
+                        const selectedIds = Array.from(document.querySelectorAll('.item-checkbox:checked')).map(cb => cb.value);
+                        selectedItemsInputPrint.value = JSON.stringify(selectedIds);
+                        selectedItemsInputExcel.value = JSON.stringify(selectedIds);
+                    } else {
+                        selectionInfo.style.display = 'none';
+                        printSelectedBtn.disabled = true;
+                        exportExcelBtn.disabled = true;
+                        selectAllCheckbox.checked = false;
+                        selectAllCheckbox.indeterminate = false;
+
+                        // Clear selected items for form submission
+                        selectedItemsInputPrint.value = '[]';
+                        selectedItemsInputExcel.value = '[]';
+                    }
+                }
+
+                // Select all checkbox handler
+                selectAllCheckbox.addEventListener('change', function() {
+                    const visibleRows = itemsTableBody.querySelectorAll('tr:not([style*="display: none"])');
+                    visibleRows.forEach(row => {
+                        const checkbox = row.querySelector('.item-checkbox');
+                        if (checkbox) {
+                            checkbox.checked = this.checked;
+                        }
+                    });
+                    updateSelection();
+                });
+
+                // Individual checkbox handlers
+                document.addEventListener('change', function(e) {
+                    if (e.target.classList.contains('item-checkbox')) {
+                        updateSelection();
                     }
                 });
-                updateSelection();
-            });
 
-            // Individual checkbox handlers
-            document.addEventListener('change', function(e) {
-                if (e.target.classList.contains('item-checkbox')) {
+                // Clear selection button
+                clearSelectionBtn.addEventListener('click', function() {
+                    itemCheckboxes.forEach(cb => {
+                        cb.checked = false;
+                    });
+                    updateSelection();
+                });
+
+                // Print selected button
+                printSelectedBtn.addEventListener('click', function() {
+                    const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
+
+                    if (selectedItems.length === 0) {
+                        alert('Please select items to print.');
+                        return;
+                    }
+
+                    // Submit form to print selected items
+                    printSelectedForm.submit();
+                });
+
+                // Export Excel button
+                exportExcelBtn.addEventListener('click', function() {
+                    const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
+
+                    if (selectedItems.length === 0) {
+                        alert('Please select items to export.');
+                        return;
+                    }
+
+                    // Show loading
+                    exportExcelBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
+                    exportExcelBtn.disabled = true;
+
+                    // Submit form
+                    exportExcelForm.submit();
+
+                    // Reset button after 2 seconds
+                    setTimeout(() => {
+                        exportExcelBtn.innerHTML = '<i class="fas fa-file-excel"></i> Export Excel';
+                        exportExcelBtn.disabled = false;
+                    }, 2000);
+                });
+
+                // Live Search Functionality
+                function performLiveSearch() {
+                    const searchTerm = liveSearch.value.toLowerCase().trim();
+                    let visibleCount = 0;
+
+                    allRows.forEach(row => {
+                        let rowText = '';
+
+                        // Collect all searchable data from data attributes
+                        const materialCode = row.getAttribute('data-material-code') || '';
+                        const description = row.getAttribute('data-description') || '';
+                        const salesOrders = row.getAttribute('data-sales-orders') || '';
+                        const proNumbers = row.getAttribute('data-pro-numbers') || '';
+                        const addInfo = row.getAttribute('data-add-info') || '';
+                        const groes = row.getAttribute('data-groes') || '';
+                        const ferth = row.getAttribute('data-ferth') || '';
+                        const zeinr = row.getAttribute('data-zeinr') || '';
+                        const mrpComp = row.getAttribute('data-mrp-comp') || '';
+
+                        // Combine all searchable text
+                        rowText = `${materialCode} ${description} ${salesOrders} ${proNumbers} ${addInfo} ${groes} ${ferth} ${zeinr} ${mrpComp}`;
+
+                        // Check if search term is found
+                        if (searchTerm === '' || rowText.includes(searchTerm)) {
+                            row.style.display = '';
+                            visibleCount++;
+
+                            // Remove highlight class
+                            row.classList.remove('search-highlight');
+
+                            // Add highlight if search term is not empty
+                            if (searchTerm !== '') {
+                                row.classList.add('search-highlight');
+                            }
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    });
+
+                    // Update search stats
+                    if (searchTerm === '') {
+                        searchStats.textContent = `Total items: ${totalItems} | Showing all items`;
+                    } else {
+                        searchStats.textContent = `Total items: ${totalItems} | Found: ${visibleCount} item(s) | Search: "${searchTerm}"`;
+                    }
+
+                    // Update selection checkboxes
                     updateSelection();
                 }
-            });
 
-            // Clear selection button
-            clearSelectionBtn.addEventListener('click', function() {
-                itemCheckboxes.forEach(cb => {
-                    cb.checked = false;
-                });
-                updateSelection();
-            });
+                // Live search event listener
+                if (liveSearch) {
+                    liveSearch.addEventListener('input', performLiveSearch);
 
-            // Print selected button
-            printSelectedBtn.addEventListener('click', function() {
-                const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
-
-                if (selectedItems.length === 0) {
-                    alert('Please select items to print.');
-                    return;
-                }
-
-                // Submit form to print selected items
-                printSelectedForm.submit();
-            });
-
-            // Export Excel button
-            exportExcelBtn.addEventListener('click', function() {
-                const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked);
-
-                if (selectedItems.length === 0) {
-                    alert('Please select items to export.');
-                    return;
-                }
-
-                // Show loading
-                exportExcelBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
-                exportExcelBtn.disabled = true;
-
-                // Submit form
-                exportExcelForm.submit();
-
-                // Reset button after 2 seconds
-                setTimeout(() => {
-                    exportExcelBtn.innerHTML = '<i class="fas fa-file-excel"></i> Export Excel';
-                    exportExcelBtn.disabled = false;
-                }, 2000);
-            });
-
-            // Live Search Functionality
-            function performLiveSearch() {
-                const searchTerm = liveSearch.value.toLowerCase().trim();
-                let visibleCount = 0;
-
-                allRows.forEach(row => {
-                    let rowText = '';
-
-                    // Collect all searchable data from data attributes
-                    const materialCode = row.getAttribute('data-material-code') || '';
-                    const description = row.getAttribute('data-description') || '';
-                    const salesOrders = row.getAttribute('data-sales-orders') || '';
-                    const proNumbers = row.getAttribute('data-pro-numbers') || '';
-                    const addInfo = row.getAttribute('data-add-info') || '';
-                    const groes = row.getAttribute('data-groes') || '';
-                    const ferth = row.getAttribute('data-ferth') || '';
-                    const zeinr = row.getAttribute('data-zeinr') || '';
-                    const mrpComp = row.getAttribute('data-mrp-comp') || '';
-
-                    // Combine all searchable text
-                    rowText = `${materialCode} ${description} ${salesOrders} ${proNumbers} ${addInfo} ${groes} ${ferth} ${zeinr} ${mrpComp}`;
-
-                    // Check if search term is found
-                    if (searchTerm === '' || rowText.includes(searchTerm)) {
-                        row.style.display = '';
-                        visibleCount++;
-
-                        // Remove highlight class
-                        row.classList.remove('search-highlight');
-
-                        // Add highlight if search term is not empty
-                        if (searchTerm !== '') {
-                            row.classList.add('search-highlight');
-                        }
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-
-                // Update search stats
-                if (searchTerm === '') {
-                    searchStats.textContent = `Total items: ${totalItems} | Showing all items`;
-                } else {
-                    searchStats.textContent = `Total items: ${totalItems} | Found: ${visibleCount} item(s) | Search: "${searchTerm}"`;
-                }
-
-                // Update selection checkboxes
-                updateSelection();
-            }
-
-            // Live search event listener
-            if (liveSearch) {
-                liveSearch.addEventListener('input', performLiveSearch);
-
-                // Focus on search box when page loads
-                liveSearch.focus();
-            }
-
-            // Clear search button
-            if (clearSearch) {
-                clearSearch.addEventListener('click', function() {
-                    liveSearch.value = '';
-                    performLiveSearch();
+                    // Focus on search box when page loads
                     liveSearch.focus();
-                });
-            }
+                }
 
-            // Auto print jika parameter autoPrint=true
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('autoPrint') === 'true') {
-                setTimeout(function() {
-                    window.print();
-                }, 500);
-            }
+                // Clear search button
+                if (clearSearch) {
+                    clearSearch.addEventListener('click', function() {
+                        liveSearch.value = '';
+                        performLiveSearch();
+                        liveSearch.focus();
+                    });
+                }
 
-            // Handle print event
-            window.onafterprint = function(event) {
-                // Jika autoPrint, tutup window setelah print
+                // Auto print jika parameter autoPrint=true
+                const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('autoPrint') === 'true') {
                     setTimeout(function() {
-                        closeWindow();
-                    }, 300);
+                        window.print();
+                    }, 500);
                 }
-            };
 
-            // Tambahkan event listener untuk tombol close
-            const closeBtn = document.querySelector('.btn-secondary');
-            if (closeBtn) {
-                closeBtn.addEventListener('click', closeWindow);
-            }
+                // Handle print event
+                window.onafterprint = function(event) {
+                    // Jika autoPrint, tutup window setelah print
+                    if (urlParams.get('autoPrint') === 'true') {
+                        setTimeout(function() {
+                            closeWindow();
+                        }, 300);
+                    }
+                };
 
-            // Initialize selection
-            updateSelection();
-        });
-    </script>
+                // Tambahkan event listener untuk tombol close
+                const closeBtn = document.querySelector('.btn-secondary');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', closeWindow);
+                }
+
+                // Initialize selection
+                updateSelection();
+            });
+        </script>
 </body>
 </html>

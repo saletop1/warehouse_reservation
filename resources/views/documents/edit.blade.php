@@ -53,13 +53,6 @@
                 </div>
             @endif
 
-            <!-- Delete Selected Items Form -->
-            <form id="deleteItemsForm" action="{{ route('documents.items.delete-selected', $document->id) }}" method="POST" style="display: none;">
-                @csrf
-                @method('DELETE')
-                <input type="hidden" name="selected_items" id="selectedItemsInput">
-            </form>
-
             <!-- Force Complete Form -->
             <form id="forceCompleteForm" action="{{ route('documents.items.force-complete', $document->id) }}" method="POST" style="display: none;">
                 @csrf
@@ -124,11 +117,8 @@
                             <h5 class="mb-0">Document Items</h5>
                             <div>
                                 @if(auth()->id() == $document->created_by)
-                                <button type="button" id="forceCompleteSelectedItemsBtn" class="btn btn-warning btn-sm me-2" disabled>
+                                <button type="button" id="forceCompleteSelectedItemsBtn" class="btn btn-warning btn-sm" disabled>
                                     <i class="fas fa-check-double"></i> Force Complete
-                                </button>
-                                <button type="button" id="deleteSelectedItemsBtn" class="btn btn-danger btn-sm" disabled>
-                                    <i class="fas fa-trash"></i> Delete Selected
                                 </button>
                                 @endif
                             </div>
@@ -488,32 +478,6 @@
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteConfirmationModal" tabindex="-1" aria-labelledby="deleteConfirmationModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="deleteConfirmationModalLabel">
-                    <i class="fas fa-exclamation-triangle me-2"></i>Confirm Deletion
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete <span id="deleteItemCount">0</span> selected item(s)?</p>
-                <p class="text-danger"><strong>This action cannot be undone.</strong></p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times"></i> Cancel
-                </button>
-                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <style>
 /* Hilangkan spinner tombol naik turun di semua browser */
 .qty-input::-webkit-outer-spin-button,
@@ -579,30 +543,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // Variables for item selection
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
     const itemCheckboxes = document.querySelectorAll('.item-checkbox');
-    const deleteSelectedItemsBtn = document.getElementById('deleteSelectedItemsBtn');
     const forceCompleteSelectedItemsBtn = document.getElementById('forceCompleteSelectedItemsBtn');
     const clearSelectionBtn = document.getElementById('clearSelectionBtn');
     const selectionInfo = document.getElementById('selectionInfo');
     const selectedCount = document.getElementById('selectedCount');
-    const selectedItemsInput = document.getElementById('selectedItemsInput');
     const forceCompleteItemsInput = document.getElementById('forceCompleteItemsInput');
     const forceCompleteReason = document.getElementById('forceCompleteReason');
-    const deleteItemsForm = document.getElementById('deleteItemsForm');
     const forceCompleteForm = document.getElementById('forceCompleteForm');
     const forceCompleteModal = new bootstrap.Modal(document.getElementById('forceCompleteModal'));
-    const deleteConfirmationModal = new bootstrap.Modal(document.getElementById('deleteConfirmationModal'));
-    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
     const confirmForceCompleteBtn = document.getElementById('confirmForceCompleteBtn');
-    const deleteItemCount = document.getElementById('deleteItemCount');
     const forceCompleteItemCount = document.getElementById('forceCompleteItemCount');
     const forceCompleteReasonText = document.getElementById('forceCompleteReasonText');
 
     console.log('Found elements:', {
         selectAllCheckbox: !!selectAllCheckbox,
         itemCheckboxes: itemCheckboxes.length,
-        deleteSelectedItemsBtn: !!deleteSelectedItemsBtn,
         forceCompleteSelectedItemsBtn: !!forceCompleteSelectedItemsBtn,
-        deleteItemsForm: !!deleteItemsForm,
         forceCompleteForm: !!forceCompleteForm
     });
 
@@ -617,7 +573,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (count > 0) {
             selectionInfo.style.display = 'flex';
-            deleteSelectedItemsBtn.disabled = false;
             forceCompleteSelectedItemsBtn.disabled = false;
 
             // Update select all checkbox state
@@ -641,18 +596,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const selectedIds = selectedItems.map(cb => cb.value);
             console.log('Selected IDs:', selectedIds);
 
-            if (selectedItemsInput) {
-                selectedItemsInput.value = JSON.stringify(selectedIds);
-                console.log('Delete form input value:', selectedItemsInput.value);
-            }
-
             if (forceCompleteItemsInput) {
                 forceCompleteItemsInput.value = JSON.stringify(selectedIds);
                 console.log('Force complete form input value:', forceCompleteItemsInput.value);
             }
         } else {
             selectionInfo.style.display = 'none';
-            deleteSelectedItemsBtn.disabled = true;
             forceCompleteSelectedItemsBtn.disabled = true;
 
             if (selectAllCheckbox) {
@@ -666,7 +615,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             // Clear selected items for form submission
-            if (selectedItemsInput) selectedItemsInput.value = '[]';
             if (forceCompleteItemsInput) forceCompleteItemsInput.value = '[]';
         }
     }
@@ -763,49 +711,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 forceCompleteForm.submit();
             } else {
                 console.error('Force complete form not found!');
-                alert('Error: Form not found. Please try again.');
-            }
-        });
-    }
-
-    // Delete selected items button
-    if (deleteSelectedItemsBtn) {
-        deleteSelectedItemsBtn.addEventListener('click', function() {
-            console.log('Delete selected items button clicked');
-            const selectedItems = Array.from(itemCheckboxes).filter(cb => cb.checked && !cb.disabled);
-
-            if (selectedItems.length === 0) {
-                alert('Please select items to delete.');
-                return;
-            }
-
-            console.log('Opening delete confirmation modal for', selectedItems.length, 'items');
-
-            // Update modal message
-            deleteItemCount.textContent = selectedItems.length;
-
-            // Show confirmation modal
-            deleteConfirmationModal.show();
-        });
-    }
-
-    // Confirm delete button in modal
-    if (confirmDeleteBtn) {
-        confirmDeleteBtn.addEventListener('click', function() {
-            console.log('Confirm delete clicked');
-
-            // Log form data before submission
-            console.log('Delete form action:', deleteItemsForm ? deleteItemsForm.action : 'No form');
-            console.log('Delete form data:', {
-                selected_items: selectedItemsInput ? selectedItemsInput.value : 'No input'
-            });
-
-            // Submit the delete form
-            if (deleteItemsForm) {
-                console.log('Submitting delete form...');
-                deleteItemsForm.submit();
-            } else {
-                console.error('Delete form not found!');
                 alert('Error: Form not found. Please try again.');
             }
         });

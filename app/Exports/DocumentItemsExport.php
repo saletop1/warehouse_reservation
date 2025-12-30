@@ -8,9 +8,14 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class DocumentItemsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithTitle
+class DocumentItemsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithTitle, WithColumnFormatting
 {
     protected $items;
     protected $document;
@@ -35,22 +40,17 @@ class DocumentItemsExport implements FromCollection, WithHeadings, WithMapping, 
     public function headings(): array
     {
         return [
-            'No',
+            'Document No',
+            'Status',
+            'Plant Request',
+            'Plant Supply',
             'Material Code',
             'Material Description',
-            'Add Info',
             'Requested Qty',
             'Unit',
             'Sales Order',
             'PRO Numbers',
-            'MRP',
-            'Size Fin',
-            'Size Mat',
-            'Jenis',
-            'Document No',
-            'Plant Request',
-            'Plant Supply',
-            'Status'
+            'MRP COMP'
         ];
     }
 
@@ -77,50 +77,20 @@ class DocumentItemsExport implements FromCollection, WithHeadings, WithMapping, 
             $salesOrders = $item->sales_orders;
         }
 
-        // Ambil data dari pro_details jika ada
-        $addInfo = '-';
-        $groes = '-';
-        $ferth = '-';
-        $zeinr = '-';
-
-        // Decode pro_details JSON
-        $proDetails = [];
-        if (is_string($item->pro_details)) {
-            $proDetails = json_decode($item->pro_details, true) ?? [];
-        } elseif (is_array($item->pro_details)) {
-            $proDetails = $item->pro_details;
+        // Format sales orders menjadi string dengan line breaks
+        $formattedSalesOrders = '';
+        if (!empty($salesOrders)) {
+            // Tambahkan apostrophe (') di depan setiap angka untuk memaksa Excel menampilkan sebagai text
+            $processedSalesOrders = array_map(function($so) {
+                if (is_numeric($so) && strlen($so) > 10) {
+                    return "'" . $so; // Tambahkan apostrophe di depan angka panjang
+                }
+                return $so;
+            }, $salesOrders);
+            $formattedSalesOrders = implode("\n", $processedSalesOrders);
         }
 
-        // Ambil data dari pro_details pertama yang ada data
-        foreach ($proDetails as $proDetail) {
-            if (!empty($proDetail['sortf']) && $proDetail['sortf'] != '-' && $proDetail['sortf'] != 'null' && $proDetail['sortf'] != '0') {
-                $addInfo = $proDetail['sortf'];
-                break;
-            }
-        }
-
-        foreach ($proDetails as $proDetail) {
-            if (!empty($proDetail['groes']) && $proDetail['groes'] != '-' && $proDetail['groes'] != 'null' && $proDetail['groes'] != '0') {
-                $groes = $proDetail['groes'];
-                break;
-            }
-        }
-
-        foreach ($proDetails as $proDetail) {
-            if (!empty($proDetail['ferth']) && $proDetail['ferth'] != '-' && $proDetail['ferth'] != 'null' && $proDetail['ferth'] != '0') {
-                $ferth = $proDetail['ferth'];
-                break;
-            }
-        }
-
-        foreach ($proDetails as $proDetail) {
-            if (!empty($proDetail['zeinr']) && $proDetail['zeinr'] != '-' && $proDetail['zeinr'] != 'null' && $proDetail['zeinr'] != '0') {
-                $zeinr = $proDetail['zeinr'];
-                break;
-            }
-        }
-
-        // Ambil processed_sources
+        // Ambil processed_sources (PRO Numbers)
         $sources = [];
         if (is_string($item->sources)) {
             $sources = json_decode($item->sources, true) ?? [];
@@ -128,35 +98,42 @@ class DocumentItemsExport implements FromCollection, WithHeadings, WithMapping, 
             $sources = $item->sources;
         }
 
-        $processedSources = array_map(function($source) {
-            return \App\Helpers\NumberHelper::removeLeadingZeros($source);
-        }, $sources);
-
-        // Ambil sortf dari item jika ada
-        $itemAddInfo = $item->sortf ?? '-';
-        if ($itemAddInfo != '-' && $itemAddInfo != 'null') {
-            $addInfo = $itemAddInfo;
+        // Format PRO numbers menjadi string dengan line breaks
+        $formattedProNumbers = '';
+        if (!empty($sources)) {
+            $processedSources = array_map(function($source) {
+                $cleanSource = \App\Helpers\NumberHelper::removeLeadingZeros($source);
+                // Jika source adalah angka panjang, tambahkan apostrophe untuk mencegah notasi ilmiah
+                if (is_numeric($cleanSource) && strlen($cleanSource) > 10) {
+                    return "'" . $cleanSource; // Apostrophe memaksa Excel menampilkan sebagai text
+                }
+                return $cleanSource;
+            }, $sources);
+            $formattedProNumbers = implode("\n", $processedSources);
         }
 
+        // Ambil MRP COMP dari dispc
+        $mrpComp = (!empty($item->dispc) && $item->dispc != '-' && $item->dispc != 'null' && $item->dispc != '0')
+            ? $item->dispc
+            : '-';
+
+        // Plant Supply
+        $plantSupply = !empty($this->document->sloc_supply) && $this->document->sloc_supply !== '-'
+            ? strtoupper($this->document->sloc_supply)
+            : 'Not set';
+
         return [
-            $item->id,
+            $this->document->document_no,
+            $this->document->status,
+            $this->document->plant,
+            $plantSupply,
             $materialCode,
             $item->material_description,
-            $addInfo,
             \App\Helpers\NumberHelper::formatQuantity($item->requested_qty),
             $unit,
-            !empty($salesOrders) ? implode(', ', $salesOrders) : '-',
-            !empty($processedSources) ? implode(', ', $processedSources) : '-',
-            $item->dispo ?? '-',
-            $groes,
-            $ferth,
-            $zeinr,
-            $this->document->document_no,
-            $this->document->plant,
-            !empty($this->document->sloc_supply) && $this->document->sloc_supply !== '-'
-                ? strtoupper($this->document->sloc_supply)
-                : 'Not set',
-            $this->document->status
+            $formattedSalesOrders,  // Kolom dengan line breaks
+            $formattedProNumbers,   // Kolom dengan line breaks dan format text
+            $mrpComp
         ];
     }
 
@@ -165,7 +142,22 @@ class DocumentItemsExport implements FromCollection, WithHeadings, WithMapping, 
      */
     public function title(): string
     {
-        return 'Selected Items';
+        return 'Selected_Items_' . $this->document->document_no;
+    }
+
+    /**
+     * Format kolom tertentu
+     */
+    public function columnFormats(): array
+    {
+        return [
+            // Format Material Code dan PRO Numbers sebagai TEXT
+            'E' => NumberFormat::FORMAT_TEXT, // Material Code
+            'J' => NumberFormat::FORMAT_TEXT, // PRO Numbers
+
+            // Format Requested Qty sebagai angka dengan 2 desimal
+            'G' => '#,##0.00',
+        ];
     }
 
     /**
@@ -174,28 +166,82 @@ class DocumentItemsExport implements FromCollection, WithHeadings, WithMapping, 
      */
     public function styles(Worksheet $sheet)
     {
-        return [
-            // Style the first row as bold text
-            1 => ['font' => ['bold' => true]],
+        // Jumlah baris total
+        $lastRow = $this->items->count() + 1;
 
-            // Set column widths
-            'A' => ['width' => 5],
-            'B' => ['width' => 15],
-            'C' => ['width' => 40],
-            'D' => ['width' => 15],
-            'E' => ['width' => 12],
-            'F' => ['width' => 8],
-            'G' => ['width' => 15],
-            'H' => ['width' => 20],
-            'I' => ['width' => 8],
-            'J' => ['width' => 10],
-            'K' => ['width' => 10],
-            'L' => ['width' => 10],
-            'M' => ['width' => 15],
-            'N' => ['width' => 12],
-            'O' => ['width' => 12],
-            'P' => ['width' => 10],
-        ];
+        // Set header style
+        $sheet->getStyle('A1:K1')->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => 'FFFFFF']
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '2E75B6']
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+                'wrapText' => true
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000']
+                ]
+            ]
+        ]);
+
+        // Set column widths
+        $sheet->getColumnDimension('A')->setWidth(15); // Document No
+        $sheet->getColumnDimension('B')->setWidth(10); // Status
+        $sheet->getColumnDimension('C')->setWidth(12); // Plant Request
+        $sheet->getColumnDimension('D')->setWidth(12); // Plant Supply
+        $sheet->getColumnDimension('E')->setWidth(15); // Material Code
+        $sheet->getColumnDimension('F')->setWidth(40); // Material Description
+        $sheet->getColumnDimension('G')->setWidth(12); // Requested Qty
+        $sheet->getColumnDimension('H')->setWidth(8);  // Unit
+        $sheet->getColumnDimension('I')->setWidth(20); // Sales Order
+        $sheet->getColumnDimension('J')->setWidth(25); // PRO Numbers (lebih lebar)
+        $sheet->getColumnDimension('K')->setWidth(12); // MRP COMP
+
+        // Style untuk seluruh data jika ada
+        if ($lastRow > 1) {
+            $dataRange = 'A2:K' . $lastRow;
+
+            $sheet->getStyle($dataRange)->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => 'DDDDDD']
+                    ]
+                ]
+            ]);
+
+            // Set wrap text untuk kolom yang perlu
+            $sheet->getStyle('I2:I' . $lastRow)->getAlignment()->setWrapText(true);
+            $sheet->getStyle('J2:J' . $lastRow)->getAlignment()->setWrapText(true);
+            $sheet->getStyle('F2:F' . $lastRow)->getAlignment()->setWrapText(true);
+
+            // Set alignment untuk kolom tertentu
+            // Left align untuk text columns
+            $sheet->getStyle('E2:E' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+            $sheet->getStyle('I2:I' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+            $sheet->getStyle('J2:J' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
+            // Right align untuk numeric columns
+            $sheet->getStyle('G2:G' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+            // Center align untuk kolom lainnya
+            $centerColumns = ['A', 'B', 'C', 'D', 'H', 'K'];
+            foreach ($centerColumns as $col) {
+                $sheet->getStyle($col . '2:' . $col . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            }
+        }
+
+        // Freeze header row
+        $sheet->freezePane('A2');
+
+        return [];
     }
 }
-

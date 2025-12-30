@@ -416,10 +416,33 @@
                                     $transferredQty = $item->transferred_qty ?? 0;
                                     $remainingQty = $item->remaining_qty ?? 0;
 
-                                    // ✅ FIX: Cek history transfer dari database tanpa `use` statement
+                                    // ✅ PERBAIKAN: Hitung status dengan benar
                                     $hasTransferHistory = \Illuminate\Support\Facades\DB::table('reservation_transfer_items')
                                         ->where('document_item_id', $item->id)
                                         ->exists();
+
+                                    // ✅ PERBAIKAN: Tentukan status berdasarkan kondisi aktual
+                                    $transfer_status = 'pending';
+                                    $transfer_badge_class = 'bg-secondary';
+                                    $transfer_icon = 'fa-clock';
+                                    $transfer_label = 'Pending';
+
+                                    if ($item->force_completed) {
+                                        $transfer_status = 'force_completed';
+                                        $transfer_badge_class = 'bg-success';
+                                        $transfer_icon = 'fa-check-double';
+                                        $transfer_label = 'Force Completed';
+                                    } elseif ($item->transferred_qty >= $item->requested_qty) {
+                                        $transfer_status = 'completed';
+                                        $transfer_badge_class = 'bg-success';
+                                        $transfer_icon = 'fa-check-circle';
+                                        $transfer_label = 'Completed';
+                                    } elseif ($item->transferred_qty > 0 && $item->transferred_qty < $item->requested_qty) {
+                                        $transfer_status = 'partial';
+                                        $transfer_badge_class = 'bg-info';
+                                        $transfer_icon = 'fa-tasks';
+                                        $transfer_label = 'Partial';
+                                    }
 
                                     // Stock information
                                     $stockInfo = $item->stock_info ?? null;
@@ -448,18 +471,12 @@
 
                                     // MRP Comp (dispc)
                                     $mrpComp = $item->dispc ?? ($item->mrp_comp ?? ($item->dispo ?? '-'));
-
-                                    // ✅ PERBAIKAN: Gunakan data status yang sudah dihitung di controller
-                                    $status = $item->transfer_status ?? 'pending';
-                                    $badgeClass = $item->transfer_badge_class ?? 'bg-secondary';
-                                    $icon = $item->transfer_icon ?? 'fa-clock';
-                                    $label = $item->transfer_label ?? 'Pending';
                                 @endphp
 
                                 <tr class="item-row draggable-row"
                                     draggable="{{ $canTransfer ? 'true' : 'false' }}"
                                     data-item-id="{{ $item->id }}"
-                                    data-material-code="{{ $materialCode }}"
+                                    data-material-code="{{ $item->material_code }}" {{-- ✅ Gunakan kode material original --}}
                                     data-material-description="{{ $item->material_description }}"
                                     data-requested-qty="{{ $requestedQty }}"
                                     data-transferred-qty="{{ $transferredQty }}"
@@ -523,14 +540,17 @@
                                         @endif
                                     </td>
 
-                                    <!-- ✅ PERBAIKAN: Kolom Status (kolom ke-9) - Gunakan data dari controller -->
+                                    <!-- ✅ PERBAIKAN: Kolom Status (kolom ke-9) -->
                                     <td class="align-middle text-center py-2 px-2">
-                                        <button class="badge {{ $badgeClass }} px-2 py-1 small view-transfer-details"
+                                        <button class="badge {{ $transfer_badge_class }} px-2 py-1 small view-transfer-details"
+                                                data-item-id="{{ $item->id }}"
                                                 data-material-code="{{ $item->material_code }}"
                                                 data-material-description="{{ $item->material_description }}"
-                                                style="border: none; cursor: pointer;"
-                                                title="Click to view transfer details">
-                                            <i class="fas {{ $icon }} me-1"></i>{{ $label }}
+                                                data-has-history="{{ $hasTransferHistory ? 'true' : 'false' }}"
+                                                style="border: none; cursor: {{ $hasTransferHistory ? 'pointer' : 'default' }};"
+                                                title="{{ $hasTransferHistory ? 'Click to view transfer details' : 'No transfer history' }}"
+                                                {{ $hasTransferHistory ? '' : 'disabled' }}>
+                                            <i class="fas {{ $transfer_icon }} me-1"></i>{{ $transfer_label }}
                                         </button>
                                     </td>
 
@@ -1234,169 +1254,193 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-            // Setup event listener untuk view transfer details
-            function setupTransferDetailsListeners() {
-            console.log('Setting up transfer details listeners...');
+    // ✅ PERBAIKAN: Setup event listener untuk view transfer details
+    function setupTransferDetailsListeners() {
+        console.log('Setting up transfer details listeners...');
 
-            // Gunakan event delegation yang lebih reliable
-            document.body.addEventListener('click', function(e) {
-                // Cari elemen terdekat dengan class 'view-transfer-details'
-                const target = e.target.closest('.view-transfer-details');
+        // Gunakan event delegation untuk semua tombol view-transfer-details
+        document.addEventListener('click', function(e) {
+            const target = e.target.closest('.view-transfer-details');
 
-                if (!target) return;
+            if (!target) return;
 
-                e.preventDefault();
-                e.stopPropagation();
-
-                console.log('Transfer details button clicked');
-
-                const materialCode = target.getAttribute('data-material-code');
-                const materialDescription = target.getAttribute('data-material-description');
-
-                console.log('Material Code:', materialCode);
-                console.log('Material Description:', materialDescription);
-
-                /*showLoading();*/
-
-                // Get document ID - gunakan cara yang lebih reliable
-                let documentId = "{{ $document->id }}"; // Langsung dari PHP
-
-                if (!documentId) {
-                    console.error('Document ID not found');
-                    hideLoading();
-                    showToast('Document ID not found', 'error');
-                    return;
-                }
-
-                // Construct the URL dengan route yang benar
-                const url = `{{ route('documents.item-transfer-history', ['document' => $document->id, 'materialCode' => ':materialCode']) }}`
-    .replace(':materialCode', encodeURIComponent(materialCode));
-
-                console.log('Fetching URL:', url);
-
-                fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'same-origin'
-                })
-                .then(response => {
-                    console.log('Response status:', response.status);
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Transfer history data:', data);
-                    hideLoading();
-                    showTransferDetailsModal(materialCode, materialDescription, data);
-                })
-                .catch(error => {
-                    console.error('Error loading transfer details:', error);
-                    hideLoading();
-                    showToast('Error loading transfer details: ' + error.message, 'error');
-                });
-            });
-        }
-
-            function showTransferDetailsModal(materialCode, materialDescription, transferData) {
-            console.log('Showing transfer details modal');
-
-            const modalElement = document.getElementById('transferDetailsModal');
-            if (!modalElement) {
-                console.error('Transfer details modal not found');
-                showToast('Transfer details modal not found', 'error');
+            // Cek apakah tombol tidak disabled
+            if (target.disabled) {
+                console.log('Transfer details button is disabled');
                 return;
             }
 
-            // Initialize Bootstrap modal jika belum
-            let modal = bootstrap.Modal.getInstance(modalElement);
-            if (!modal) {
-                modal = new bootstrap.Modal(modalElement);
+            e.preventDefault();
+            e.stopPropagation();
+
+            console.log('Transfer details button clicked');
+
+            const itemId = target.getAttribute('data-item-id');
+            const materialCode = target.getAttribute('data-material-code');
+            const materialDescription = target.getAttribute('data-material-description');
+            const hasHistory = target.getAttribute('data-has-history') === 'true';
+
+            console.log('Item ID:', itemId);
+            console.log('Material Code:', materialCode);
+            console.log('Material Description:', materialDescription);
+            console.log('Has History:', hasHistory);
+
+            // Jika tidak ada history, tidak perlu fetch
+            if (!hasHistory) {
+                showToast('No transfer history available for this item', 'info');
+                return;
             }
 
-            // Update modal content
-            const modalTitle = document.getElementById('transferDetailsModalLabel');
-            if (modalTitle) {
-                modalTitle.innerHTML = `<i class="fas fa-list-alt me-2 text-primary"></i>Transfer Details - ${materialCode}`;
-            }
+            showLoading();
 
-            const materialDesc = document.getElementById('detailMaterialDescription');
-            if (materialDesc) {
-                materialDesc.textContent = materialDescription;
-            }
+            // Gunakan route dengan parameter yang benar
+            const url = `/documents/{{ $document->id }}/items/${encodeURIComponent(materialCode)}/transfer-history`;
 
-            const tbody = document.querySelector('#transferDetailsTable tbody');
-            if (tbody) {
-                tbody.innerHTML = '';
+            console.log('Fetching URL:', url);
 
-                if (transferData && Array.isArray(transferData) && transferData.length > 0) {
-                    transferData.forEach((transfer, index) => {
-                        const row = tbody.insertRow();
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
 
-                        // Format tanggal dengan fallback
-                        let formattedDate = '-';
-                        if (transfer.created_at) {
-                            // Coba parse jika bukan string kosong
-                            if (transfer.created_at.trim() !== '' &&
-                                transfer.created_at !== 'Tanggal tidak tersedia' &&
-                                transfer.created_at !== 'Format tidak valid') {
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Transfer history not found');
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Transfer history data received:', data);
+                hideLoading();
 
-                                // Jika sudah dalam format yang diinginkan
-                                if (transfer.created_at.match(/\d{2}\/\d{2}\/\d{4}/)) {
-                                    formattedDate = transfer.created_at;
-                                } else {
-                                    // Coba parse
-                                    try {
-                                        const dateObj = new Date(transfer.created_at);
-                                        if (!isNaN(dateObj.getTime())) {
-                                            formattedDate = dateObj.toLocaleDateString('id-ID', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                                second: '2-digit'
-                                            });
-                                        }
-                                    } catch (e) {
-                                        console.warn('Date parsing failed:', e);
+                if (data.error) {
+                    showToast(data.error, 'error');
+                    return;
+                }
+
+                if (!Array.isArray(data) || data.length === 0) {
+                    showToast('No transfer history found for this item', 'info');
+                    return;
+                }
+
+                showTransferDetailsModal(materialCode, materialDescription, data);
+            })
+            .catch(error => {
+                console.error('Error loading transfer details:', error);
+                hideLoading();
+
+                // Tampilkan pesan yang lebih user-friendly
+                if (error.message.includes('404')) {
+                    showToast('Transfer history not found for this item', 'info');
+                } else {
+                    showToast('Error loading transfer details: ' + error.message, 'error');
+                }
+            });
+        });
+    }
+
+    function showTransferDetailsModal(materialCode, materialDescription, transferData) {
+        console.log('Showing transfer details modal');
+
+        const modalElement = document.getElementById('transferDetailsModal');
+        if (!modalElement) {
+            console.error('Transfer details modal not found');
+            showToast('Transfer details modal not found', 'error');
+            return;
+        }
+
+        // Initialize Bootstrap modal jika belum
+        let modal = bootstrap.Modal.getInstance(modalElement);
+        if (!modal) {
+            modal = new bootstrap.Modal(modalElement);
+        }
+
+        // Update modal content
+        const modalTitle = document.getElementById('transferDetailsModalLabel');
+        if (modalTitle) {
+            modalTitle.innerHTML = `<i class="fas fa-list-alt me-2 text-primary"></i>Transfer Details - ${materialCode}`;
+        }
+
+        const materialDesc = document.getElementById('detailMaterialDescription');
+        if (materialDesc) {
+            materialDesc.textContent = materialDescription;
+        }
+
+        const tbody = document.querySelector('#transferDetailsTable tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+
+            if (transferData && Array.isArray(transferData) && transferData.length > 0) {
+                transferData.forEach((transfer, index) => {
+                    const row = tbody.insertRow();
+
+                    // Format tanggal dengan fallback
+                    let formattedDate = '-';
+                    if (transfer.created_at) {
+                        // Coba parse jika bukan string kosong
+                        if (transfer.created_at.trim() !== '' &&
+                            transfer.created_at !== 'Tanggal tidak tersedia' &&
+                            transfer.created_at !== 'Format tidak valid') {
+
+                            // Jika sudah dalam format yang diinginkan (d/m/Y H:i:s)
+                            if (transfer.created_at.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/)) {
+                                formattedDate = transfer.created_at;
+                            } else {
+                                // Coba parse dengan berbagai format
+                                try {
+                                    const dateObj = new Date(transfer.created_at);
+                                    if (!isNaN(dateObj.getTime())) {
+                                        formattedDate = dateObj.toLocaleDateString('id-ID', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            second: '2-digit'
+                                        });
                                     }
+                                } catch (e) {
+                                    console.warn('Date parsing failed:', e);
                                 }
                             }
                         }
+                    }
 
-                        row.innerHTML = `
-                            <td class="text-center align-middle">${index + 1}</td>
-                            <td class="align-middle">
-                                <span class="badge bg-soft-primary text-primary small">${transfer.transfer_no || '-'}</span>
-                            </td>
-                            <td class="align-middle small">${transfer.material_code || materialCode}</td>
-                            <td class="align-middle small">${transfer.batch || '-'}</td>
-                            <td class="text-center align-middle fw-medium small">${formatAngka(transfer.quantity || 0)}</td>
-                            <td class="text-center align-middle small">${transfer.unit || 'PC'}</td>
-                            <td class="text-center align-middle small">${formattedDate}</td>
-                        `;
-                    });
-                } else {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="7" class="text-center text-muted py-3 small">
-                                <i class="fas fa-info-circle me-2"></i>No transfer history found
-                            </td>
-                        </tr>
+                    row.innerHTML = `
+                        <td class="text-center align-middle">${index + 1}</td>
+                        <td class="align-middle">
+                            <span class="badge bg-soft-primary text-primary small">${transfer.transfer_no || '-'}</span>
+                        </td>
+                        <td class="align-middle small">${transfer.material_code || materialCode}</td>
+                        <td class="align-middle small">${transfer.batch || '-'}</td>
+                        <td class="text-center align-middle fw-medium small">${formatAngka(transfer.quantity || 0)}</td>
+                        <td class="text-center align-middle small">${transfer.unit || 'PC'}</td>
+                        <td class="text-center align-middle small">${formattedDate}</td>
                     `;
-                }
+                });
+            } else {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-3 small">
+                            <i class="fas fa-info-circle me-2"></i>No transfer history found
+                        </td>
+                    </tr>
+                `;
             }
-
-            // Show modal
-            modal.show();
         }
+
+        // Show modal
+        modal.show();
+    }
 
     // Setup drag and drop
     function setupDragAndDrop() {
@@ -2522,53 +2566,62 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-            // Initialize all functions
-            function initialize() {
-            console.log('Initializing document show page...');
+    // ✅ PERBAIKAN: Initialize all functions
+    function initialize() {
+        console.log('Initializing document show page...');
 
-            try {
-                setupTransferDetailsListeners();
-                console.log('Transfer details listeners setup complete');
+        try {
+            // 1. Setup transfer details listeners (DIPERBAIKI)
+            setupTransferDetailsListeners();
+            console.log('✅ Transfer details listeners setup complete');
 
-                setupDragAndDrop();
-                console.log('Drag and drop setup complete');
+            // 2. Setup drag and drop
+            setupDragAndDrop();
+            console.log('✅ Drag and drop setup complete');
 
-                setupCheckboxSelection();
-                console.log('Checkbox selection setup complete');
+            // 3. Setup checkbox selection
+            setupCheckboxSelection();
+            console.log('✅ Checkbox selection setup complete');
 
-                updateRemainingQuantities();
-                console.log('Remaining quantities updated');
+            // 4. Update remaining quantities
+            updateRemainingQuantities();
+            console.log('✅ Remaining quantities updated');
 
-                // Debug: Log semua buttons
-                const transferButtons = document.querySelectorAll('.view-transfer-details');
-                console.log(`Found ${transferButtons.length} transfer detail buttons`);
+            // 5. Debug: Log semua transfer detail buttons
+            const transferButtons = document.querySelectorAll('.view-transfer-details');
+            console.log(`✅ Found ${transferButtons.length} transfer detail buttons`);
 
-                transferButtons.forEach((btn, index) => {
-                    console.log(`Button ${index + 1}:`, {
-                        materialCode: btn.getAttribute('data-material-code'),
-                        materialDesc: btn.getAttribute('data-material-description')
-                    });
+            transferButtons.forEach((btn, index) => {
+                console.log(`Button ${index + 1}:`, {
+                    itemId: btn.getAttribute('data-item-id'),
+                    materialCode: btn.getAttribute('data-material-code'),
+                    materialDesc: btn.getAttribute('data-material-description'),
+                    hasHistory: btn.getAttribute('data-has-history'),
+                    disabled: btn.disabled
                 });
+            });
 
-                // Auto-hide alerts
-                setTimeout(function() {
-                    document.querySelectorAll('.alert').forEach(function(alert) {
-                        const bsAlert = new bootstrap.Alert(alert);
-                        bsAlert.close();
-                    });
-                }, 5000);
+            // 6. Auto-hide alerts setelah 5 detik
+            setTimeout(function() {
+                document.querySelectorAll('.alert').forEach(function(alert) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                });
+            }, 5000);
 
-            } catch (error) {
-                console.error('Error during initialization:', error);
-                showToast('Error initializing page: ' + error.message, 'error');
-            }
+            console.log('✅ All initialization complete');
+
+        } catch (error) {
+            console.error('❌ Error during initialization:', error);
+            showToast('Error initializing page: ' + error.message, 'error');
         }
+    }
 
-        // TAMBAHKAN error handling untuk seluruh script
-        window.addEventListener('error', function(e) {
-            console.error('Global error:', e.error);
-            console.error('Error at:', e.filename, 'line:', e.lineno);
-        });
+    // TAMBAHKAN error handling untuk seluruh script
+    window.addEventListener('error', function(e) {
+        console.error('Global error:', e.error);
+        console.error('Error at:', e.filename, 'line:', e.lineno);
+    });
 
     // Run initialization
     initialize();

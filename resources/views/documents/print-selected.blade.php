@@ -584,44 +584,51 @@
         </div>
     </div>
 
-    <script>
-        // Fungsi untuk menutup window dengan cara yang lebih reliable
-        function closeWindow() {
-            // Coba beberapa metode untuk menutup window
-            if (window.history.length > 1) {
-                // Jika ada history, gunakan back
-                window.history.back();
-            } else if (window.opener) {
-                // Jika window dibuka oleh window lain, tutup saja
-                window.close();
-            } else {
-                // Jika tidak ada history dan bukan window popup, redirect ke halaman sebelumnya
-                window.location.href = "{{ route('documents.index') }}";
-            }
-        }
+        <script>
+            // Fungsi untuk menutup window dengan cara yang lebih reliable
+            function closeWindow() {
+                // TUTUP WINDOW SAJA, TIDAK REDIRECT KE HALAMAN EDIT
+                if (window.opener && !window.opener.closed) {
+                    // Jika dibuka dari popup, tutup saja
+                    window.close();
+                } else if (window.history.length > 1) {
+                    // Jika ada history, kembali
+                    window.history.back();
+                } else {
+                    // Jika tidak ada history, tutup window
+                    window.close();
+                }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            // Auto print jika parameter autoPrint=true
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('autoPrint') === 'true') {
+                // Fallback: jika window tidak bisa ditutup, redirect ke index
                 setTimeout(function() {
-                    window.print();
-                }, 500);
+                    if (!window.closed) {
+                        window.location.href = "{{ route('documents.index') }}";
+                    }
+                }, 100);
             }
 
-            // Handle print event
-            window.onafterprint = function(event) {
-                // Jika autoPrint, tutup window setelah print
+            document.addEventListener('DOMContentLoaded', function() {
+                // Auto print jika parameter autoPrint=true
+                const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('autoPrint') === 'true') {
                     setTimeout(function() {
-                        closeWindow();
-                    }, 300);
+                        window.print();
+                    }, 500);
                 }
-            };
 
-            // Tambahkan event listener untuk tombol close
-            document.querySelector('.btn-secondary').addEventListener('click', closeWindow);
-        });
-    </script>
+                // Handle print event
+                window.onafterprint = function(event) {
+                    // Jika autoPrint, tutup window setelah print
+                    if (urlParams.get('autoPrint') === 'true') {
+                        setTimeout(function() {
+                            closeWindow();
+                        }, 300);
+                    }
+                };
+
+                // Tambahkan event listener untuk tombol close
+                document.querySelector('.btn-secondary').addEventListener('click', closeWindow);
+            });
+        </script>
 </body>
 </html>

@@ -101,7 +101,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
         Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
 
-        // Item Management Routes (using DocumentController for edit/update/delete/force-complete)
+        // Item Management Routes (using DocumentController for edit/update/force-complete)
         Route::get('/{id}/edit', [DocumentController::class, 'edit'])->name('edit');
         Route::put('/{id}', [DocumentController::class, 'update'])->name('update');
 
@@ -109,8 +109,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{id}/print-selected', [ReservationDocumentController::class, 'printSelected'])->name('print-selected');
         Route::post('/{id}/export-excel', [ReservationDocumentController::class, 'exportExcel'])->name('export-excel');
 
-        // Item Management Routes (Delete and Force Complete)
-        Route::delete('/{id}/items/delete-selected', [DocumentController::class, 'deleteSelectedItems'])->name('items.delete-selected');
+        // Force Complete Items
         Route::post('/{id}/items/force-complete', [DocumentController::class, 'forceCompleteItems'])->name('items.force-complete');
 
         // Transfer Process Route
