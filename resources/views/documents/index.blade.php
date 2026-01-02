@@ -11,13 +11,7 @@
                 </ol>
             </nav>
 
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>Reservation Documents</h2>
-                <div class="text-muted" id="documentCounter">
-                    <i class="fas fa-file-alt me-1"></i>
-                    <span id="visibleCount">{{ $documents->count() }}</span> of {{ $documents->count() }} documents
-                </div>
-            </div>
+            <!-- HAPUS HEADER DI SINI - Sudah dihapus -->
 
             @if(session('success'))
                 <div class="alert alert-success alert-dismissible fade show shadow-lg mb-3 floating-alert" role="alert">
@@ -58,8 +52,9 @@
                         <h5 class="mb-1 fw-bold">Reservation Documents</h5>
                         <small class="text-muted">Browse and search through all reservation documents</small>
                     </div>
-                    <div class="d-flex align-items-center">
-                        <div class="input-group input-group-sm" style="width: 300px;">
+                    <div class="d-flex flex-column align-items-end">
+                        <!-- Search Box -->
+                        <div class="input-group input-group-sm mb-2" style="width: 300px;">
                             <span class="input-group-text bg-transparent border-end-0">
                                 <i class="fas fa-search text-muted"></i>
                             </span>
@@ -70,6 +65,11 @@
                             <button class="btn btn-outline-secondary" type="button" id="clearSearch">
                                 <i class="fas fa-times"></i>
                             </button>
+                        </div>
+                        <!-- Document Counter - DIPINDAHKAN DI SINI -->
+                        <div class="text-muted small" id="documentCounter">
+                            <i class="fas fa-file-alt me-1"></i>
+                            <span id="visibleCount">{{ $documents->count() }}</span> of {{ $documents->count() }} documents
                         </div>
                     </div>
                 </div>
@@ -384,12 +384,21 @@
         min-width: 120px;
     }
 
+    /* HAPUS STYLE LAMA UNTUK #documentCounter */
+    /*
     #documentCounter {
         background-color: #f8f9fa;
         padding: 8px 16px;
         border-radius: 20px;
         font-size: 0.9rem;
         border: 1px solid #e9ecef;
+    }
+    */
+
+    /* GANTI DENGAN STYLE BARU */
+    #documentCounter {
+        font-size: 0.85rem;
+        color: #6c757d;
     }
 
     .empty-state {

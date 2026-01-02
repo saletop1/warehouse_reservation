@@ -163,3 +163,9 @@ Route::middleware(['auth'])->group(function () {
 Route::fallback(function () {
     return response()->view('errors.404', [], 404);
 });
+
+// Dashboard API routes
+Route::prefix('api/dashboard')->name('api.dashboard.')->middleware(['auth'])->group(function () {
+    Route::get('/stats', [DashboardController::class, 'getStats'])->name('stats');
+    Route::get('/activities', [DashboardController::class, 'getActivities'])->name('activities');
+});

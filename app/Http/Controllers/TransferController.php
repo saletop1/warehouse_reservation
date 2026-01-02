@@ -421,6 +421,20 @@ class TransferController extends Controller
      */
     public function index(Request $request)
     {
+        // Check if request wants JSON (API call)
+        if ($request->wantsJson() || $request->ajax()) {
+            return $this->getTransfersJson($request);
+        }
+
+        // For web view
+        return $this->getTransfersView($request);
+    }
+
+    /**
+     * Get transfers as JSON (for API)
+     */
+    private function getTransfersJson(Request $request)
+    {
         try {
             $perPage = $request->get('per_page', 20);
 
@@ -444,6 +458,28 @@ class TransferController extends Controller
                 'success' => false,
                 'message' => 'Error fetching transfers: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Get transfers as HTML view
+     */
+    private function getTransfersView(Request $request)
+    {
+        try {
+            $perPage = $request->get('per_page', 20);
+
+            $transfers = ReservationTransfer::with(['items', 'document'])
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage);
+
+            return view('transfers.index', compact('transfers'));
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching transfers view: ' . $e->getMessage());
+
+            return redirect()->route('dashboard')
+                ->with('error', 'Error loading transfers: ' . $e->getMessage());
         }
     }
 

@@ -6,7 +6,6 @@ use App\Models\ReservationDocument;
 use App\Models\ReservationDocumentItem;
 use App\Models\ReservationStock;
 use App\Models\ReservationTransfer;
-use App\Models\ReservationTransferItem;
 use Illuminate\Http\Request;
 use App\Exports\ReservationDocumentsSelectedExport;
 use App\Exports\DocumentItemsExport;
@@ -15,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-use Barryvdh\DomPDF\Facade\Pdf;
+
 
 class ReservationDocumentController extends Controller
 {
