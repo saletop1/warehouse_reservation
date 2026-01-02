@@ -437,13 +437,18 @@
 
                                     // Check if stock is available
                                     $hasStock = $totalStock > 0;
-                                    $transferableQty = min($remainingQty, $totalStock);
+                                    // PERBAIKAN: Transferable quantity hanya berdasarkan batch stock
+                                    $transferableQty = 0;
+                                    if (!empty($batchInfo)) {
+                                        // Jumlahkan semua batch stock
+                                        $transferableQty = array_sum(array_column($batchInfo, 'qty'));
+                                    }
 
                                     // PERBAIKAN: Cek force completed
                                     $isForceCompleted = $item->force_completed ?? false;
 
                                     // PERBAIKAN: Check if item is transferable
-                                    $isTransferable = !$isForceCompleted && $remainingQty > 0 && $hasStock && $transferableQty > 0;
+                                    $isTransferable = !$isForceCompleted && $transferableQty > 0;
 
                                     // MRP Comp (dispc)
                                     $mrpComp = $item->dispc ?? ($item->mrp_comp ?? ($item->dispo ?? '-'));
@@ -458,7 +463,7 @@
                                     data-transferred-qty="{{ $transferredQty }}"
                                     data-remaining-qty="{{ $remainingQty }}"
                                     data-available-stock="{{ $totalStock }}"
-                                    data-transferable-qty="{{ $isTransferable ? min($remainingQty, $totalStock) : 0 }}"
+                                    data-transferable-qty="{{ $transferableQty }}"
                                     data-unit="{{ $unit }}"
                                     data-sloc="{{ !empty($batchInfo) ? ($batchInfo[0]['sloc'] ?? '') : '' }}"
                                     data-can-transfer="{{ $isTransferable ? 'true' : 'false' }}"
@@ -1346,99 +1351,111 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function showTransferDetailsModal(materialCode, materialDescription, transferData) {
-        console.log('Showing transfer details modal');
+            // Di dalam fungsi showTransferDetailsModal(), update row HTML:
+        function showTransferDetailsModal(materialCode, materialDescription, transferData) {
+            console.log('Showing transfer details modal');
 
-        const modalElement = document.getElementById('transferDetailsModal');
-        if (!modalElement) {
-            console.error('Transfer details modal not found');
-            showToast('Transfer details modal not found', 'error');
-            return;
-        }
+            const modalElement = document.getElementById('transferDetailsModal');
+            if (!modalElement) {
+                console.error('Transfer details modal not found');
+                showToast('Transfer details modal not found', 'error');
+                return;
+            }
 
-        // Initialize Bootstrap modal jika belum
-        let modal = bootstrap.Modal.getInstance(modalElement);
-        if (!modal) {
-            modal = new bootstrap.Modal(modalElement);
-        }
+            // Initialize Bootstrap modal jika belum
+            let modal = bootstrap.Modal.getInstance(modalElement);
+            if (!modal) {
+                modal = new bootstrap.Modal(modalElement);
+            }
 
-        // Update modal content
-        const modalTitle = document.getElementById('transferDetailsModalLabel');
-        if (modalTitle) {
-            modalTitle.innerHTML = `<i class="fas fa-list-alt me-2 text-primary"></i>Transfer Details - ${materialCode}`;
-        }
+            // Update modal content
+            const modalTitle = document.getElementById('transferDetailsModalLabel');
+            if (modalTitle) {
+                modalTitle.innerHTML = `<i class="fas fa-list-alt me-2 text-primary"></i>Transfer Details - ${materialCode}`;
+            }
 
-        const materialDesc = document.getElementById('detailMaterialDescription');
-        if (materialDesc) {
-            materialDesc.textContent = materialDescription;
-        }
+            const materialDesc = document.getElementById('detailMaterialDescription');
+            if (materialDesc) {
+                materialDesc.textContent = materialDescription;
+            }
 
-        const tbody = document.querySelector('#transferDetailsTable tbody');
-        if (tbody) {
-            tbody.innerHTML = '';
+            const tbody = document.querySelector('#transferDetailsTable tbody');
+            if (tbody) {
+                tbody.innerHTML = '';
 
-            if (transferData && Array.isArray(transferData) && transferData.length > 0) {
-                transferData.forEach((transfer, index) => {
-                    const row = tbody.insertRow();
+                if (transferData && Array.isArray(transferData) && transferData.length > 0) {
+                    transferData.forEach((transfer, index) => {
+                        const row = tbody.insertRow();
 
-                    // Format tanggal dengan fallback
-                    let formattedDate = '-';
-                    if (transfer.created_at) {
-                        // Coba parse jika bukan string kosong
-                        if (transfer.created_at.trim() !== '' &&
-                            transfer.created_at !== 'Tanggal tidak tersedia' &&
-                            transfer.created_at !== 'Format tidak valid') {
+                        // Format tanggal dengan fallback
+                        let formattedDate = '-';
+                        if (transfer.created_at) {
+                            // Coba parse jika bukan string kosong
+                            if (transfer.created_at.trim() !== '' &&
+                                transfer.created_at !== 'Tanggal tidak tersedia' &&
+                                transfer.created_at !== 'Format tidak valid') {
 
-                            // Jika sudah dalam format yang diinginkan (d/m/Y H:i:s)
-                            if (transfer.created_at.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/)) {
-                                formattedDate = transfer.created_at;
-                            } else {
-                                // Coba parse dengan berbagai format
-                                try {
-                                    const dateObj = new Date(transfer.created_at);
-                                    if (!isNaN(dateObj.getTime())) {
-                                        formattedDate = dateObj.toLocaleDateString('id-ID', {
-                                            day: '2-digit',
-                                            month: '2-digit',
-                                            year: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            second: '2-digit'
-                                        });
+                                // Jika sudah dalam format yang diinginkan (d/m/Y H:i:s)
+                                if (transfer.created_at.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/)) {
+                                    formattedDate = transfer.created_at;
+                                } else {
+                                    // Coba parse dengan berbagai format
+                                    try {
+                                        const dateObj = new Date(transfer.created_at);
+                                        if (!isNaN(dateObj.getTime())) {
+                                            formattedDate = dateObj.toLocaleDateString('id-ID', {
+                                                day: '2-digit',
+                                                month: '2-digit',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                second: '2-digit'
+                                            });
+                                        }
+                                    } catch (e) {
+                                        console.warn('Date parsing failed:', e);
                                     }
-                                } catch (e) {
-                                    console.warn('Date parsing failed:', e);
                                 }
                             }
                         }
-                    }
 
-                    row.innerHTML = `
-                        <td class="text-center align-middle">${index + 1}</td>
-                        <td class="align-middle">
-                            <span class="badge bg-soft-primary text-primary small">${transfer.transfer_no || '-'}</span>
-                        </td>
-                        <td class="align-middle small">${transfer.material_code || materialCode}</td>
-                        <td class="align-middle small">${transfer.batch || '-'}</td>
-                        <td class="text-center align-middle fw-medium small">${formatAngka(transfer.quantity || 0)}</td>
-                        <td class="text-center align-middle small">${transfer.unit || 'PC'}</td>
-                        <td class="text-center align-middle small">${formattedDate}</td>
+                        row.innerHTML = `
+                            <td class="text-center align-middle">${index + 1}</td>
+                            <td class="align-middle">
+                                <span class="badge bg-soft-primary text-primary small">${transfer.transfer_no || '-'}</span>
+                            </td>
+                            <td class="align-middle small">
+                                ${transfer.created_by_name || 'N/A'}
+                            </td>
+                            <td class="align-middle small">
+                                <span class="fw-medium">${transfer.material_code || materialCode}</span>
+                            </td>
+                            <td class="align-middle small">${transfer.batch || '-'}</td>
+                            <td class="text-center align-middle fw-medium small">${formatAngka(transfer.quantity || 0)}</td>
+                            <td class="text-center align-middle small">${transfer.unit || 'PC'}</td>
+                            <td class="align-middle small">
+                                <span class="badge bg-soft-info text-info small">${transfer.batch_sloc || '-'}</span>
+                            </td>
+                            <td class="align-middle small">
+                                <span class="badge bg-soft-warning text-warning small">${transfer.sloc_destination || '-'}</span>
+                            </td>
+                            <td class="text-center align-middle small">${formattedDate}</td>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-3 small">
+                                <i class="fas fa-info-circle me-2"></i>No transfer history found
+                            </td>
+                        </tr>
                     `;
-                });
-            } else {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="text-center text-muted py-3 small">
-                            <i class="fas fa-info-circle me-2"></i>No transfer history found
-                        </td>
-                    </tr>
-                `;
+                }
             }
-        }
 
-        // Show modal
-        modal.show();
-    }
+            // Show modal
+            modal.show();
+        }
 
     // Setup drag and drop
     function setupDragAndDrop() {
@@ -1710,7 +1727,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!itemData) return;
 
                 if (!transferItems.some(item => item.id === itemData.id)) {
-                    if (itemData.remainingQty > 0 && itemData.availableStock > 0) {
+                    // PERBAIKAN: Cek apakah ada batch stock yang tersedia
+                    let totalBatchStock = 0;
+                    if (itemData.batchInfo && itemData.batchInfo.length > 0) {
+                        totalBatchStock = itemData.batchInfo.reduce((sum, batch) => sum + (batch.qty || 0), 0);
+                    }
+
+                    if (totalBatchStock > 0) {
                         addItemToTransferByData(itemData);
                         addedCount++;
                     }
@@ -1771,13 +1794,15 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (itemData.remainingQty <= 0) {
-            showToast('Item already fully transferred', 'error');
-            return;
+        // PERBAIKAN: Hapus validasi remainingQty, cukup cek batch stock
+        // Cek apakah ada batch stock yang tersedia
+        let totalBatchStock = 0;
+        if (itemData.batchInfo && itemData.batchInfo.length > 0) {
+            totalBatchStock = itemData.batchInfo.reduce((sum, batch) => sum + (batch.qty || 0), 0);
         }
 
-        if (itemData.availableStock <= 0) {
-            showToast('Item has no available stock', 'error');
+        if (totalBatchStock <= 0) {
+            showToast('Item has no available batch stock', 'error');
             return;
         }
 
@@ -1794,12 +1819,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let batchSloc = '';
 
         if (item.batchInfo && item.batchInfo.length > 0) {
+            // Cari batch dengan stock tersedia
             const validBatch = item.batchInfo.find(batch => (batch.qty || 0) > 0);
             if (validBatch) {
                 selectedBatch = validBatch.batch || validBatch.sloc || '';
                 batchQty = validBatch.qty || validBatch.clabs || 0;
                 batchSloc = validBatch.sloc || selectedBatch;
             } else if (item.batchInfo[0]) {
+                // Jika tidak ada yang punya stock, ambil batch pertama
                 selectedBatch = item.batchInfo[0].batch || item.batchInfo[0].sloc || '';
                 batchQty = item.batchInfo[0].qty || item.batchInfo[0].clabs || 0;
                 batchSloc = item.batchInfo[0].sloc || selectedBatch;
@@ -1813,8 +1840,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Calculate transferable quantity
-        const maxTransferable = Math.min(item.remainingQty, batchQty > 0 ? batchQty : item.availableStock);
+        // PERBAIKAN: Calculate transferable quantity hanya berdasarkan batchQty
+        const maxTransferable = batchQty > 0 ? batchQty : 0;
 
         // Add to transfer items array
         const transferItem = {
@@ -2003,7 +2030,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="align-middle"><div class="fw-medium small">${item.materialCode}</div></td>
                 <td class="align-middle"><div class="text-truncate-2 small" title="${item.materialDesc}">${item.materialDesc.length > 30 ? item.materialDesc.substring(0, 30) + '...' : item.materialDesc}</div></td>
                 <td class="text-center align-middle"><div class="fw-medium small">${formatAngka(item.remainingQty)}</div></td>
-                <td class="text-center align-middle"><div class="${item.batchQty > 0 ? 'stock-custom-available' : 'stock-custom-unavailable'} fw-medium small" id="batchQtyDisplay-${index}">${formatAngka(item.batchQty || 0)}</div></td>
+                <td class="text-center align-middle">
+                    <div class="fw-medium small text-primary"
+                         title="Available stock for selected batch">
+                        ${formatAngka(item.batchQty || 0)}
+                    </div>
+                    <div class="text-muted small">
+                        <i class="fas fa-info-circle me-1"></i>Batch stock limit
+                    </div>
+                </td>
                 <td class="text-center align-middle">
                     <input type="text" class="form-control form-control-sm qty-transfer-input uppercase-input" value="${formatAngka(item.qty || 0)}" placeholder="0" data-index="${index}" required style="width: 70px;">
                 </td>
@@ -2064,7 +2099,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 let value = this.value.trim();
                 let parsedValue = parseAngka(value);
                 const batchQty = transferItems[index].batchQty || 0;
-                const remainingQty = transferItems[index].remainingQty || 0;
 
                 if (isNaN(parsedValue) || parsedValue < 0) {
                     this.value = '';
@@ -2076,11 +2110,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     transferItems[index].qty = batchQty;
                     transferItems[index].quantity = batchQty;
                     showToast('Quantity cannot exceed batch quantity', 'warning');
-                } else if (parsedValue > remainingQty) {
-                    this.value = formatAngka(remainingQty);
-                    transferItems[index].qty = remainingQty;
-                    transferItems[index].quantity = remainingQty;
-                    showToast('Quantity cannot exceed remaining quantity', 'warning');
                 } else {
                     this.value = formatAngka(parsedValue);
                     transferItems[index].qty = parsedValue;
@@ -2164,7 +2193,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 transferItems[index].batchQty = batchQty;
                 transferItems[index].batchSloc = batchSloc;
 
-                const batchQtyDisplay = document.getElementById('batchQtyDisplay-' + index);
+                const batchQtyDisplay = document.querySelector('#batchQtyDisplay-' + index);
                 if (batchQtyDisplay) {
                     batchQtyDisplay.textContent = formatAngka(batchQty);
                     batchQtyDisplay.className = batchQty > 0 ? 'stock-custom-available fw-medium small' : 'stock-custom-unavailable fw-medium small';

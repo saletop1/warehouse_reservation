@@ -5,8 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Document;
 use App\Models\DocumentItem;
 use Illuminate\Http\Request;
-use App\Exports\DocumentExport;
-use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;

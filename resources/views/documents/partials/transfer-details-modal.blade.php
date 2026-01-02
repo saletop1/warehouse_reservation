@@ -16,12 +16,15 @@
                     <table class="table table-bordered mb-0" id="transferDetailsTable">
                         <thead class="table-light">
                             <tr>
-                                <th class="text-center">#</th>
+                                <th class="text-center">No</th>
                                 <th>Transfer No</th>
+                                <th>Created By</th>
                                 <th>Material Code</th>
                                 <th>Batch</th>
                                 <th class="text-center">Quantity</th>
                                 <th class="text-center">Unit</th>
+                                <th>Batch SLOC</th>
+                                <th>SLOC Destination</th>
                                 <th class="text-center">Created At</th>
                             </tr>
                         </thead>
@@ -69,7 +72,7 @@ function safeResetTransferDetailsModal() {
 }
 
 // Event listener untuk modal hidden
-document.getElementById('transferDetailsModal').addEventListener('hidden.bs.modal', function () {
+document.getElementById('transferDetailsModal')?.addEventListener('hidden.bs.modal', function () {
     setTimeout(() => {
         safeResetTransferDetailsModal();
     }, 300);
