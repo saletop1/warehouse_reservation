@@ -173,9 +173,18 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="mb-2">
+                                <label class="form-label text-muted small mb-1">Created Date</label>
+                                <p class="fw-medium mb-0">
+                                    <i class="fas fa-calendar me-1 text-muted small"></i>
+                                    {{ \Carbon\Carbon::parse($document->created_at)->format('d/m/Y H:i:s') }}
+                                </p>
+                            </div>
+                            <div class="mb-2">
                                 <label class="form-label text-muted small mb-1">Plant Request</label>
                                 <p class="fw-medium mb-0">{{ $document->plant }}</p>
                             </div>
+                        </div>
+                        <div class="col-md-4">
                             <div class="mb-2">
                                 <label class="form-label text-muted small mb-1">Plant Supply</label>
                                 <p class="fw-medium mb-0">
@@ -188,12 +197,6 @@
                                     @endif
                                 </p>
                             </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-2">
-                                <label class="form-label text-muted small mb-1">Total Quantity</label>
-                                <p class="fw-medium mb-0">{{ number_format($document->total_qty) }}</p>
-                            </div>
                             <div class="mb-2">
                                 <label class="form-label text-muted small mb-1">Created By</label>
                                 <p class="fw-medium mb-0">
@@ -203,13 +206,6 @@
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="mb-2">
-                                <label class="form-label text-muted small mb-1">Created Date</label>
-                                <p class="fw-medium mb-0">
-                                    <i class="fas fa-calendar me-1 text-muted small"></i>
-                                    {{ \Carbon\Carbon::parse($document->created_at)->format('d/m/Y H:i:s') }}
-                                </p>
-                            </div>
                             @if($document->remarks)
                             <div class="mb-2">
                                 <label class="form-label text-muted small mb-1">Remarks</label>
@@ -303,9 +299,9 @@
         <!-- Items Table -->
         <div class="col-lg-9">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header border-bottom bg-light py-2 px-3">
+                <div class="card-header border-bottom bg-light py-1 px-2">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="card-title mb-0">
+                        <h6 class="card-title mb-0" style="font-size: 0.95rem;">
                             <i class="fas fa-list-ul me-2 text-primary"></i>Document Items
                             <span class="badge bg-primary bg-opacity-10 text-primary ms-2 small">{{ $document->items->count() }} items</span>
                         </h6>
@@ -359,20 +355,20 @@
                         <table class="table table-hover table-borderless mb-0">
                             <thead class="table-light border-bottom">
                                 <tr>
-                                    <th class="border-0 py-2 px-2" style="width: 40px;">
+                                    <th class="border-0 py-1 px-1" style="width: 40px;">
                                         <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
                                     </th>
-                                    <th class="border-0 text-muted py-2 px-2" style="width: 40px;">#</th>
-                                    <th class="border-0 text-muted py-2 px-2">Material</th>
-                                    <th class="border-0 text-muted py-2 px-2">Description</th>
-                                    <th class="border-0 text-muted py-2 px-2 text-center">Req Qty</th>
-                                    <th class="border-0 text-muted py-2 px-2 text-center">Remaining</th>
-                                    <th class="border-0 text-muted py-2 px-2 text-center">Unit</th>
-                                    <th class="border-0 text-muted py-2 px-2 text-center">Stock</th>
-                                    <th class="border-0 text-muted py-2 px-2 text-center">Status</th>
-                                    <th class="border-0 text-muted py-2 px-2 text-center">Batch Source</th>
-                                    <th class="border-0 text-muted py-2 px-2 text-center">SO</th>
-                                    <th class="border-0 text-muted py-2 px-2 text-center">Source PRO</th>
+                                    <th class="border-0 text-muted py-1 px-1" style="width: 40px;">#</th>
+                                    <th class="border-0 text-muted py-1 px-1">Material</th>
+                                    <th class="border-0 text-muted py-1 px-1">Description</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">Req Qty</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">Remaining</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">Unit</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">Stock</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">Status</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">Batch Source</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">SO</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">Source PRO</th>
                                 </tr>
                             </thead>
                             <tbody id="sortableItems">
@@ -471,45 +467,44 @@
                                     data-batch-info="{{ htmlspecialchars(json_encode($batchInfo), ENT_QUOTES, 'UTF-8') }}"
                                     style="cursor: {{ $isTransferable ? 'move' : 'default' }}; background-color: {{ $isForceCompleted ? 'rgba(40, 167, 69, 0.05)' : 'transparent' }};">
 
-                                    <td class="align-middle py-2 px-2">
+                                    <td class="align-middle py-1 px-1">
                                         <input type="checkbox" class="form-check-input row-select"
                                             data-item-id="{{ $item->id }}"
                                             {{ $isTransferable ? '' : 'disabled' }}>
                                     </td>
 
-                                    <td class="align-middle text-muted py-2 px-2">
+                                    <td class="align-middle text-muted py-1 px-1">
                                         <span class="fw-medium small">{{ $index + 1 }}</span>
                                     </td>
 
-                                    <td class="align-middle py-2 px-2">
+                                    <td class="align-middle py-1 px-1">
                                         <div class="d-flex flex-column">
                                             <span class="fw-semibold text-dark small">{{ $materialCode }}</span>
                                             <small class="text-muted">{{ $mrpComp }}</small>
                                         </div>
                                     </td>
 
-                                    <td class="align-middle py-2 px-2">
-                                        <div class="text-truncate" style="max-width: 180px;"
-                                            title="{{ $item->material_description }}">
+                                    <td class="align-middle py-1 px-1">
+                                        <div title="{{ $item->material_description }}">
                                             <span class="small">{{ $item->material_description }}</span>
                                         </div>
                                     </td>
 
-                                    <td class="align-middle text-center py-2 px-2">
+                                    <td class="align-middle text-center py-1 px-1">
                                         <span class="fw-medium small">{{ \App\Helpers\NumberHelper::formatQuantity($requestedQty) }}</span>
                                     </td>
 
-                                    <td class="align-middle text-center py-2 px-2">
+                                    <td class="align-middle text-center py-1 px-1">
                                         <span class="fw-bold small {{ $remainingQty > 0 ? 'text-primary' : 'text-success' }}">
                                             {{ \App\Helpers\NumberHelper::formatQuantity($remainingQty) }}
                                         </span>
                                     </td>
 
-                                    <td class="align-middle text-center py-2 px-2">
+                                    <td class="align-middle text-center py-1 px-1">
                                         <span class="text-muted small">{{ $unit }}</span>
                                     </td>
 
-                                    <td class="align-middle text-center py-2 px-2">
+                                    <td class="align-middle text-center py-1 px-1">
                                         @if($totalStock > 0)
                                             <span class="badge bg-{{ $remainingQty > 0 ? 'success' : 'warning' }} bg-opacity-10
                                                 text-{{ $remainingQty > 0 ? 'success' : 'warning' }} px-2 py-1 small">
@@ -523,7 +518,7 @@
                                     </td>
 
                                     <!-- Kolom Status -->
-                                    <td class="align-middle text-center py-2 px-2">
+                                    <td class="align-middle text-center py-1 px-1">
                                         @php
                                             // Gunakan status yang sudah dihitung di controller
                                             $hasTransferHistory = $item->has_transfer_history ?? false;
@@ -541,50 +536,35 @@
                                     </td>
 
                                     <!-- Kolom Batch Source -->
-                                    <td class="align-middle text-center py-2 px-2">
+                                    <td class="align-middle text-center py-1 px-1">
                                         @if(!empty($batchInfo))
-                                            @if(count($batchInfo) > 1)
-                                                <select class="form-control form-control-sm batch-dropdown small"
-                                                        style="min-width: 150px; font-size: 0.85rem; padding: 2px 5px;"
-                                                        title="Batch Source">
-                                                    @foreach($batchInfo as $batch)
-                                                        <option value="{{ $batch['batch'] }}"
-                                                                data-sloc="{{ $batch['sloc'] }}"
-                                                                data-qty="{{ $batch['qty'] }}">
-                                                            {{ $batch['sloc'] }} | {{ $batch['batch'] }} | {{ \App\Helpers\NumberHelper::formatStockNumber($batch['qty']) }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            @elseif(count($batchInfo) == 1)
-                                                <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1 small">
-                                                    {{ $batchInfo[0]['batch'] ?? 'N/A' }}
-                                                </span>
-                                            @else
-                                                <span class="text-muted small">-</span>
-                                            @endif
+                                            <select class="form-control form-control-sm batch-dropdown small"
+                                                    style="min-width: 150px; font-size: 0.85rem; padding: 2px 5px;"
+                                                    title="Batch Source">
+                                                @foreach($batchInfo as $batch)
+                                                    <option value="{{ $batch['batch'] }}"
+                                                            data-sloc="{{ $batch['sloc'] }}"
+                                                            data-qty="{{ $batch['qty'] }}">
+                                                        {{ $batch['sloc'] }} | {{ $batch['batch'] }} | {{ \App\Helpers\NumberHelper::formatStockNumber($batch['qty']) }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
                                         @else
                                             <span class="text-muted small">-</span>
                                         @endif
                                     </td>
 
                                     <!-- Kolom SO -->
-                                    <td class="align-middle text-center py-2 px-2">
+                                    <td class="align-middle text-center py-1 px-1">
                                         @if(!empty($salesOrders))
                                             @if(is_array($salesOrders))
-                                                @foreach(array_slice($salesOrders, 0, 2) as $so)
-                                                    <span class="badge bg-info bg-opacity-10 text-info px-1 py-0 mb-1 small d-block">
-                                                        {{ $so }}
-                                                    </span>
-                                                @endforeach
-                                                @if(count($salesOrders) > 2)
-                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary px-1 py-0 small">
-                                                        +{{ count($salesOrders) - 2 }}
-                                                    </span>
-                                                @endif
+                                                <div class="d-flex flex-column" style="max-height: 80px; overflow-y: auto;">
+                                                    @foreach($salesOrders as $so)
+                                                        <span class="text-info small">{{ $so }}</span>
+                                                    @endforeach
+                                                </div>
                                             @else
-                                                <span class="badge bg-info bg-opacity-10 text-info px-1 py-0 small">
-                                                    {{ $salesOrders }}
-                                                </span>
+                                                <span class="text-info small">{{ $salesOrders }}</span>
                                             @endif
                                         @else
                                             <span class="text-muted small">-</span>
@@ -592,23 +572,16 @@
                                     </td>
 
                                     <!-- Kolom Source PRO -->
-                                    <td class="align-middle text-center py-2 px-2">
+                                    <td class="align-middle text-center py-1 px-1">
                                         @if(!empty($sources))
                                             @if(is_array($sources))
-                                                @foreach(array_slice($sources, 0, 2) as $source)
-                                                    <span class="badge bg-warning bg-opacity-10 text-warning px-1 py-0 mb-1 small d-block">
-                                                        {{ $source }}
-                                                    </span>
-                                                @endforeach
-                                                @if(count($sources) > 2)
-                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary px-1 py-0 small">
-                                                        +{{ count($sources) - 2 }}
-                                                    </span>
-                                                @endif
+                                                <div class="d-flex flex-column" style="max-height: 80px; overflow-y: auto;">
+                                                    @foreach($sources as $source)
+                                                        <span class="text-warning small">{{ $source }}</span>
+                                                    @endforeach
+                                                </div>
                                             @else
-                                                <span class="badge bg-warning bg-opacity-10 text-warning px-1 py-0 small">
-                                                    {{ $sources }}
-                                                </span>
+                                                <span class="text-warning small">{{ $sources }}</span>
                                             @endif
                                         @else
                                             <span class="text-muted small">-</span>
@@ -620,7 +593,7 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer bg-light border-top py-2 px-3">
+                <div class="card-footer bg-light border-top py-1 px-2">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="form-check mb-0">
                             <input class="form-check-input" type="checkbox" id="selectAllHeader">
@@ -777,10 +750,11 @@ body {
     border-bottom: 2px solid rgba(0,0,0,0.08);
     background: rgba(0,0,0,0.02);
     white-space: nowrap;
+    padding: 8px 4px !important;
 }
 
 .table tbody td {
-    padding: 0.6rem 0.5rem;
+    padding: 6px 4px !important;
     border-bottom: 1px solid rgba(0,0,0,0.05);
     vertical-align: middle;
     color: #333;
@@ -1819,18 +1793,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let batchSloc = '';
 
         if (item.batchInfo && item.batchInfo.length > 0) {
-            // Cari batch dengan stock tersedia
-            const validBatch = item.batchInfo.find(batch => (batch.qty || 0) > 0);
-            if (validBatch) {
-                selectedBatch = validBatch.batch || validBatch.sloc || '';
-                batchQty = validBatch.qty || validBatch.clabs || 0;
-                batchSloc = validBatch.sloc || selectedBatch;
-            } else if (item.batchInfo[0]) {
-                // Jika tidak ada yang punya stock, ambil batch pertama
-                selectedBatch = item.batchInfo[0].batch || item.batchInfo[0].sloc || '';
-                batchQty = item.batchInfo[0].qty || item.batchInfo[0].clabs || 0;
-                batchSloc = item.batchInfo[0].sloc || selectedBatch;
-            }
+            // Ambil batch pertama sebagai default
+            selectedBatch = item.batchInfo[0].batch || item.batchInfo[0].sloc || '';
+            batchQty = item.batchInfo[0].qty || item.batchInfo[0].clabs || 0;
+            batchSloc = item.batchInfo[0].sloc || selectedBatch;
         } else if (item.sloc) {
             const slocs = item.sloc.split(',');
             if (slocs.length > 0) {
@@ -2031,12 +1997,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="align-middle"><div class="text-truncate-2 small" title="${item.materialDesc}">${item.materialDesc.length > 30 ? item.materialDesc.substring(0, 30) + '...' : item.materialDesc}</div></td>
                 <td class="text-center align-middle"><div class="fw-medium small">${formatAngka(item.remainingQty)}</div></td>
                 <td class="text-center align-middle">
-                    <div class="fw-medium small text-primary"
+                    <div class="fw-medium small text-primary selected-batch-qty"
+                         data-index="${index}"
                          title="Available stock for selected batch">
                         ${formatAngka(item.batchQty || 0)}
-                    </div>
-                    <div class="text-muted small">
-                        <i class="fas fa-info-circle me-1"></i>Batch stock limit
                     </div>
                 </td>
                 <td class="text-center align-middle">
@@ -2167,7 +2131,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
-        // Batch select change
+        // Batch select change - PERBAIKAN: Otomatis update Selected Batch Qty
         document.querySelectorAll('.batch-source-select').forEach(function(select) {
             select.addEventListener('change', function() {
                 const index = parseInt(this.dataset.index);
@@ -2189,27 +2153,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 const batchQty = parseFloat(selectedOption.dataset.qty) || 0;
                 const batchSloc = selectedOption.dataset.sloc || selectedValue;
 
+                // Update data transferItems
                 transferItems[index].selectedBatch = selectedValue;
                 transferItems[index].batchQty = batchQty;
                 transferItems[index].batchSloc = batchSloc;
 
-                const batchQtyDisplay = document.querySelector('#batchQtyDisplay-' + index);
+                // Update Selected Batch Qty display
+                const batchQtyDisplay = document.querySelector(`.selected-batch-qty[data-index="${index}"]`);
                 if (batchQtyDisplay) {
                     batchQtyDisplay.textContent = formatAngka(batchQty);
-                    batchQtyDisplay.className = batchQty > 0 ? 'stock-custom-available fw-medium small' : 'stock-custom-unavailable fw-medium small';
                 }
 
-                const qtyInput = document.querySelector('.qty-transfer-input[data-index="' + index + '"]');
+                // Update quantity input dengan batch quantity yang baru
+                const qtyInput = document.querySelector(`.qty-transfer-input[data-index="${index}"]`);
                 if (qtyInput) {
+                    // Jika quantity sebelumnya lebih besar dari batchQty yang baru, adjust ke batchQty
                     const currentQty = parseAngka(qtyInput.value);
                     if (currentQty > batchQty && batchQty > 0) {
                         qtyInput.value = formatAngka(batchQty);
                         transferItems[index].qty = batchQty;
                         transferItems[index].quantity = batchQty;
-                        showToast('Quantity adjusted to available batch', 'info');
-                        updateModalTotals();
+                    } else {
+                        // Jika tidak, tetap gunakan currentQty
+                        qtyInput.value = formatAngka(currentQty);
+                        transferItems[index].qty = currentQty;
+                        transferItems[index].quantity = currentQty;
                     }
                 }
+
+                updateModalTotals();
             });
         });
     }
@@ -2376,25 +2348,35 @@ document.addEventListener('DOMContentLoaded', function() {
             const modal = new bootstrap.Modal(sapCredentialsModal);
             modal.show();
 
-            // Setup SAP form submission
-            setupSapFormSubmission();
+            // Setup SAP form submission - PERBAIKAN: Gunakan event delegation
+            setTimeout(() => {
+                setupSapFormSubmission();
+            }, 300);
         } else {
             showToast('SAP Credentials modal not found', 'error');
         }
     }
 
-    // Setup SAP form submission
+    // Setup SAP form submission - PERBAIKAN: Gunakan event delegation
     function setupSapFormSubmission() {
         const sapForm = document.getElementById('sapCredentialsForm');
-        if (!sapForm) return;
+        if (!sapForm) {
+            console.error('SAP Credentials form not found');
+            return;
+        }
 
-        // Hapus event listener lama jika ada
+        console.log('Setting up SAP form submission...');
+
+        // Hapus semua event listener sebelumnya
         const newForm = sapForm.cloneNode(true);
         sapForm.parentNode.replaceChild(newForm, sapForm);
 
-        newForm.addEventListener('submit', function(e) {
+        // Pasang event listener pada form yang baru
+        document.getElementById('sapCredentialsForm').addEventListener('submit', function(e) {
             e.preventDefault();
             e.stopPropagation();
+
+            console.log('SAP form submitted');
 
             // Cek apakah sedang proses transfer
             if (isProcessingTransfer) {
@@ -2604,6 +2586,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (resetStockForm) {
         resetStockForm.addEventListener('submit', function(e) {
             e.preventDefault();
+            if (!confirm('Are you sure you want to reset stock data?')) {
+                return;
+            }
+
             showLoading();
 
             const formData = new FormData(this);

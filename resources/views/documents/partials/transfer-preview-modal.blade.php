@@ -24,7 +24,7 @@
                     <table class="table table-borderless mb-0" id="transferPreviewTable">
                         <thead class="table-light sticky-top">
                             <tr>
-                                <th class="text-center" style="width: 40px;">#</th>
+                                <th class="text-center" style="width: 40px;">No</th>
                                 <th style="width: 90px;">Material</th>
                                 <th style="min-width: 150px;">Description</th>
                                 <th class="text-center" style="width: 70px;">Remaining</th>
