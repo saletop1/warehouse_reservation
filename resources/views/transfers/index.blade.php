@@ -1,27 +1,27 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container-fluid px-2 px-md-4">
+<div class="container-fluid px-3">
     {{-- Header --}}
     <div class="row mb-3">
         <div class="col-12">
             <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3">
                 <div class="mb-2 mb-md-0">
-                    <h2 class="fw-bold text-dark fs-4 mb-1">
-                        <i class="fas fa-exchange-alt me-2 text-primary"></i>Transfer Management
+                    <h2 class="fw-bold text-dark mb-1">
+                        <i class="fas fa-exchange-alt me-2 text-primary"></i>Transfer List
                     </h2>
-                    <p class="text-muted small mb-0">
-                        Total: {{ $transfers->total() }} transfers • Last sync: {{ now()->format('H:i') }}
+                    <p class="text-muted mb-0">
+                        Total: {{ $transfers->count() }} transfers • Last sync: {{ now()->format('H:i') }}
                     </p>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
-                    <a href="{{ route('dashboard') }}" class="btn btn-sm btn-outline-secondary">
+                    <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-1"></i>Back
                     </a>
-                    <button class="btn btn-sm btn-outline-primary" onclick="syncTransfers()">
+                    <button class="btn btn-outline-primary" onclick="syncTransfers()">
                         <i class="fas fa-sync-alt me-1"></i>Sync
                     </button>
-                    <button class="btn btn-sm btn-primary" onclick="exportTransfers()">
+                    <button class="btn btn-primary" onclick="exportTransfers()">
                         <i class="fas fa-download me-1"></i>Export
                     </button>
                 </div>
@@ -29,90 +29,29 @@
         </div>
     </div>
 
-    {{-- Stats Summary --}}
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm rounded-3 mb-3">
-                <div class="card-body p-3">
-                    <div class="row g-2 text-center">
-                        @php
-                            $stats = [
-                                'total' => $transfers->total(),
-                                'completed' => $transfers->where('status', 'COMPLETED')->count(),
-                                'submitted' => $transfers->where('status', 'SUBMITTED')->count(),
-                                'failed' => $transfers->where('status', 'FAILED')->count(),
-                                'pending' => $transfers->whereIn('status', ['PENDING', 'PROCESSING'])->count()
-                            ];
-                        @endphp
-
-                        <div class="col-4 col-md-2">
-                            <div class="stat-item">
-                                <div class="stat-value fw-bold text-dark">{{ $stats['total'] }}</div>
-                                <div class="stat-label small text-muted">Total</div>
-                            </div>
-                        </div>
-                        <div class="col-4 col-md-2">
-                            <div class="stat-item border-start">
-                                <div class="stat-value fw-bold text-success">{{ $stats['completed'] }}</div>
-                                <div class="stat-label small text-muted">Completed</div>
-                            </div>
-                        </div>
-                        <div class="col-4 col-md-2">
-                            <div class="stat-item border-start">
-                                <div class="stat-value fw-bold text-warning">{{ $stats['submitted'] }}</div>
-                                <div class="stat-label small text-muted">Submitted</div>
-                            </div>
-                        </div>
-                        <div class="col-4 col-md-2">
-                            <div class="stat-item border-start">
-                                <div class="stat-value fw-bold text-danger">{{ $stats['failed'] }}</div>
-                                <div class="stat-label small text-muted">Failed</div>
-                            </div>
-                        </div>
-                        <div class="col-4 col-md-2">
-                            <div class="stat-item border-start">
-                                <div class="stat-value fw-bold text-info">{{ $stats['pending'] }}</div>
-                                <div class="stat-label small text-muted">Pending</div>
-                            </div>
-                        </div>
-                        <div class="col-4 col-md-2">
-                            <div class="stat-item border-start">
-                                <div class="stat-value fw-bold text-primary">
-                                    {{ $transfers->sum('total_qty') > 1000 ? round($transfers->sum('total_qty')/1000, 1).'K' : $transfers->sum('total_qty') }}
-                                </div>
-                                <div class="stat-label small text-muted">Total Qty</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     {{-- Filters --}}
     <div class="card border-0 shadow-sm rounded-3 mb-3">
-        <div class="card-header bg-transparent border-bottom py-3">
-            <div class="d-flex justify-content-between align-items-center">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="mb-0 fw-semibold">
                     <i class="fas fa-filter me-2 text-primary"></i>Filters
                 </h6>
-                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
+                <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
                     <i class="fas fa-sliders-h me-1"></i>Toggle
                 </button>
             </div>
-        </div>
-        <div class="collapse show" id="filterCollapse">
-            <div class="card-body p-3">
+
+            <div class="collapse show" id="filterCollapse">
                 <form method="GET" action="{{ route('transfers.index') }}" id="filterForm">
-                    <div class="row g-2">
+                    <div class="row g-3">
                         <div class="col-12 col-md-3">
-                            <label class="form-label small text-muted mb-1">Transfer/Doc No</label>
-                            <input type="text" name="search" class="form-control form-control-sm"
+                            <label class="form-label text-muted mb-1">Transfer/Doc No</label>
+                            <input type="text" name="search" class="form-control"
                                    value="{{ request('search') }}" placeholder="TRMG... or doc no...">
                         </div>
                         <div class="col-12 col-md-2">
-                            <label class="form-label small text-muted mb-1">Status</label>
-                            <select name="status" class="form-select form-select-sm">
+                            <label class="form-label text-muted mb-1">Status</label>
+                            <select name="status" class="form-select">
                                 <option value="">All Status</option>
                                 <option value="COMPLETED" {{ request('status') == 'COMPLETED' ? 'selected' : '' }}>Completed</option>
                                 <option value="SUBMITTED" {{ request('status') == 'SUBMITTED' ? 'selected' : '' }}>Submitted</option>
@@ -122,39 +61,30 @@
                             </select>
                         </div>
                         <div class="col-12 col-md-2">
-                            <label class="form-label small text-muted mb-1">Plant Supply</label>
-                            <input type="text" name="plant_supply" class="form-control form-control-sm"
+                            <label class="form-label text-muted mb-1">Plant Supply</label>
+                            <input type="text" name="plant_supply" class="form-control"
                                    value="{{ request('plant_supply') }}" placeholder="e.g., 3000">
                         </div>
                         <div class="col-12 col-md-2">
-                            <label class="form-label small text-muted mb-1">Plant Dest</label>
-                            <input type="text" name="plant_destination" class="form-control form-control-sm"
+                            <label class="form-label text-muted mb-1">Plant Dest</label>
+                            <input type="text" name="plant_destination" class="form-control"
                                    value="{{ request('plant_destination') }}" placeholder="e.g., 3100">
                         </div>
                         <div class="col-12 col-md-3">
-                            <label class="form-label small text-muted mb-1">Date Range</label>
-                            <div class="input-group input-group-sm">
+                            <label class="form-label text-muted mb-1">Date Range</label>
+                            <div class="input-group">
                                 <input type="date" name="date_from" class="form-control" value="{{ request('date_from') }}">
                                 <span class="input-group-text">to</span>
                                 <input type="date" name="date_to" class="form-control" value="{{ request('date_to') }}">
                             </div>
                         </div>
-                        <div class="col-12 d-flex gap-2 mt-2">
-                            <button type="submit" class="btn btn-sm btn-primary px-3">
+                        <div class="col-12 d-flex gap-3 mt-2 justify-content-end">
+                            <button type="submit" class="btn btn-primary px-4">
                                 <i class="fas fa-search me-1"></i>Search
                             </button>
-                            <a href="{{ route('transfers.index') }}" class="btn btn-sm btn-outline-secondary px-3">
+                            <a href="{{ route('transfers.index') }}" class="btn btn-outline-secondary px-4">
                                 <i class="fas fa-redo me-1"></i>Reset
                             </a>
-                            <div class="ms-auto d-flex align-items-center">
-                                <label class="form-label small text-muted me-2 mb-0">Show:</label>
-                                <select name="per_page" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
-                                    <option value="10" {{ request('per_page', 20) == 10 ? 'selected' : '' }}>10</option>
-                                    <option value="20" {{ request('per_page', 20) == 20 ? 'selected' : '' }}>20</option>
-                                    <option value="50" {{ request('per_page', 20) == 50 ? 'selected' : '' }}>50</option>
-                                    <option value="100" {{ request('per_page', 20) == 100 ? 'selected' : '' }}>100</option>
-                                </select>
-                            </div>
                         </div>
                     </div>
                 </form>
@@ -162,210 +92,206 @@
         </div>
     </div>
 
-    {{-- Transfers Table --}}
+    {{-- Transfers Table with Sticky Header --}}
     <div class="card border-0 shadow-sm rounded-3">
         <div class="card-body p-0">
-            <div class="table-responsive">
+            <div class="table-container" style="max-height: 700px; overflow-y: auto;">
                 <table class="table table-hover mb-0">
-                    <thead class="table-light">
+                    <thead class="table-light sticky-top" style="top: 0; z-index: 10;">
                         <tr>
-                            <th class="ps-3 py-2 small fw-semibold" style="width: 15%">
-                                <i class="fas fa-hashtag me-1 text-muted"></i>Transfer No
+                            <th class="ps-3 py-3 fw-semibold" style="width: 15%; min-width: 140px">
+                                <i class="fas fa-hashtag me-2 text-muted"></i>Transfer No
                             </th>
-                            <th class="py-2 small fw-semibold" style="width: 12%">Document</th>
-                            <th class="py-2 small fw-semibold" style="width: 10%">Status</th>
-                            <th class="py-2 small fw-semibold" style="width: 18%">Plants</th>
-                            <th class="py-2 small fw-semibold text-center" style="width: 8%">Items</th>
-                            <th class="py-2 small fw-semibold text-center" style="width: 10%">Quantity</th>
-                            <th class="py-2 small fw-semibold" style="width: 12%">Created</th>
-                            <th class="py-2 small fw-semibold text-center" style="width: 15%">Actions</th>
+                            <th class="py-3 fw-semibold" style="width: 12%; min-width: 110px">Document</th>
+                            <th class="py-3 fw-semibold" style="width: 10%; min-width: 100px">Status</th>
+                            <th class="py-3 fw-semibold" style="width: 18%; min-width: 140px">Plants</th>
+                            <th class="py-3 fw-semibold text-center" style="width: 8%; min-width: 80px">Items</th>
+                            <th class="py-3 fw-semibold text-center" style="width: 10%; min-width: 90px">Quantity</th>
+                            <th class="py-3 fw-semibold" style="width: 12%; min-width: 110px">Created</th>
+                            <th class="py-3 fw-semibold text-center" style="width: 15%; min-width: 120px">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-    @php
-        // Gunakan array untuk melacak transfer yang sudah ditampilkan
-        $displayedTransfers = [];
-    @endphp
+                        @php
+                            $displayedTransfers = [];
+                        @endphp
 
-    @forelse($transfers as $transfer)
-        @php
-            // Skip jika transfer sudah ditampilkan atau data tidak lengkap
-            $transferKey = $transfer->transfer_no . '_' . $transfer->plant_destination;
+                        @forelse($transfers as $transfer)
+                            @php
+                                $transferKey = $transfer->transfer_no . '_' . $transfer->plant_destination;
 
-            if (in_array($transferKey, $displayedTransfers) ||
-                empty($transfer->plant_destination) ||
-                $transfer->total_items == 0 ||
-                $transfer->total_qty == 0) {
-                continue;
-            }
+                                if (in_array($transferKey, $displayedTransfers) ||
+                                    empty($transfer->plant_destination) ||
+                                    $transfer->total_items == 0 ||
+                                    $transfer->total_qty == 0) {
+                                    continue;
+                                }
 
-            $displayedTransfers[] = $transferKey;
-        @endphp
+                                $displayedTransfers[] = $transferKey;
+                            @endphp
 
-        <tr class="align-middle">
-            <td class="ps-3">
-                <div class="d-flex align-items-center">
-                    <div class="me-2">
-                        @if($transfer->status == 'COMPLETED')
-                        <i class="fas fa-check-circle text-success fs-12"></i>
-                        @elseif($transfer->status == 'SUBMITTED')
-                        <i class="fas fa-clock text-warning fs-12"></i>
-                        @elseif($transfer->status == 'FAILED')
-                        <i class="fas fa-times-circle text-danger fs-12"></i>
-                        @else
-                        <i class="fas fa-question-circle text-secondary fs-12"></i>
-                        @endif
-                    </div>
-                    <div>
-                        <div class="fw-semibold">{{ $transfer->transfer_no ?? 'N/A' }}</div>
-                        <small class="text-muted d-block">
-                            {{ \Carbon\Carbon::parse($transfer->created_at)->format('H:i') }}
-                        </small>
-                    </div>
-                </div>
-            </td>
-            <td>
-                @if($transfer->document)
-                <a href="{{ route('documents.show', $transfer->document->id) }}"
-                   class="text-decoration-none text-dark fw-medium small d-block">
-                    {{ $transfer->document_no }}
-                </a>
-                <small class="text-muted d-block">
-                    Plant: {{ $transfer->document->plant ?? 'N/A' }}
-                </small>
-                @else
-                <span class="text-muted small">{{ $transfer->document_no }}</span>
-                @endif
-            </td>
-            <td>
-                @php
-                    $statusConfig = [
-                        'COMPLETED' => ['class' => 'success', 'icon' => 'check-circle', 'label' => 'Done'],
-                        'SUBMITTED' => ['class' => 'warning', 'icon' => 'clock', 'label' => 'Sent'],
-                        'FAILED' => ['class' => 'danger', 'icon' => 'times-circle', 'label' => 'Failed'],
-                        'PENDING' => ['class' => 'secondary', 'icon' => 'hourglass-half', 'label' => 'Pending'],
-                        'PROCESSING' => ['class' => 'info', 'icon' => 'sync-alt', 'label' => 'Processing'],
-                    ];
-                    $config = $statusConfig[$transfer->status] ?? ['class' => 'secondary', 'icon' => 'question-circle', 'label' => $transfer->status];
-                @endphp
-                <span class="badge bg-{{ $config['class'] }}-subtle text-{{ $config['class'] }} border border-{{ $config['class'] }}-subtle px-2 py-1">
-                    <i class="fas fa-{{ $config['icon'] }} me-1 fs-12"></i>
-                    {{ $config['label'] }}
-                </span>
-            </td>
-            <td>
-                <div class="d-flex align-items-center">
-                    <div class="text-center me-2">
-                        <div class="badge bg-info-subtle text-info border px-2 py-1">
-                            {{ $transfer->plant_supply ?? 'N/A' }}
-                        </div>
-                        <div class="text-muted extra-small mt-1">Supply</div>
-                    </div>
-                    @if(!empty($transfer->plant_destination) && $transfer->plant_destination != $transfer->plant_supply)
-                    <div class="me-2">
-                        <i class="fas fa-arrow-right text-muted"></i>
-                    </div>
-                    <div class="text-center">
-                        <div class="badge bg-primary-subtle text-primary border px-2 py-1">
-                            {{ $transfer->plant_destination ?? 'N/A' }}
-                        </div>
-                        <div class="text-muted extra-small mt-1">Dest</div>
-                    </div>
-                    @endif
-                </div>
-            </td>
-            <td class="text-center">
-                <span class="badge bg-light text-dark border px-2 py-1">
-                    {{ $transfer->total_items ?? 0 }}
-                </span>
-            </td>
-            <td class="text-center">
-                <div class="fw-bold">{{ number_format($transfer->total_qty ?? 0) }}</div>
-                <small class="text-muted">{{ $transfer->items->first()->unit ?? 'PC' }}</small>
-            </td>
-            <td>
-                <div class="small">
-                    <div>{{ \Carbon\Carbon::parse($transfer->created_at)->format('d/m/y') }}</div>
-                    <div class="text-muted">{{ $transfer->created_by_name ?? 'System' }}</div>
-                </div>
-            </td>
-            <td class="text-center">
-                <div class="btn-group btn-group-sm" role="group">
-                    <button class="btn btn-outline-primary view-transfer"
-                            data-id="{{ $transfer->id }}"
-                            title="View Details">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    @if($transfer->document_id)
-                    <a href="{{ route('documents.show', $transfer->document_id) }}"
-                       class="btn btn-outline-info"
-                       title="View Document">
-                        <i class="fas fa-file-alt"></i>
-                    </a>
-                    @endif
-                    <button class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split"
-                            type="button"
-                            data-bs-toggle="dropdown">
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow">
-                        <li>
-                            <button class="dropdown-item" onclick="printTransfer({{ $transfer->id }})">
-                                <i class="fas fa-print me-2 text-muted"></i>Print
-                            </button>
-                        </li>
-                        <li>
-                            <button class="dropdown-item" onclick="copyTransferNo('{{ $transfer->transfer_no }}')">
-                                <i class="fas fa-copy me-2 text-muted"></i>Copy No
-                            </button>
-                        </li>
-                        @if($transfer->status == 'FAILED')
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <button class="dropdown-item text-danger" onclick="retryTransfer({{ $transfer->id }})">
-                                <i class="fas fa-redo me-2"></i>Retry
-                            </button>
-                        </li>
-                        @endif
-                        @if(empty($transfer->plant_destination))
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <button class="dropdown-item text-warning" onclick="fixTransferData({{ $transfer->id }})">
-                                <i class="fas fa-wrench me-2"></i>Fix Data
-                            </button>
-                        </li>
-                        @endif
-                    </ul>
-                </div>
-            </td>
-        </tr>
-    @empty
-        <tr>
-            <td colspan="8" class="text-center py-5">
-                <div class="empty-state py-4">
-                    <i class="fas fa-exchange-alt fa-3x text-muted opacity-25 mb-3"></i>
-                    <h5 class="text-muted mb-2">No transfers found</h5>
-                    <p class="text-muted small mb-3">No valid transfer records available</p>
-                </div>
-            </td>
-        </tr>
-    @endforelse
-</tbody>
+                            <tr class="align-middle">
+                                <td class="ps-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-2">
+                                            @if($transfer->status == 'COMPLETED')
+                                            <i class="fas fa-check-circle text-success"></i>
+                                            @elseif($transfer->status == 'SUBMITTED')
+                                            <i class="fas fa-clock text-warning"></i>
+                                            @elseif($transfer->status == 'FAILED')
+                                            <i class="fas fa-times-circle text-danger"></i>
+                                            @else
+                                            <i class="fas fa-question-circle text-secondary"></i>
+                                            @endif
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold">{{ $transfer->transfer_no ?? 'N/A' }}</div>
+                                            <div class="text-muted">
+                                                {{ \Carbon\Carbon::parse($transfer->created_at)->format('H:i') }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if($transfer->document)
+                                    <a href="{{ route('documents.show', $transfer->document->id) }}"
+                                       class="text-decoration-none text-dark fw-medium d-block">
+                                        {{ $transfer->document_no }}
+                                    </a>
+                                    <div class="text-muted">
+                                        Plant: {{ $transfer->document->plant ?? 'N/A' }}
+                                    </div>
+                                    @else
+                                    <div class="text-muted">{{ $transfer->document_no }}</div>
+                                    @endif
+                                </td>
+                                <td>
+                                    @php
+                                        $statusConfig = [
+                                            'COMPLETED' => ['class' => 'success', 'icon' => 'check-circle', 'label' => 'Done'],
+                                            'SUBMITTED' => ['class' => 'warning', 'icon' => 'clock', 'label' => 'Sent'],
+                                            'FAILED' => ['class' => 'danger', 'icon' => 'times-circle', 'label' => 'Failed'],
+                                            'PENDING' => ['class' => 'secondary', 'icon' => 'hourglass-half', 'label' => 'Pending'],
+                                            'PROCESSING' => ['class' => 'info', 'icon' => 'sync-alt', 'label' => 'Processing'],
+                                        ];
+                                        $config = $statusConfig[$transfer->status] ?? ['class' => 'secondary', 'icon' => 'question-circle', 'label' => $transfer->status];
+                                    @endphp
+                                    <span class="badge bg-{{ $config['class'] }}-subtle text-{{ $config['class'] }} border border-{{ $config['class'] }}-subtle px-3 py-1">
+                                        <i class="fas fa-{{ $config['icon'] }} me-1"></i>
+                                        {{ $config['label'] }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="text-center me-2">
+                                            <div class="badge bg-info-subtle text-info border px-3 py-1">
+                                                {{ $transfer->plant_supply ?? 'N/A' }}
+                                            </div>
+                                            <div class="text-muted mt-1">Supply</div>
+                                        </div>
+                                        @if(!empty($transfer->plant_destination) && $transfer->plant_destination != $transfer->plant_supply)
+                                        <div class="me-2">
+                                            <i class="fas fa-arrow-right text-muted"></i>
+                                        </div>
+                                        <div class="text-center">
+                                            <div class="badge bg-primary-subtle text-primary border px-3 py-1">
+                                                {{ $transfer->plant_destination ?? 'N/A' }}
+                                            </div>
+                                            <div class="text-muted mt-1">Dest</div>
+                                        </div>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-light text-dark border px-3 py-1">
+                                        {{ $transfer->total_items ?? 0 }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <div class="fw-bold">{{ number_format($transfer->total_qty ?? 0) }}</div>
+                                    <div class="text-muted">{{ $transfer->items->first()->unit ?? 'PC' }}</div>
+                                </td>
+                                <td>
+                                    <div>
+                                        <div>{{ \Carbon\Carbon::parse($transfer->created_at)->format('d/m/y') }}</div>
+                                        <div class="text-muted">{{ $transfer->created_by_name ?? 'System' }}</div>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-outline-primary view-transfer"
+                                                data-id="{{ $transfer->id }}"
+                                                title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        @if($transfer->document_id)
+                                        <a href="{{ route('documents.show', $transfer->document_id) }}"
+                                           class="btn btn-outline-info"
+                                           title="View Document">
+                                            <i class="fas fa-file-alt"></i>
+                                        </a>
+                                        @endif
+                                        <button class="btn btn-outline-secondary dropdown-toggle"
+                                                type="button"
+                                                data-bs-toggle="dropdown">
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow">
+                                            <li>
+                                                <button class="dropdown-item" onclick="printTransfer({{ $transfer->id }})">
+                                                    <i class="fas fa-print me-2 text-muted"></i>Print
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <button class="dropdown-item" onclick="copyTransferNo('{{ $transfer->transfer_no }}')">
+                                                    <i class="fas fa-copy me-2 text-muted"></i>Copy No
+                                                </button>
+                                            </li>
+                                            @if($transfer->status == 'FAILED')
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <button class="dropdown-item text-danger" onclick="retryTransfer({{ $transfer->id }})">
+                                                    <i class="fas fa-redo me-2"></i>Retry
+                                                </button>
+                                            </li>
+                                            @endif
+                                            @if(empty($transfer->plant_destination))
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <button class="dropdown-item text-warning" onclick="fixTransferData({{ $transfer->id }})">
+                                                    <i class="fas fa-wrench me-2"></i>Fix Data
+                                                </button>
+                                            </li>
+                                            @endif
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="8" class="text-center py-5">
+                                    <div class="py-4">
+                                        <i class="fas fa-exchange-alt fa-3x text-muted opacity-25 mb-3"></i>
+                                        <h5 class="text-muted mb-2">No transfers found</h5>
+                                        <p class="text-muted mb-3">No valid transfer records available</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
                 </table>
             </div>
         </div>
 
-        {{-- Pagination --}}
-        @if($transfers->hasPages())
-        <div class="card-footer bg-transparent border-top py-3">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
-                <div class="text-muted small mb-2 mb-md-0">
-                    Showing {{ $transfers->firstItem() ?? 0 }}-{{ $transfers->lastItem() ?? 0 }} of {{ $transfers->total() }}
+        {{-- Row Count Summary --}}
+        @if($transfers->count() > 0)
+        <div class="card-footer bg-transparent border-top py-3 px-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="text-muted">
+                    Showing {{ $displayedTransfers ? count($displayedTransfers) : 0 }} transfers
                 </div>
-                <nav aria-label="Page navigation">
-                    <ul class="pagination pagination-sm mb-0">
-                        {{ $transfers->withQueryString()->links() }}
-                    </ul>
-                </nav>
+                <div class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>Scroll to see more rows
+                </div>
             </div>
         </div>
         @endif
@@ -376,13 +302,13 @@
 <div class="modal fade" id="transferDetailModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header border-bottom bg-light">
+            <div class="modal-header border-bottom bg-light py-3">
                 <div class="d-flex align-items-center w-100">
                     <div>
-                        <h6 class="modal-title fw-semibold mb-0">
+                        <h5 class="modal-title fw-semibold mb-0">
                             <i class="fas fa-exchange-alt me-2 text-primary"></i>Transfer Details
-                        </h6>
-                        <small class="text-muted" id="transferNoLabel">Loading...</small>
+                        </h5>
+                        <div class="text-muted" id="transferNoLabel">Loading...</div>
                     </div>
                     <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
                 </div>
@@ -398,38 +324,38 @@
 <div class="modal fade" id="exportModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
-            <div class="modal-header border-bottom">
-                <h6 class="modal-title fw-semibold">
+            <div class="modal-header border-bottom py-3">
+                <h5 class="modal-title fw-semibold">
                     <i class="fas fa-download me-2 text-primary"></i>Export Transfers
-                </h6>
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-3">
                 <div class="mb-3">
-                    <label class="form-label small">Export Format</label>
+                    <label class="form-label">Export Format</label>
                     <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-primary flex-fill" onclick="exportToExcel()">
+                        <button class="btn btn-outline-primary flex-fill" onclick="exportToExcel()">
                             <i class="fas fa-file-excel me-1"></i>Excel
                         </button>
-                        <button class="btn btn-sm btn-outline-success flex-fill" onclick="exportToCSV()">
+                        <button class="btn btn-outline-success flex-fill" onclick="exportToCSV()">
                             <i class="fas fa-file-csv me-1"></i>CSV
                         </button>
-                        <button class="btn btn-sm btn-outline-danger flex-fill" onclick="exportToPDF()">
+                        <button class="btn btn-outline-danger flex-fill" onclick="exportToPDF()">
                             <i class="fas fa-file-pdf me-1"></i>PDF
                         </button>
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small">Date Range</label>
-                    <div class="input-group input-group-sm">
+                    <label class="form-label">Date Range</label>
+                    <div class="input-group">
                         <input type="date" id="exportDateFrom" class="form-control" value="{{ now()->subDays(7)->format('Y-m-d') }}">
                         <span class="input-group-text">to</span>
                         <input type="date" id="exportDateTo" class="form-control" value="{{ now()->format('Y-m-d') }}">
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small">Status Filter</label>
-                    <select id="exportStatus" class="form-select form-select-sm">
+                    <label class="form-label">Status Filter</label>
+                    <select id="exportStatus" class="form-select">
                         <option value="">All Status</option>
                         <option value="COMPLETED">Completed</option>
                         <option value="SUBMITTED">Submitted</option>
@@ -437,9 +363,9 @@
                     </select>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-sm btn-primary" onclick="confirmExport()">
+            <div class="modal-footer py-3">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="confirmExport()">
                     <i class="fas fa-download me-1"></i>Export
                 </button>
             </div>
@@ -448,130 +374,132 @@
 </div>
 
 <style>
-/* Responsive Design */
+/* Improved Font Sizes */
+body {
+    font-size: 14px;
+}
+
+.table {
+    font-size: 13.5px;
+}
+
+.table th {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.badge {
+    font-size: 12.5px;
+}
+
+.small, .text-muted {
+    font-size: 12.5px;
+}
+
+.btn {
+    font-size: 13px;
+}
+
+.form-control, .form-select {
+    font-size: 13.5px;
+}
+
+/* Table Container */
+.table-container {
+    max-height: 700px;
+    overflow-y: auto;
+    position: relative;
+}
+
+.table-container thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa;
+    z-index: 10;
+    box-shadow: 0 1px 0 #dee2e6;
+}
+
+/* Table Improvements */
+.table > :not(caption) > * > * {
+    padding: 0.75rem 0.5rem;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Card Padding */
+.card-body {
+    padding: 1rem;
+}
+
+/* Button Groups */
+.btn-group .btn {
+    padding: 0.375rem 0.75rem;
+}
+
+/* Badge Padding */
+.badge {
+    padding: 0.35em 0.65em;
+}
+
+/* Modal */
+.modal-body {
+    font-size: 14px;
+}
+
+.modal-content .table {
+    font-size: 13px;
+}
+
+/* Custom Scrollbar */
+.table-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Responsive Adjustments */
 @media (max-width: 768px) {
-    .table-responsive {
-        font-size: 0.85rem;
+    body {
+        font-size: 13.5px;
     }
 
-    .btn-group-sm .btn {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.75rem;
+    .table {
+        font-size: 13px;
     }
 
-    .stat-item {
-        padding: 0.5rem;
-    }
-
-    .modal-dialog {
-        margin: 0.5rem;
+    .table-container {
+        max-height: 550px;
     }
 }
 
 @media (max-width: 576px) {
     .container-fluid {
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
     }
 
-    .card-body.p-0 .table td,
-    .card-body.p-0 .table th {
-        padding: 0.5rem;
+    .table-container {
+        max-height: 500px;
     }
 
-    .btn-group .dropdown-toggle::after {
-        margin-left: 0;
+    .table > :not(caption) > * > * {
+        padding: 0.5rem 0.25rem;
     }
-
-    .d-none-mobile {
-        display: none !important;
-    }
-}
-
-/* Custom Styles */
-.stat-item {
-    padding: 0.75rem;
-    border-right: 1px solid #dee2e6;
-}
-
-.stat-item:last-child {
-    border-right: none;
-}
-
-.stat-value {
-    font-size: 1.25rem;
-    line-height: 1.2;
-}
-
-.stat-label {
-    font-size: 0.75rem;
-}
-
-.extra-small {
-    font-size: 0.7rem;
-}
-
-.fs-12 {
-    font-size: 0.75rem;
-}
-
-/* Table improvements */
-.table > :not(caption) > * > * {
-    padding: 0.75rem 0.5rem;
-}
-
-.table-hover tbody tr:hover {
-    background-color: rgba(0,0,0,0.02);
-}
-
-/* Badge styles */
-.badge {
-    font-weight: 500;
-    letter-spacing: 0.3px;
-}
-
-/* Modal custom */
-.modal-header {
-    padding: 1rem 1.5rem;
-}
-
-.modal-body {
-    max-height: 70vh;
-    overflow-y: auto;
-}
-
-/* Loading animation */
-.loading-spinner {
-    display: inline-block;
-    width: 1rem;
-    height: 1rem;
-    border: 2px solid #f3f3f3;
-    border-top: 2px solid #3498db;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Custom scrollbar */
-.modal-body::-webkit-scrollbar {
-    width: 6px;
-}
-
-.modal-body::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-.modal-body::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-}
-
-.modal-body::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
 }
 </style>
 
@@ -593,7 +521,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show loading state
         contentDiv.innerHTML = `
             <div class="text-center py-5">
-                <div class="loading-spinner mb-3"></div>
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
                 <p class="text-muted">Loading transfer details...</p>
             </div>
         `;
@@ -610,16 +540,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const transfer = data.data;
                     document.getElementById('transferNoLabel').textContent = transfer.transfer_no || 'N/A';
                     contentDiv.innerHTML = generateTransferDetailContent(transfer);
-
-                    // Initialize tooltips
-                    const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-                    tooltips.forEach(tooltip => new bootstrap.Tooltip(tooltip));
                 } else {
                     contentDiv.innerHTML = `
                         <div class="text-center py-5">
                             <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>
-                            <h6 class="text-danger">Failed to load transfer details</h6>
-                            <p class="text-muted small">${data.message || 'Unknown error'}</p>
+                            <h5 class="text-danger">Failed to load transfer details</h5>
+                            <p class="text-muted">${data.message || 'Unknown error'}</p>
                         </div>
                     `;
                 }
@@ -629,9 +555,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 contentDiv.innerHTML = `
                     <div class="text-center py-5">
                         <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>
-                        <h6 class="text-danger">Error loading transfer details</h6>
-                        <p class="text-muted small">${error.message}</p>
-                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="loadTransferDetails(${transferId})">
+                        <h5 class="text-danger">Error loading transfer details</h5>
+                        <p class="text-muted">${error.message}</p>
+                        <button class="btn btn-outline-primary mt-3" onclick="loadTransferDetails(${transferId})">
                             <i class="fas fa-redo me-1"></i>Retry
                         </button>
                     </div>
@@ -647,8 +573,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 month: '2-digit',
                 year: 'numeric',
                 hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
+                minute: '2-digit'
             }) : 'N/A';
 
         const completedDate = transfer.completed_at ?
@@ -667,12 +592,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="row">
                         <div class="col-md-6">
                             <div class="d-flex align-items-center mb-3">
-                                <div class="bg-primary bg-opacity-10 p-2 rounded-2 me-3">
+                                <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3">
                                     <i class="fas fa-exchange-alt fa-lg text-primary"></i>
                                 </div>
                                 <div>
-                                    <h5 class="fw-bold mb-0">${transfer.transfer_no || 'N/A'}</h5>
-                                    <div class="text-muted small">
+                                    <h4 class="fw-bold mb-0">${transfer.transfer_no || 'N/A'}</h4>
+                                    <div class="text-muted">
                                         <i class="fas fa-file-alt me-1"></i>Doc: ${transfer.document_no || 'N/A'}
                                     </div>
                                 </div>
@@ -680,12 +605,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="col-md-6 text-md-end">
                             <div class="d-inline-block">
-                                <span class="badge ${getStatusClass(transfer.status)} fs-12 px-3 py-2">
+                                <span class="badge ${getStatusClass(transfer.status)} fs-6 px-4 py-2">
                                     <i class="fas fa-${getStatusIcon(transfer.status)} me-1"></i>
                                     ${transfer.status || 'UNKNOWN'}
                                 </span>
                             </div>
-                            <div class="mt-2 small text-muted">
+                            <div class="mt-2 text-muted">
                                 Created: ${formattedDate}
                             </div>
                         </div>
@@ -698,24 +623,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="row mb-4">
                         <div class="col-md-6 mb-3 mb-md-0">
                             <div class="card border h-100">
-                                <div class="card-header bg-transparent py-2">
+                                <div class="card-header bg-transparent py-3">
                                     <h6 class="mb-0 fw-semibold">
                                         <i class="fas fa-info-circle me-2 text-primary"></i>Transfer Information
                                     </h6>
                                 </div>
                                 <div class="card-body">
-                                    <div class="row small">
-                                        <div class="col-6 mb-2">
+                                    <div class="row">
+                                        <div class="col-6 mb-3">
                                             <div class="text-muted">Move Type</div>
-                                            <div class="fw-medium">${transfer.move_type || '311'}</div>
+                                            <div class="fw-semibold">${transfer.move_type || '311'}</div>
                                         </div>
-                                        <div class="col-6 mb-2">
+                                        <div class="col-6 mb-3">
                                             <div class="text-muted">Total Items</div>
-                                            <div class="fw-medium">${transfer.total_items || 0}</div>
+                                            <div class="fw-semibold">${transfer.total_items || 0}</div>
                                         </div>
                                         <div class="col-6">
                                             <div class="text-muted">Total Quantity</div>
-                                            <div class="fw-bold">${formatNumber(transfer.total_qty || 0)}</div>
+                                            <div class="fw-bold fs-5">${formatNumber(transfer.total_qty || 0)}</div>
                                         </div>
                                         <div class="col-6">
                                             <div class="text-muted">Completion</div>
@@ -732,36 +657,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         <div class="col-md-6">
                             <div class="card border h-100">
-                                <div class="card-header bg-transparent py-2">
+                                <div class="card-header bg-transparent py-3">
                                     <h6 class="mb-0 fw-semibold">
                                         <i class="fas fa-building me-2 text-primary"></i>Plant Information
                                     </h6>
                                 </div>
                                 <div class="card-body">
-                                    <div class="row small">
+                                    <div class="row">
                                         <div class="col-6 mb-3">
-                                            <div class="text-muted mb-1">Supply Plant</div>
+                                            <div class="text-muted mb-2">Supply Plant</div>
                                             <div class="d-flex align-items-center">
-                                                <div class="badge bg-info-subtle text-info border px-3 py-1 me-2">
+                                                <div class="badge bg-info-subtle text-info border px-4 py-2 me-2 fs-6">
                                                     ${transfer.plant_supply || 'N/A'}
                                                 </div>
                                             </div>
                                         </div>
                                         <div class="col-6 mb-3">
-                                            <div class="text-muted mb-1">Destination Plant</div>
+                                            <div class="text-muted mb-2">Destination Plant</div>
                                             <div class="d-flex align-items-center">
-                                                <div class="badge bg-primary-subtle text-primary border px-3 py-1 me-2">
+                                                <div class="badge bg-primary-subtle text-primary border px-4 py-2 me-2 fs-6">
                                                     ${transfer.plant_destination || 'N/A'}
                                                 </div>
                                             </div>
                                         </div>
                                         <div class="col-6">
-                                            <div class="text-muted mb-1">Created By</div>
-                                            <div class="fw-medium">${transfer.created_by_name || 'System'}</div>
+                                            <div class="text-muted mb-2">Created By</div>
+                                            <div class="fw-semibold">${transfer.created_by_name || 'System'}</div>
                                         </div>
                                         <div class="col-6">
-                                            <div class="text-muted mb-1">Completed At</div>
-                                            <div class="fw-medium">${completedDate}</div>
+                                            <div class="text-muted mb-2">Completed At</div>
+                                            <div class="fw-semibold">${completedDate}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -779,25 +704,25 @@ document.addEventListener('DOMContentLoaded', function() {
                                         ${transfer.items?.length || 0} items
                                     </span>
                                 </h6>
-                                <div class="text-muted small">
+                                <div class="text-muted">
                                     Total: ${formatNumber(transfer.total_qty || 0)}
                                 </div>
                             </div>
                         </div>
                         <div class="card-body p-0">
-                            <div class="table-responsive">
+                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
                                 <table class="table table-sm mb-0">
                                     <thead class="table-light">
                                         <tr>
-                                            <th class="ps-3 py-2 small fw-semibold">#</th>
-                                            <th class="py-2 small fw-semibold">Material Code</th>
-                                            <th class="py-2 small fw-semibold">Description</th>
-                                            <th class="py-2 small fw-semibold">Batch</th>
-                                            <th class="py-2 small fw-semibold">Storage Loc</th>
-                                            <th class="py-2 small fw-semibold text-end">Quantity</th>
-                                            <th class="py-2 small fw-semibold">Unit</th>
-                                            <th class="py-2 small fw-semibold">Dest. SLOC</th>
-                                            <th class="pe-3 py-2 small fw-semibold text-center">Status</th>
+                                            <th class="ps-3 py-2 fw-semibold">#</th>
+                                            <th class="py-2 fw-semibold">Material Code</th>
+                                            <th class="py-2 fw-semibold">Description</th>
+                                            <th class="py-2 fw-semibold">Batch</th>
+                                            <th class="py-2 fw-semibold">Storage Loc</th>
+                                            <th class="py-2 fw-semibold text-end">Quantity</th>
+                                            <th class="py-2 fw-semibold">Unit</th>
+                                            <th class="py-2 fw-semibold">Dest. SLOC</th>
+                                            <th class="pe-3 py-2 fw-semibold text-center">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -814,13 +739,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${transfer.remarks ? `
                         <div class="col-md-6 mb-3 mb-md-0">
                             <div class="card border">
-                                <div class="card-header bg-transparent py-2">
+                                <div class="card-header bg-transparent py-3">
                                     <h6 class="mb-0 fw-semibold">
                                         <i class="fas fa-sticky-note me-2 text-warning"></i>Remarks
                                     </h6>
                                 </div>
                                 <div class="card-body">
-                                    <p class="mb-0 small">${transfer.remarks}</p>
+                                    <p class="mb-0">${transfer.remarks}</p>
                                 </div>
                             </div>
                         </div>
@@ -829,13 +754,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${transfer.sap_message ? `
                         <div class="${transfer.remarks ? 'col-md-6' : 'col-12'}">
                             <div class="card border">
-                                <div class="card-header bg-transparent py-2">
+                                <div class="card-header bg-transparent py-3">
                                     <h6 class="mb-0 fw-semibold">
                                         <i class="fas fa-comment-alt me-2 text-info"></i>SAP Message
                                     </h6>
                                 </div>
                                 <div class="card-body">
-                                    <pre class="mb-0 small bg-light p-2 rounded" style="white-space: pre-wrap;">${transfer.sap_message}</pre>
+                                    <pre class="mb-0 bg-light p-3 rounded" style="white-space: pre-wrap;">${transfer.sap_message}</pre>
                                 </div>
                             </div>
                         </div>
@@ -844,15 +769,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     ` : ''}
 
                     {{-- Action Buttons --}}
-                    <div class="d-flex gap-2 mt-4">
-                        <button class="btn btn-sm btn-outline-primary" onclick="printTransfer(${transfer.id})">
+                    <div class="d-flex gap-3 mt-4">
+                        <button class="btn btn-outline-primary" onclick="printTransfer(${transfer.id})">
                             <i class="fas fa-print me-1"></i>Print Transfer
                         </button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="copyTransferDetails(${transfer.id})">
+                        <button class="btn btn-outline-secondary" onclick="copyTransferDetails(${transfer.id})">
                             <i class="fas fa-copy me-1"></i>Copy Details
                         </button>
                         ${transfer.document_id ? `
-                        <a href="/documents/${transfer.document_id}" class="btn btn-sm btn-outline-info ms-auto">
+                        <a href="/documents/${transfer.document_id}" class="btn btn-outline-info ms-auto">
                             <i class="fas fa-file-alt me-1"></i>View Document
                         </a>
                         ` : ''}
@@ -882,7 +807,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <tr>
                     <td class="ps-3">${index + 1}</td>
                     <td>
-                        <code class="small">${formattedCode}</code>
+                        <code>${formattedCode}</code>
                     </td>
                     <td>${item.material_description || '-'}</td>
                     <td>${item.batch || '-'}</td>
@@ -891,7 +816,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td>${item.unit || 'PC'}</td>
                     <td>${item.sloc_destination || '-'}</td>
                     <td class="pe-3 text-center">
-                        <span class="badge ${getItemStatusClass(item.sap_status)} px-2 py-1">
+                        <span class="badge ${getItemStatusClass(item.sap_status)} px-3 py-1">
                             ${item.sap_status || 'PREPARED'}
                         </span>
                     </td>
@@ -944,7 +869,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return new Intl.NumberFormat().format(num);
     }
 
-        // Tambahkan di bagian script
+    // Fix Transfer Data
     function fixTransferData(id) {
         if (confirm('Fix this transfer data? This will try to complete missing information.')) {
             fetch(`/transfers/${id}/fix`, {
@@ -972,25 +897,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Fungsi untuk membersihkan data duplicate di client side
-    function cleanDuplicateTransfers() {
-        const transfers = @json($transfers->items());
-        const uniqueTransfers = [];
-        const seen = new Set();
-
-        transfers.forEach(transfer => {
-            const key = transfer.transfer_no + '_' + transfer.plant_destination;
-            if (!seen.has(key) &&
-                transfer.plant_destination &&
-                transfer.plant_destination.trim() !== '' &&
-                transfer.total_items > 0) {
-                seen.add(key);
-                uniqueTransfers.push(transfer);
-            }
-        });
-
-        return uniqueTransfers;
-    }
     // Export Functions
     function exportTransfers() {
         new bootstrap.Modal(document.getElementById('exportModal')).show();
@@ -1000,7 +906,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const btn = event.currentTarget;
         const originalHtml = btn.innerHTML;
 
-        btn.innerHTML = '<span class="loading-spinner me-1"></span>Syncing...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
         btn.disabled = true;
 
         setTimeout(() => {
@@ -1045,8 +951,21 @@ Created At: ${new Date(transfer.created_at).toLocaleString()}
 
     function retryTransfer(id) {
         if (confirm('Retry this failed transfer?')) {
-            showToast('Retrying transfer...', 'info');
-            // Implement retry logic
+            fetch(`/transfers/${id}/retry`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Transfer retry initiated', 'success');
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    showToast('Failed to retry transfer', 'error');
+                }
+            });
         }
     }
 
@@ -1069,23 +988,22 @@ Created At: ${new Date(transfer.created_at).toLocaleString()}
     }
 
     function confirmExport() {
-        const format = document.querySelector('.modal-body .btn-primary').dataset.format;
-        if (format === 'excel') exportToExcel();
-        else if (format === 'csv') exportToCSV();
-        else if (format === 'pdf') exportToPDF();
+        exportToExcel();
     }
 
     function buildExportParams() {
         const params = new URLSearchParams({
             date_from: document.getElementById('exportDateFrom').value,
             date_to: document.getElementById('exportDateTo').value,
-            status: document.getElementById('exportStatus').value
+            status: document.getElementById('exportStatus').value,
+            search: '{{ request('search') }}',
+            plant_supply: '{{ request('plant_supply') }}',
+            plant_destination: '{{ request('plant_destination') }}'
         });
         return params.toString();
     }
 
     function showToast(message, type = 'info') {
-        // Simple toast notification
         const toast = document.createElement('div');
         toast.className = `position-fixed bottom-0 end-0 p-3`;
         toast.innerHTML = `
@@ -1104,19 +1022,18 @@ Created At: ${new Date(transfer.created_at).toLocaleString()}
         bsToast.show();
 
         setTimeout(() => {
-            document.body.removeChild(toast);
+            if (toast.parentNode) {
+                document.body.removeChild(toast);
+            }
         }, 3000);
     }
 
-    // Auto refresh every 2 minutes if on page for more than 5 minutes
-    let autoRefreshTimer;
-    setTimeout(() => {
-        autoRefreshTimer = setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                window.location.reload();
-            }
-        }, 120000); // 2 minutes
-    }, 300000); // Start after 5 minutes
+    // Remove page parameter from filter form
+    document.getElementById('filterForm').addEventListener('submit', function() {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('page');
+        this.action = url.toString();
+    });
 });
 </script>
 @endsection
