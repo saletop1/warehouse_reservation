@@ -279,6 +279,148 @@ class TransferController extends Controller
         }
     }
 
+            /**
+         * Get transfer details with complete data
+         */
+        public function showDetailed($id)
+        {
+            try {
+                $transfer = ReservationTransfer::with([
+                    'items' => function($query) {
+                        $query->select([
+                            'id', 'transfer_id', 'document_item_id', 'material_code',
+                            'material_code_raw', 'material_description', 'batch',
+                            'storage_location', 'plant_supply', 'plant_destination',
+                            'sloc_destination', 'quantity', 'unit', 'item_number',
+                            'sap_status', 'sap_message', 'material_formatted',
+                            'requested_qty', 'available_stock', 'created_at'
+                        ]);
+                    },
+                    'document' => function($query) {
+                        $query->select(['id', 'document_no', 'plant', 'sloc_supply', 'status']);
+                    }
+                ])->findOrFail($id);
+
+                // Add additional calculated fields
+                $transfer->total_items = $transfer->items->count();
+                $transfer->total_qty = $transfer->items->sum('quantity');
+
+                // Format dates
+                $transfer->created_at_formatted = Carbon::parse($transfer->created_at)
+                    ->setTimezone('Asia/Jakarta')
+                    ->format('d/m/Y H:i:s');
+
+                $transfer->completed_at_formatted = $transfer->completed_at ?
+                    Carbon::parse($transfer->completed_at)
+                        ->setTimezone('Asia/Jakarta')
+                        ->format('d/m/Y H:i:s') : null;
+
+                return response()->json([
+                    'success' => true,
+                    'data' => $transfer,
+                    'message' => 'Transfer details retrieved successfully'
+                ]);
+
+            } catch (\Exception $e) {
+                \Log::error('Error getting detailed transfer: ' . $e->getMessage());
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error: ' . $e->getMessage()
+                ], 500);
+            }
+        }
+
+        /**
+         * Export transfers to Excel
+         */
+        public function exportExcel(Request $request)
+        {
+            try {
+                $query = ReservationTransfer::with(['items', 'document']);
+
+                // Apply filters
+                if ($request->filled('date_from')) {
+                    $query->whereDate('created_at', '>=', $request->date_from);
+                }
+
+                if ($request->filled('date_to')) {
+                    $query->whereDate('created_at', '<=', $request->date_to);
+                }
+
+                if ($request->filled('status')) {
+                    $query->where('status', $request->status);
+                }
+
+                if ($request->filled('plant_supply')) {
+                    $query->where('plant_supply', $request->plant_supply);
+                }
+
+                if ($request->filled('plant_destination')) {
+                    $query->where('plant_destination', $request->plant_destination);
+                }
+
+                $transfers = $query->orderBy('created_at', 'desc')->get();
+
+                $filename = 'transfers_export_' . date('Ymd_His') . '.xlsx';
+
+                return Excel::download(new TransfersExport($transfers), $filename);
+
+            } catch (\Exception $e) {
+                \Log::error('Export error: ' . $e->getMessage());
+                return back()->with('error', 'Export failed: ' . $e->getMessage());
+            }
+        }
+
+        /**
+         * Export transfers to PDF
+         */
+        public function exportPDF(Request $request)
+        {
+            try {
+                $query = ReservationTransfer::with(['items', 'document']);
+
+                // Apply filters (same as above)
+                if ($request->filled('date_from')) {
+                    $query->whereDate('created_at', '>=', $request->date_from);
+                }
+
+                if ($request->filled('date_to')) {
+                    $query->whereDate('created_at', '<=', $request->date_to);
+                }
+
+                if ($request->filled('status')) {
+                    $query->where('status', $request->status);
+                }
+
+                $transfers = $query->orderBy('created_at', 'desc')->get();
+
+                $pdf = \PDF::loadView('transfers.export-pdf', compact('transfers'));
+
+                return $pdf->download('transfers_export_' . date('Ymd_His') . '.pdf');
+
+            } catch (\Exception $e) {
+                \Log::error('PDF export error: ' . $e->getMessage());
+                return back()->with('error', 'PDF export failed');
+            }
+        }
+
+        /**
+         * Print transfer
+         */
+        public function print($id)
+        {
+            try {
+                $transfer = ReservationTransfer::with(['items', 'document'])->findOrFail($id);
+
+                return view('transfers.print', compact('transfer'));
+
+            } catch (\Exception $e) {
+                \Log::error('Print error: ' . $e->getMessage());
+                return back()->with('error', 'Cannot print transfer');
+            }
+        }
+
     /**
      * Update document transferred quantities after successful transfer
      */
@@ -461,28 +603,144 @@ class TransferController extends Controller
         }
     }
 
-    /**
-     * Get transfers as HTML view
-     */
-    private function getTransfersView(Request $request)
-    {
-        try {
-            $perPage = $request->get('per_page', 20);
+            /**
+         * Get transfers as HTML view
+         */
+        private function getTransfersView(Request $request)
+        {
+            try {
+                $perPage = $request->get('per_page', 20);
 
-            $transfers = ReservationTransfer::with(['items', 'document'])
-                ->orderBy('created_at', 'desc')
-                ->paginate($perPage);
+                // Query dengan filter untuk menghilangkan data tidak lengkap
+                $query = ReservationTransfer::with(['items', 'document'])
+                    ->orderBy('created_at', 'desc');
 
-            return view('transfers.index', compact('transfers'));
+                // Filter data tidak lengkap: plant_destination harus ada dan tidak kosong
+                $query->whereNotNull('plant_destination')
+                    ->where('plant_destination', '!=', '')
+                    ->where('total_items', '>', 0)
+                    ->where('total_qty', '>', 0);
 
-        } catch (\Exception $e) {
-            Log::error('Error fetching transfers view: ' . $e->getMessage());
+                // Terapkan filter pencarian dari user
+                if ($request->filled('transfer_no')) {
+                    $query->where('transfer_no', 'like', '%' . $request->transfer_no . '%');
+                }
 
-            return redirect()->route('dashboard')
-                ->with('error', 'Error loading transfers: ' . $e->getMessage());
+                if ($request->filled('document_no')) {
+                    $query->where('document_no', 'like', '%' . $request->document_no . '%');
+                }
+
+                if ($request->filled('status')) {
+                    $query->where('status', $request->status);
+                }
+
+                if ($request->filled('date_from')) {
+                    $query->whereDate('created_at', '>=', $request->date_from);
+                }
+
+                if ($request->filled('date_to')) {
+                    $query->whereDate('created_at', '<=', $request->date_to);
+                }
+
+                if ($request->filled('plant_supply')) {
+                    $query->where('plant_supply', $request->plant_supply);
+                }
+
+                if ($request->filled('plant_destination')) {
+                    $query->where('plant_destination', $request->plant_destination);
+                }
+
+                $transfers = $query->paginate($perPage);
+
+                // Tambahkan stats untuk tampilan
+                $stats = [
+                    'total' => $transfers->total(),
+                    'completed' => $transfers->where('status', 'COMPLETED')->count(),
+                    'submitted' => $transfers->where('status', 'SUBMITTED')->count(),
+                    'failed' => $transfers->where('status', 'FAILED')->count(),
+                    'pending' => $transfers->whereIn('status', ['PENDING', 'PROCESSING'])->count()
+                ];
+
+                return view('transfers.index', compact('transfers', 'stats'));
+
+            } catch (\Exception $e) {
+                Log::error('Error fetching transfers view: ' . $e->getMessage());
+
+                return redirect()->route('dashboard')
+                    ->with('error', 'Error loading transfers: ' . $e->getMessage());
+            }
         }
-    }
 
+                /**
+         * Fix incomplete transfer data
+         */
+        public function fixTransferData($id)
+        {
+            try {
+                $transfer = ReservationTransfer::findOrFail($id);
+
+                // Coba ambil data dari document jika ada
+                if ($transfer->document_id) {
+                    $document = ReservationDocument::find($transfer->document_id);
+                    if ($document) {
+                        // Update missing data
+                        if (empty($transfer->plant_destination) || $transfer->plant_destination == '') {
+                            $transfer->plant_destination = $document->plant;
+                        }
+
+                        if ($transfer->total_items == 0) {
+                            $transfer->total_items = $transfer->items()->count();
+                        }
+
+                        if ($transfer->total_qty == 0) {
+                            $transfer->total_qty = $transfer->items()->sum('quantity');
+                        }
+
+                        $transfer->save();
+
+                        Log::info('Transfer data fixed', [
+                            'transfer_id' => $id,
+                            'plant_destination_set' => $document->plant,
+                            'total_items_updated' => $transfer->total_items,
+                            'total_qty_updated' => $transfer->total_qty
+                        ]);
+
+                        return response()->json([
+                            'success' => true,
+                            'message' => 'Transfer data fixed successfully'
+                        ]);
+                    }
+                }
+
+                // Jika tidak ada document, coba hapus transfer yang tidak lengkap
+                if (empty($transfer->plant_destination) || $transfer->total_items == 0) {
+                    $transfer->delete();
+
+                    Log::info('Incomplete transfer deleted', [
+                        'transfer_id' => $id,
+                        'transfer_no' => $transfer->transfer_no
+                    ]);
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Incomplete transfer deleted'
+                    ]);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No fixes needed'
+                ]);
+
+            } catch (\Exception $e) {
+                Log::error('Error fixing transfer data: ' . $e->getMessage());
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error: ' . $e->getMessage()
+                ], 500);
+            }
+        }
     /**
      * Get transfer details
      */

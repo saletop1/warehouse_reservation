@@ -115,6 +115,7 @@ Route::middleware(['auth'])->group(function () {
         // Transfer Process Route
         Route::post('/{id}/transfers/process', [TransferController::class, 'createTransfer'])
             ->name('transfers.process');
+        Route::post('/transfers/{id}/fix', [TransferController::class, 'fixTransferData'])->name('transfers.fix');
 
         // Transfer History
         Route::get('/{document}/items/{materialCode}/transfer-history',
