@@ -1184,66 +1184,38 @@ def create_sap_transfer():
                 result.get('EV_MATERIAL_DOC')
             )
 
-            # Save transfer to MySQL database
-            db_result = db.save_transfer_to_db(
-                transfer_data=transfer_data,
-                sap_response=result,
-                item_results=item_results,
-                user_id=user_id,
-                user_name=user_name
-            )
+            # ======================================================
+            # **PERUBAHAN PENTING: JANGAN SIMPAN KE DATABASE**
+            # Biarkan Laravel/PHP yang menyimpan ke database
+            # ======================================================
 
             if errors:
                 error_message = 'SAP transfer failed: ' + ' | '.join(errors[:3])
                 logger.error(f"Transfer failed with errors: {errors}")
 
-                # Update transfer status to FAILED if already saved
-                if db_result and db_result.get('transfer_id'):
-                    db.update_transfer_status(
-                        transfer_id=db_result['transfer_id'],
-                        status='FAILED',
-                        sap_response=result,
-                        errors=errors
-                    )
-
+                # Return error response tanpa menyimpan ke database
                 return jsonify({
                     'success': False,
                     'message': error_message,
                     'errors': errors,
                     'item_results': item_results,
-                    'db_saved': db_result is not None,
-                    'transfer_id': db_result.get('transfer_id') if db_result else None,
                     'processing_time': round(time.time() - start_time, 2)
                 }), 400
 
             if material_doc:
                 logger.info(f"Transfer successful: Material Document {material_doc} created")
 
+                # Kembalikan hanya response dari SAP
                 response_data = {
                     'success': True,
                     'message': f'Material Document {material_doc} created successfully',
                     'transfer_no': material_doc,
                     'status': 'COMPLETED',
                     'item_results': item_results,
-                    'processing_time': round(time.time() - start_time, 2)
+                    'processing_time': round(time.time() - start_time, 2),
+                    'db_saved': False,  # Tandai bahwa Python tidak menyimpan ke database
+                    'should_save_by_laravel': True  # Tandai bahwa Laravel yang harus menyimpan
                 }
-
-                if db_result is not None:
-                    response_data['db_saved'] = True
-                    response_data['transfer_id'] = db_result.get('transfer_id')
-                    response_data['document_id_included'] = db_result.get('document_id_included', False)
-
-                    # Update transfer dengan material_doc jika belum ada
-                    if not db_result.get('material_doc'):
-                        db.update_transfer_status(
-                            transfer_id=db_result['transfer_id'],
-                            status='COMPLETED',
-                            material_doc=material_doc,
-                            sap_response=result
-                        )
-                else:
-                    response_data['db_saved'] = False
-                    response_data['message'] += ' (but failed to save to database)'
 
                 return jsonify(response_data)
             else:
@@ -1264,31 +1236,17 @@ def create_sap_transfer():
                         'message': 'Transfer submitted successfully: ' + ' | '.join(success_messages[:2]),
                         'status': 'SUBMITTED',
                         'item_results': item_results,
-                        'processing_time': round(time.time() - start_time, 2)
+                        'processing_time': round(time.time() - start_time, 2),
+                        'db_saved': False,
+                        'should_save_by_laravel': True
                     }
-
-                    if db_result is not None:
-                        response_data['db_saved'] = True
-                        response_data['transfer_id'] = db_result.get('transfer_id')
-                    else:
-                        response_data['db_saved'] = False
 
                     return jsonify(response_data)
                 else:
-                    # Update transfer status to FAILED if no material doc and no success messages
-                    if db_result and db_result.get('transfer_id'):
-                        db.update_transfer_status(
-                            transfer_id=db_result['transfer_id'],
-                            status='FAILED',
-                            sap_response=result
-                        )
-
                     return jsonify({
                         'success': False,
                         'message': 'Transfer failed: No material document created',
                         'item_results': item_results,
-                        'db_saved': db_result is not None,
-                        'transfer_id': db_result.get('transfer_id') if db_result else None,
                         'processing_time': round(time.time() - start_time, 2)
                     }), 400
 
@@ -1305,7 +1263,8 @@ def create_sap_transfer():
                 'error_code': error_code,
                 'error_key': error_key,
                 'error_type': 'RFC_ERROR',
-                'item_results': item_results
+                'item_results': item_results,
+                'processing_time': round(time.time() - start_time, 2)
             }), 500
 
         except Exception as e:
@@ -1315,7 +1274,8 @@ def create_sap_transfer():
                 'success': False,
                 'message': f'SAP transfer error: {e}',
                 'error_type': 'GENERAL_ERROR',
-                'item_results': item_results
+                'item_results': item_results,
+                'processing_time': round(time.time() - start_time, 2)
             }), 500
 
         finally:

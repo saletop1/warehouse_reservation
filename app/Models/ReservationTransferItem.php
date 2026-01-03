@@ -10,7 +10,7 @@ class ReservationTransferItem extends Model
         'transfer_id',
         'document_item_id',
         'material_code',
-        'material_code_raw',       // Tambahkan field ini
+        'material_code_raw',
         'material_description',
         'unit',
         'quantity',

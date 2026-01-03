@@ -22,7 +22,7 @@ class ReservationTransfer extends Model
         'created_by_name',
         'completed_at',
         'sap_message',
-        'sap_response'  // Tambahkan ini jika belum ada
+        'sap_response'
     ];
 
     protected $casts = [
