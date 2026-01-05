@@ -1395,21 +1395,53 @@ class TransferController extends Controller
         }
     }
 
-    /**
-     * Print transfer
-     */
-    public function print($id)
-    {
-        try {
-            $transfer = ReservationTransfer::with(['items', 'document'])->findOrFail($id);
+            /**
+             * Print transfer
+             */
+            public function print($id)
+            {
+                try {
+                    $transfer = ReservationTransfer::with(['items', 'document'])->findOrFail($id);
 
-            return view('transfers.print', compact('transfer'));
+                    // Calculate total quantity from items
+                    $totalQty = 0;
+                    if ($transfer->items && $transfer->items->count() > 0) {
+                        $totalQty = $transfer->items->sum('quantity');
+                    } elseif ($transfer->total_qty) {
+                        $totalQty = $transfer->total_qty;
+                    }
 
-        } catch (\Exception $e) {
-            Log::error('Print error: ' . $e->getMessage());
-            return back()->with('error', 'Cannot print transfer');
-        }
-    }
+                    $transfer->total_qty_calculated = $totalQty;
+
+                    // Format dates for view
+                    $transfer->created_at_formatted = $transfer->created_at
+                        ? \Carbon\Carbon::parse($transfer->created_at)->format('d/m/Y H:i:s')
+                        : 'N/A';
+
+                    $transfer->completed_at_formatted = $transfer->completed_at
+                        ? \Carbon\Carbon::parse($transfer->completed_at)->format('d/m/Y H:i:s')
+                        : 'Not completed';
+
+                    // Format material codes
+                    if ($transfer->items) {
+                        foreach ($transfer->items as $item) {
+                            if (ctype_digit($item->material_code)) {
+                                $item->material_code_formatted = ltrim($item->material_code, '0');
+                            } else {
+                                $item->material_code_formatted = $item->material_code;
+                            }
+                        }
+                    }
+
+                    return view('transfers.print', compact('transfer'));
+
+                } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+                    abort(404, 'Transfer not found');
+                } catch (\Exception $e) {
+                    Log::error('Error printing transfer: ' . $e->getMessage());
+                    abort(500, 'Error generating printout');
+                }
+            }
 
     /**
      * Get transfer statistics

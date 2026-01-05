@@ -29,65 +29,17 @@
         </div>
     </div>
 
-    {{-- Filters --}}
+    {{-- Live Search --}}
     <div class="card border-0 shadow-sm rounded-3 mb-3">
         <div class="card-body p-3">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="mb-0 fw-semibold">
-                    <i class="fas fa-filter me-2 text-primary"></i>Filters
-                </h6>
-                <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
-                    <i class="fas fa-sliders-h me-1"></i>Toggle
-                </button>
-            </div>
-
-            <div class="collapse show" id="filterCollapse">
-                <form method="GET" action="{{ route('transfers.index') }}" id="filterForm">
-                    <div class="row g-3">
-                        <div class="col-12 col-md-3">
-                            <label class="form-label text-muted mb-1">Transfer/Doc No</label>
-                            <input type="text" name="search" class="form-control"
-                                   value="{{ request('search') }}" placeholder="TRMG... or doc no...">
-                        </div>
-                        <div class="col-12 col-md-2">
-                            <label class="form-label text-muted mb-1">Status</label>
-                            <select name="status" class="form-select">
-                                <option value="">All Status</option>
-                                <option value="COMPLETED" {{ request('status') == 'COMPLETED' ? 'selected' : '' }}>Completed</option>
-                                <option value="SUBMITTED" {{ request('status') == 'SUBMITTED' ? 'selected' : '' }}>Submitted</option>
-                                <option value="FAILED" {{ request('status') == 'FAILED' ? 'selected' : '' }}>Failed</option>
-                                <option value="PENDING" {{ request('status') == 'PENDING' ? 'selected' : '' }}>Pending</option>
-                                <option value="PROCESSING" {{ request('status') == 'PROCESSING' ? 'selected' : '' }}>Processing</option>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-2">
-                            <label class="form-label text-muted mb-1">Plant Supply</label>
-                            <input type="text" name="plant_supply" class="form-control"
-                                   value="{{ request('plant_supply') }}" placeholder="e.g., 3000">
-                        </div>
-                        <div class="col-12 col-md-2">
-                            <label class="form-label text-muted mb-1">Plant Dest</label>
-                            <input type="text" name="plant_destination" class="form-control"
-                                   value="{{ request('plant_destination') }}" placeholder="e.g., 3100">
-                        </div>
-                        <div class="col-12 col-md-3">
-                            <label class="form-label text-muted mb-1">Date Range</label>
-                            <div class="input-group">
-                                <input type="date" name="date_from" class="form-control" value="{{ request('date_from') }}">
-                                <span class="input-group-text">to</span>
-                                <input type="date" name="date_to" class="form-control" value="{{ request('date_to') }}">
-                            </div>
-                        </div>
-                        <div class="col-12 d-flex gap-3 mt-2 justify-content-end">
-                            <button type="submit" class="btn btn-primary px-4">
-                                <i class="fas fa-search me-1"></i>Search
-                            </button>
-                            <a href="{{ route('transfers.index') }}" class="btn btn-outline-secondary px-4">
-                                <i class="fas fa-redo me-1"></i>Reset
-                            </a>
-                        </div>
-                    </div>
-                </form>
+            <div class="d-flex align-items-center mb-0">
+                <i class="fas fa-search me-2 text-primary"></i>
+                <input type="text"
+                       id="liveSearch"
+                       class="form-control border-0 shadow-none"
+                       placeholder="Search anything in transfer list... (transfer no, document no, plant, status, etc.)"
+                       autocomplete="off">
+                <span id="searchResultCount" class="badge bg-primary ms-2 d-none">0 found</span>
             </div>
         </div>
     </div>
@@ -96,7 +48,7 @@
     <div class="card border-0 shadow-sm rounded-3">
         <div class="card-body p-0">
             <div class="table-container" style="max-height: 700px; overflow-y: auto;">
-                <table class="table table-hover mb-0">
+                <table class="table table-hover mb-0" id="transfersTable">
                     <thead class="table-light sticky-top" style="top: 0; z-index: 10;">
                         <tr>
                             <th class="ps-3 py-3 fw-semibold" style="width: 15%; min-width: 140px">
@@ -130,7 +82,7 @@
                                 $displayedTransfers[] = $transferKey;
                             @endphp
 
-                            <tr class="align-middle">
+                            <tr class="align-middle transfer-row">
                                 <td class="ps-3">
                                     <div class="d-flex align-items-center">
                                         <div class="me-2">
@@ -145,7 +97,7 @@
                                             @endif
                                         </div>
                                         <div>
-                                            <div class="fw-semibold">{{ $transfer->transfer_no ?? 'N/A' }}</div>
+                                            <div class="fw-semibold transfer-no">{{ $transfer->transfer_no ?? 'N/A' }}</div>
                                             <div class="text-muted">
                                                 {{ \Carbon\Carbon::parse($transfer->created_at)->format('H:i') }}
                                             </div>
@@ -162,7 +114,7 @@
                                         Plant: {{ $transfer->document->plant ?? 'N/A' }}
                                     </div>
                                     @else
-                                    <div class="text-muted">{{ $transfer->document_no }}</div>
+                                    <div class="text-muted document-no">{{ $transfer->document_no }}</div>
                                     @endif
                                 </td>
                                 <td>
@@ -176,7 +128,7 @@
                                         ];
                                         $config = $statusConfig[$transfer->status] ?? ['class' => 'secondary', 'icon' => 'question-circle', 'label' => $transfer->status];
                                     @endphp
-                                    <span class="badge bg-{{ $config['class'] }}-subtle text-{{ $config['class'] }} border border-{{ $config['class'] }}-subtle px-3 py-1">
+                                    <span class="badge bg-{{ $config['class'] }}-subtle text-{{ $config['class'] }} border border-{{ $config['class'] }}-subtle px-3 py-1 transfer-status">
                                         <i class="fas fa-{{ $config['icon'] }} me-1"></i>
                                         {{ $config['label'] }}
                                     </span>
@@ -184,7 +136,7 @@
                                 <td>
                                     <div class="d-flex align-items-center">
                                         <div class="text-center me-2">
-                                            <div class="badge bg-info-subtle text-info border px-3 py-1">
+                                            <div class="badge plant-supply border px-3 py-1" style="color: #28a745 !important; border-color: #28a745 !important; background-color: rgba(40, 167, 69, 0.1) !important;">
                                                 {{ $transfer->plant_supply ?? 'N/A' }}
                                             </div>
                                             <div class="text-muted mt-1">Supply</div>
@@ -194,7 +146,7 @@
                                             <i class="fas fa-arrow-right text-muted"></i>
                                         </div>
                                         <div class="text-center">
-                                            <div class="badge bg-primary-subtle text-primary border px-3 py-1">
+                                            <div class="badge plant-destination border px-3 py-1" style="color: #007bff !important; border-color: #007bff !important; background-color: rgba(0, 123, 255, 0.1) !important;">
                                                 {{ $transfer->plant_destination ?? 'N/A' }}
                                             </div>
                                             <div class="text-muted mt-1">Dest</div>
@@ -208,7 +160,18 @@
                                     </span>
                                 </td>
                                 <td class="text-center">
-                                    <div class="fw-bold">{{ number_format($transfer->total_qty ?? 0) }}</div>
+                                    <div class="fw-bold">
+                                        @php
+                                            // Calculate total quantity from all transfer items
+                                            $totalQty = 0;
+                                            if($transfer->items && $transfer->items->count() > 0) {
+                                                $totalQty = $transfer->items->sum('quantity');
+                                            } elseif($transfer->total_qty) {
+                                                $totalQty = $transfer->total_qty;
+                                            }
+                                        @endphp
+                                        {{ number_format($totalQty, 0, ',', '.') }}
+                                    </div>
                                     <div class="text-muted">{{ $transfer->items->first()->unit ?? 'PC' }}</div>
                                 </td>
                                 <td>
@@ -237,13 +200,13 @@
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end shadow">
                                             <li>
-                                                <button class="dropdown-item" onclick="printTransfer({{ $transfer->id }})">
+                                                <button class="dropdown-item" onclick="printTransferNow({{ $transfer->id }})">
                                                     <i class="fas fa-print me-2 text-muted"></i>Print
                                                 </button>
                                             </li>
                                             <li>
-                                                <button class="dropdown-item" onclick="copyTransferNo('{{ $transfer->transfer_no }}')">
-                                                    <i class="fas fa-copy me-2 text-muted"></i>Copy No
+                                                <button class="dropdown-item" onclick="copyTransferDetailsNow({{ $transfer->id }})">
+                                                    <i class="fas fa-copy me-2 text-muted"></i>Copy Details
                                                 </button>
                                             </li>
                                             @if($transfer->status == 'FAILED')
@@ -287,7 +250,7 @@
         <div class="card-footer bg-transparent border-top py-3 px-4">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="text-muted">
-                    Showing {{ $displayedTransfers ? count($displayedTransfers) : 0 }} transfers
+                    Showing <span id="visibleRowCount">{{ $displayedTransfers ? count($displayedTransfers) : 0 }}</span> transfers
                 </div>
                 <div class="text-muted">
                     <i class="fas fa-info-circle me-1"></i>Scroll to see more rows
@@ -298,17 +261,17 @@
     </div>
 </div>
 
-{{-- Transfer Detail Modal (Full Data) --}}
+{{-- Transfer Detail Modal (Compact Design) --}}
 <div class="modal fade" id="transferDetailModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header border-bottom bg-light py-3">
+            <div class="modal-header border-bottom bg-light py-2 px-3">
                 <div class="d-flex align-items-center w-100">
                     <div>
-                        <h5 class="modal-title fw-semibold mb-0">
+                        <h5 class="modal-title fw-semibold mb-0" style="font-size: 1.1rem;">
                             <i class="fas fa-exchange-alt me-2 text-primary"></i>Transfer Details
                         </h5>
-                        <div class="text-muted" id="transferNoLabel">Loading...</div>
+                        <div class="text-muted small" id="transferNoLabel">Loading...</div>
                     </div>
                     <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
                 </div>
@@ -443,13 +406,53 @@ body {
     padding: 0.35em 0.65em;
 }
 
-/* Modal */
+/* Modal - Compact Design */
 .modal-body {
     font-size: 14px;
 }
 
 .modal-content .table {
     font-size: 13px;
+}
+
+/* Plant Supply Color */
+.plant-supply {
+    color: #28a745 !important;
+    border-color: #28a745 !important;
+    background-color: rgba(40, 167, 69, 0.1) !important;
+}
+
+/* Plant Destination Color */
+.plant-destination {
+    color: #007bff !important;
+    border-color: #007bff !important;
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+
+/* Compact Modal Tables */
+.compact-table {
+    font-size: 12.5px;
+}
+
+.compact-table td, .compact-table th {
+    padding: 0.25rem 0.5rem;
+}
+
+/* Message Box Styling */
+.message-box {
+    font-size: 12.5px;
+    padding: 0.5rem;
+    margin: 0;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+/* Material Description Styling */
+.material-description {
+    max-width: 200px;
+    word-break: break-word;
+    white-space: normal;
 }
 
 /* Custom Scrollbar */
@@ -505,6 +508,51 @@ body {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Live Search Functionality
+    const liveSearch = document.getElementById('liveSearch');
+    const searchResultCount = document.getElementById('searchResultCount');
+    const visibleRowCount = document.getElementById('visibleRowCount');
+    const transferRows = document.querySelectorAll('.transfer-row');
+
+    liveSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        let visibleCount = 0;
+
+        transferRows.forEach(row => {
+            const textContent = row.textContent.toLowerCase();
+            const transferNo = row.querySelector('.transfer-no')?.textContent.toLowerCase() || '';
+            const documentNo = row.querySelector('.document-no')?.textContent.toLowerCase() || '';
+            const transferStatus = row.querySelector('.transfer-status')?.textContent.toLowerCase() || '';
+            const plantSupply = row.querySelector('.plant-supply')?.textContent.toLowerCase() || '';
+            const plantDestination = row.querySelector('.plant-destination')?.textContent.toLowerCase() || '';
+
+            const matches = searchTerm === '' ||
+                textContent.includes(searchTerm) ||
+                transferNo.includes(searchTerm) ||
+                documentNo.includes(searchTerm) ||
+                transferStatus.includes(searchTerm) ||
+                plantSupply.includes(searchTerm) ||
+                plantDestination.includes(searchTerm);
+
+            if (matches) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Update counters
+        if (searchTerm) {
+            searchResultCount.textContent = `${visibleCount} found`;
+            searchResultCount.classList.remove('d-none');
+        } else {
+            searchResultCount.classList.add('d-none');
+        }
+
+        visibleRowCount.textContent = visibleCount;
+    });
+
     // View Transfer Details
     document.querySelectorAll('.view-transfer').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -542,10 +590,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     contentDiv.innerHTML = generateTransferDetailContent(transfer);
                 } else {
                     contentDiv.innerHTML = `
-                        <div class="text-center py-5">
-                            <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>
-                            <h5 class="text-danger">Failed to load transfer details</h5>
-                            <p class="text-muted">${data.message || 'Unknown error'}</p>
+                        <div class="text-center py-3">
+                            <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                            <h6 class="text-danger mb-2">Failed to load transfer details</h6>
+                            <p class="text-muted small">${data.message || 'Unknown error'}</p>
                         </div>
                     `;
                 }
@@ -553,11 +601,11 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => {
                 console.error('Error:', error);
                 contentDiv.innerHTML = `
-                    <div class="text-center py-5">
-                        <i class="fas fa-exclamation-triangle fa-2x text-danger mb-3"></i>
-                        <h5 class="text-danger">Error loading transfer details</h5>
-                        <p class="text-muted">${error.message}</p>
-                        <button class="btn btn-outline-primary mt-3" onclick="loadTransferDetails(${transferId})">
+                    <div class="text-center py-3">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                        <h6 class="text-danger mb-2">Error loading transfer details</h6>
+                        <p class="text-muted small">${error.message}</p>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="loadTransferDetails(${transferId})">
                             <i class="fas fa-redo me-1"></i>Retry
                         </button>
                     </div>
@@ -565,7 +613,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    // Generate Complete Transfer Detail Content
+    // Generate Compact Transfer Detail Content
     function generateTransferDetailContent(transfer) {
         const formattedDate = transfer.created_at ?
             new Date(transfer.created_at).toLocaleString('id-ID', {
@@ -585,110 +633,149 @@ document.addEventListener('DOMContentLoaded', function() {
                 minute: '2-digit'
             }) : 'Not completed';
 
+        // Calculate total quantity from items
+        let totalQty = 0;
+        if (transfer.items && transfer.items.length > 0) {
+            totalQty = transfer.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+        } else if (transfer.total_qty) {
+            totalQty = parseFloat(transfer.total_qty);
+        }
+
         return `
             <div class="transfer-detail">
-                {{-- Header Info --}}
-                <div class="p-4 border-bottom bg-light-subtle">
-                    <div class="row">
+                {{-- Compact Header --}}
+                <div class="p-3 border-bottom bg-light-subtle">
+                    <div class="row align-items-center g-2">
                         <div class="col-md-6">
-                            <div class="d-flex align-items-center mb-3">
-                                <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3">
-                                    <i class="fas fa-exchange-alt fa-lg text-primary"></i>
+                            <div class="d-flex align-items-center">
+                                <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-2">
+                                    <i class="fas fa-exchange-alt text-primary"></i>
                                 </div>
                                 <div>
-                                    <h4 class="fw-bold mb-0">${transfer.transfer_no || 'N/A'}</h4>
-                                    <div class="text-muted">
+                                    <h6 class="fw-bold mb-0">${transfer.transfer_no || 'N/A'}</h6>
+                                    <div class="text-muted small">
                                         <i class="fas fa-file-alt me-1"></i>Doc: ${transfer.document_no || 'N/A'}
                                     </div>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-6 text-md-end">
-                            <div class="d-inline-block">
-                                <span class="badge ${getStatusClass(transfer.status)} fs-6 px-4 py-2">
-                                    <i class="fas fa-${getStatusIcon(transfer.status)} me-1"></i>
-                                    ${transfer.status || 'UNKNOWN'}
-                                </span>
-                            </div>
-                            <div class="mt-2 text-muted">
+                            <span class="badge ${getStatusClass(transfer.status)} px-3 py-1">
+                                <i class="fas fa-${getStatusIcon(transfer.status)} me-1"></i>
+                                ${transfer.status || 'UNKNOWN'}
+                            </span>
+                            <div class="text-muted small mt-1">
                                 Created: ${formattedDate}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Main Content --}}
-                <div class="p-4">
-                    {{-- Transfer Information --}}
-                    <div class="row mb-4">
-                        <div class="col-md-6 mb-3 mb-md-0">
+                {{-- Compact Main Content --}}
+                <div class="p-3">
+                    {{-- Compact Information Row --}}
+                    <div class="row g-3 mb-3">
+                        <div class="col-6 col-md-3">
                             <div class="card border h-100">
-                                <div class="card-header bg-transparent py-3">
-                                    <h6 class="mb-0 fw-semibold">
-                                        <i class="fas fa-info-circle me-2 text-primary"></i>Transfer Information
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Move Type</div>
+                                    <div class="fw-semibold">${transfer.move_type || '311'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Total Items</div>
+                                    <div class="fw-semibold">${transfer.total_items || 0}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Total Quantity</div>
+                                    <div class="fw-bold">${formatFullNumber(totalQty)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Completion</div>
+                                    <span class="badge ${transfer.completed_at ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'}">
+                                        ${transfer.completed_at ? 'Completed' : 'In Progress'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Plant Information --}}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="card border h-100">
+                                <div class="card-header bg-transparent py-2 px-3">
+                                    <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
+                                        <i class="fas fa-building me-2 text-primary"></i>Plant Information
                                     </h6>
                                 </div>
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-6 mb-3">
-                                            <div class="text-muted">Move Type</div>
-                                            <div class="fw-semibold">${transfer.move_type || '311'}</div>
-                                        </div>
-                                        <div class="col-6 mb-3">
-                                            <div class="text-muted">Total Items</div>
-                                            <div class="fw-semibold">${transfer.total_items || 0}</div>
-                                        </div>
+                                <div class="card-body p-2">
+                                    <div class="row g-2">
                                         <div class="col-6">
-                                            <div class="text-muted">Total Quantity</div>
-                                            <div class="fw-bold fs-5">${formatNumber(transfer.total_qty || 0)}</div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="text-muted">Completion</div>
-                                            <div>
-                                                <span class="badge bg-success-subtle text-success">
-                                                    ${transfer.completed_at ? 'Completed' : 'In Progress'}
-                                                </span>
+                                            <div class="text-muted small mb-1">Supply Plant</div>
+                                            <div class="badge plant-supply px-3 py-1" style="color: #28a745 !important; border-color: #28a745 !important; background-color: rgba(40, 167, 69, 0.1) !important;">
+                                                ${transfer.plant_supply || 'N/A'}
                                             </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Dest Plant</div>
+                                            <div class="badge plant-destination px-3 py-1" style="color: #007bff !important; border-color: #007bff !important; background-color: rgba(0, 123, 255, 0.1) !important;">
+                                                ${transfer.plant_destination || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Created By</div>
+                                            <div class="fw-semibold small">${transfer.created_by_name || 'System'}</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Completed At</div>
+                                            <div class="fw-semibold small">${completedDate}</div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
+                        {{-- Remarks Section --}}
                         <div class="col-md-6">
                             <div class="card border h-100">
-                                <div class="card-header bg-transparent py-3">
-                                    <h6 class="mb-0 fw-semibold">
-                                        <i class="fas fa-building me-2 text-primary"></i>Plant Information
+                                <div class="card-header bg-transparent py-2 px-3">
+                                    <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
+                                        <i class="fas fa-sticky-note me-2 text-warning"></i>Remarks & SAP Message
                                     </h6>
                                 </div>
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-6 mb-3">
-                                            <div class="text-muted mb-2">Supply Plant</div>
-                                            <div class="d-flex align-items-center">
-                                                <div class="badge bg-info-subtle text-info border px-4 py-2 me-2 fs-6">
-                                                    ${transfer.plant_supply || 'N/A'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col-6 mb-3">
-                                            <div class="text-muted mb-2">Destination Plant</div>
-                                            <div class="d-flex align-items-center">
-                                                <div class="badge bg-primary-subtle text-primary border px-4 py-2 me-2 fs-6">
-                                                    ${transfer.plant_destination || 'N/A'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="text-muted mb-2">Created By</div>
-                                            <div class="fw-semibold">${transfer.created_by_name || 'System'}</div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="text-muted mb-2">Completed At</div>
-                                            <div class="fw-semibold">${completedDate}</div>
-                                        </div>
+                                <div class="card-body p-2">
+                                    ${transfer.remarks ? `
+                                    <div class="mb-2">
+                                        <div class="text-muted small mb-1">Remarks:</div>
+                                        <div class="message-box bg-light p-2 rounded">${transfer.remarks}</div>
                                     </div>
+                                    ` : ''}
+
+                                    ${transfer.sap_message ? `
+                                    <div>
+                                        <div class="text-muted small mb-1">SAP Message:</div>
+                                        <div class="message-box bg-light p-2 rounded">${transfer.sap_message}</div>
+                                    </div>
+                                    ` : ''}
+
+                                    ${!transfer.remarks && !transfer.sap_message ? `
+                                    <div class="text-center py-3">
+                                        <i class="fas fa-comment-slash text-muted fa-lg mb-2"></i>
+                                        <p class="text-muted small mb-0">No remarks or messages</p>
+                                    </div>
+                                    ` : ''}
                                 </div>
                             </div>
                         </div>
@@ -696,88 +783,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     {{-- Transfer Items Table --}}
                     <div class="card border">
-                        <div class="card-header bg-transparent border-bottom py-3">
+                        <div class="card-header bg-transparent border-bottom py-2 px-3">
                             <div class="d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0 fw-semibold">
+                                <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
                                     <i class="fas fa-boxes me-2 text-primary"></i>Transfer Items
-                                    <span class="badge bg-primary-subtle text-primary ms-2">
+                                    <span class="badge bg-primary-subtle text-primary ms-1">
                                         ${transfer.items?.length || 0} items
                                     </span>
                                 </h6>
-                                <div class="text-muted">
-                                    Total: ${formatNumber(transfer.total_qty || 0)}
+                                <div class="text-muted small">
+                                    Total: ${formatFullNumber(totalQty)}
                                 </div>
                             </div>
                         </div>
                         <div class="card-body p-0">
-                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
-                                <table class="table table-sm mb-0">
+                            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                <table class="table table-sm mb-0 compact-table">
                                     <thead class="table-light">
                                         <tr>
-                                            <th class="ps-3 py-2 fw-semibold">#</th>
-                                            <th class="py-2 fw-semibold">Material Code</th>
-                                            <th class="py-2 fw-semibold">Description</th>
-                                            <th class="py-2 fw-semibold">Batch</th>
-                                            <th class="py-2 fw-semibold">Storage Loc</th>
-                                            <th class="py-2 fw-semibold text-end">Quantity</th>
-                                            <th class="py-2 fw-semibold">Unit</th>
-                                            <th class="py-2 fw-semibold">Dest. SLOC</th>
-                                            <th class="pe-3 py-2 fw-semibold text-center">Status</th>
+                                            <th class="ps-3 py-1 fw-semibold">#</th>
+                                            <th class="py-1 fw-semibold">Material Code</th>
+                                            <th class="py-1 fw-semibold">Description</th>
+                                            <th class="py-1 fw-semibold">Batch</th>
+                                            <th class="py-1 fw-semibold text-end">Quantity</th>
+                                            <th class="pe-3 py-1 fw-semibold">Unit</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${generateItemsTable(transfer.items || [])}
+                                        ${generateCompactItemsTable(transfer.items || [])}
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                     </div>
 
-                    ${transfer.remarks || transfer.sap_message ? `
-                    {{-- Additional Information --}}
-                    <div class="row mt-4">
-                        ${transfer.remarks ? `
-                        <div class="col-md-6 mb-3 mb-md-0">
-                            <div class="card border">
-                                <div class="card-header bg-transparent py-3">
-                                    <h6 class="mb-0 fw-semibold">
-                                        <i class="fas fa-sticky-note me-2 text-warning"></i>Remarks
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <p class="mb-0">${transfer.remarks}</p>
-                                </div>
-                            </div>
-                        </div>
-                        ` : ''}
-
-                        ${transfer.sap_message ? `
-                        <div class="${transfer.remarks ? 'col-md-6' : 'col-12'}">
-                            <div class="card border">
-                                <div class="card-header bg-transparent py-3">
-                                    <h6 class="mb-0 fw-semibold">
-                                        <i class="fas fa-comment-alt me-2 text-info"></i>SAP Message
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <pre class="mb-0 bg-light p-3 rounded" style="white-space: pre-wrap;">${transfer.sap_message}</pre>
-                                </div>
-                            </div>
-                        </div>
-                        ` : ''}
-                    </div>
-                    ` : ''}
-
                     {{-- Action Buttons --}}
-                    <div class="d-flex gap-3 mt-4">
-                        <button class="btn btn-outline-primary" onclick="printTransfer(${transfer.id})">
-                            <i class="fas fa-print me-1"></i>Print Transfer
+                    <div class="d-flex gap-2 mt-3">
+                        <button class="btn btn-sm btn-outline-primary" onclick="printTransferNow(${transfer.id})">
+                            <i class="fas fa-print me-1"></i>Print
                         </button>
-                        <button class="btn btn-outline-secondary" onclick="copyTransferDetails(${transfer.id})">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="copyTransferDetailsNow(${transfer.id})">
                             <i class="fas fa-copy me-1"></i>Copy Details
                         </button>
                         ${transfer.document_id ? `
-                        <a href="/documents/${transfer.document_id}" class="btn btn-outline-info ms-auto">
+                        <a href="/documents/${transfer.document_id}" class="btn btn-sm btn-outline-info ms-auto">
                             <i class="fas fa-file-alt me-1"></i>View Document
                         </a>
                         ` : ''}
@@ -787,39 +836,35 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
     }
 
-    function generateItemsTable(items) {
+    function generateCompactItemsTable(items) {
         if (!items || items.length === 0) {
             return `
                 <tr>
-                    <td colspan="9" class="text-center py-4 text-muted">
+                    <td colspan="6" class="text-center py-3 text-muted small">
                         <i class="fas fa-box-open me-1"></i>No items found
                     </td>
                 </tr>
             `;
         }
 
-        return items.map((item, index) => {
+        return items.slice(0, 10).map((item, index) => {
             const materialCode = item.material_code || 'N/A';
             const formattedCode = /^\d+$/.test(materialCode) ?
                 materialCode.replace(/^0+/, '') : materialCode;
+            const description = item.material_description || '-';
 
             return `
                 <tr>
                     <td class="ps-3">${index + 1}</td>
                     <td>
-                        <code>${formattedCode}</code>
+                        <div class="fw-semibold" style="font-size: 11.5px;">${formattedCode}</div>
                     </td>
-                    <td>${item.material_description || '-'}</td>
+                    <td class="material-description">
+                        <div class="text-muted small" style="font-size: 11.5px; line-height: 1.3;">${description}</div>
+                    </td>
                     <td>${item.batch || '-'}</td>
-                    <td>${item.storage_location || '-'}</td>
-                    <td class="text-end fw-semibold">${formatNumber(item.quantity || 0)}</td>
-                    <td>${item.unit || 'PC'}</td>
-                    <td>${item.sloc_destination || '-'}</td>
-                    <td class="pe-3 text-center">
-                        <span class="badge ${getItemStatusClass(item.sap_status)} px-3 py-1">
-                            ${item.sap_status || 'PREPARED'}
-                        </span>
-                    </td>
+                    <td class="text-end fw-semibold">${formatFullNumber(item.quantity || 0)}</td>
+                    <td class="pe-3">${item.unit || 'PC'}</td>
                 </tr>
             `;
         }).join('');
@@ -848,25 +893,81 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function getItemStatusClass(status) {
-        switch(status?.toUpperCase()) {
-            case 'COMPLETED':
-            case 'SUCCESS': return 'bg-success-subtle text-success border';
-            case 'SUBMITTED':
-            case 'PROCESSING': return 'bg-info-subtle text-info border';
-            case 'FAILED': return 'bg-danger-subtle text-danger border';
-            default: return 'bg-secondary-subtle text-secondary border';
+    function formatFullNumber(num) {
+        // Format number without abbreviation (no K, M)
+        return new Intl.NumberFormat('id-ID').format(num);
+    }
+
+    // Print Transfer Function
+    function printTransferNow(id) {
+        if (id) {
+            const url = `/transfers/${id}/print`;
+            console.log('Opening print URL:', url);
+            window.open(url, '_blank');
+            showToast('Opening print preview...', 'info');
+        } else {
+            showToast('Transfer ID is required', 'error');
         }
     }
 
-    function formatNumber(num) {
-        if (num >= 1000000) {
-            return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    // Copy Transfer Details Function
+    function copyTransferDetailsNow(id) {
+        if (!id) {
+            showToast('Transfer ID is required', 'error');
+            return;
         }
-        if (num >= 1000) {
-            return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-        }
-        return new Intl.NumberFormat().format(num);
+
+        fetch(`/transfers/${id}?_details=1`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const transfer = data.data;
+
+                    // Calculate total quantity
+                    let totalQty = 0;
+                    if (transfer.items && transfer.items.length > 0) {
+                        totalQty = transfer.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+                    } else if (transfer.total_qty) {
+                        totalQty = parseFloat(transfer.total_qty);
+                    }
+
+                    const text = `
+TRANSFER DETAILS
+────────────────
+Transfer No: ${transfer.transfer_no || 'N/A'}
+Document No: ${transfer.document_no || 'N/A'}
+Status: ${transfer.status || 'N/A'}
+Move Type: ${transfer.move_type || '311'}
+Plant Supply: ${transfer.plant_supply || 'N/A'}
+Plant Destination: ${transfer.plant_destination || 'N/A'}
+Total Items: ${transfer.total_items || 0}
+Total Quantity: ${formatFullNumber(totalQty)}
+Created By: ${transfer.created_by_name || 'System'}
+Created At: ${transfer.created_at ? new Date(transfer.created_at).toLocaleString('id-ID') : 'N/A'}
+Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocaleString('id-ID') : 'Not completed'}
+                    `.trim();
+
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast('Transfer details copied to clipboard!', 'success');
+                    }).catch(err => {
+                        console.error('Copy failed:', err);
+                        // Fallback method
+                        const textArea = document.createElement('textarea');
+                        textArea.value = text;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        showToast('Transfer details copied!', 'success');
+                    });
+                } else {
+                    showToast('Failed to load transfer details', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error loading transfer details', 'error');
+            });
     }
 
     // Fix Transfer Data
@@ -914,39 +1015,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1500);
     }
 
-    function printTransfer(id) {
-        window.open(`/transfers/${id}/print`, '_blank');
-    }
-
     function copyTransferNo(text) {
         navigator.clipboard.writeText(text).then(() => {
-            showToast('Transfer number copied!', 'success');
+            showToast('Transfer number copied to clipboard!', 'success');
+        }).catch(err => {
+            console.error('Copy failed:', err);
+            showToast('Failed to copy transfer number', 'error');
         });
-    }
-
-    function copyTransferDetails(id) {
-        fetch(`/transfers/${id}?_details=1`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const transfer = data.data;
-                    const text = `
-Transfer No: ${transfer.transfer_no}
-Document No: ${transfer.document_no}
-Status: ${transfer.status}
-Plant Supply: ${transfer.plant_supply}
-Plant Destination: ${transfer.plant_destination}
-Total Items: ${transfer.total_items}
-Total Quantity: ${transfer.total_qty}
-Created By: ${transfer.created_by_name}
-Created At: ${new Date(transfer.created_at).toLocaleString()}
-                    `.trim();
-
-                    navigator.clipboard.writeText(text).then(() => {
-                        showToast('Transfer details copied!', 'success');
-                    });
-                }
-            });
     }
 
     function retryTransfer(id) {
@@ -996,44 +1071,45 @@ Created At: ${new Date(transfer.created_at).toLocaleString()}
             date_from: document.getElementById('exportDateFrom').value,
             date_to: document.getElementById('exportDateTo').value,
             status: document.getElementById('exportStatus').value,
-            search: '{{ request('search') }}',
-            plant_supply: '{{ request('plant_supply') }}',
-            plant_destination: '{{ request('plant_destination') }}'
+            search: document.getElementById('liveSearch').value
         });
         return params.toString();
     }
 
     function showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        toast.className = `position-fixed bottom-0 end-0 p-3`;
-        toast.innerHTML = `
-            <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
-                <div class="d-flex">
-                    <div class="toast-body">
-                        ${message}
+        // Remove existing toasts
+        document.querySelectorAll('.toast-container').forEach(el => el.remove());
+
+        const toastHtml = `
+            <div class="toast-container position-fixed bottom-0 end-0 p-3">
+                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
                     </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
                 </div>
             </div>
         `;
-        document.body.appendChild(toast);
 
-        const bsToast = new bootstrap.Toast(toast.querySelector('.toast'));
-        bsToast.show();
+        document.body.insertAdjacentHTML('beforeend', toastHtml);
 
-        setTimeout(() => {
-            if (toast.parentNode) {
-                document.body.removeChild(toast);
-            }
-        }, 3000);
+        const toastElement = document.querySelector('.toast-container .toast');
+        const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+        toast.show();
+
+        // Remove after hide
+        toastElement.addEventListener('hidden.bs.toast', function () {
+            this.closest('.toast-container').remove();
+        });
     }
 
-    // Remove page parameter from filter form
-    document.getElementById('filterForm').addEventListener('submit', function() {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('page');
-        this.action = url.toString();
-    });
+    // Global functions for dropdown menu
+    window.printTransferNow = printTransferNow;
+    window.copyTransferDetailsNow = copyTransferDetailsNow;
+    window.fixTransferData = fixTransferData;
+    window.retryTransfer = retryTransfer;
 });
 </script>
 @endsection

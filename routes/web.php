@@ -170,3 +170,13 @@ Route::prefix('api/dashboard')->name('api.dashboard.')->middleware(['auth'])->gr
     Route::get('/stats', [DashboardController::class, 'getStats'])->name('stats');
     Route::get('/activities', [DashboardController::class, 'getActivities'])->name('activities');
 });
+
+// Di dalam grup 'transfers' atau tambahkan route baru
+Route::prefix('transfers')->group(function () {
+    Route::get('/', [TransferController::class, 'index'])->name('transfers.index');
+    Route::get('/{id}', [TransferController::class, 'show'])->name('transfers.show');
+    Route::post('/{id}/fix', [TransferController::class, 'fix'])->name('transfers.fix');
+    Route::post('/{id}/retry', [TransferController::class, 'retry'])->name('transfers.retry');
+    Route::get('/{id}/print', [TransferController::class, 'print'])->name('transfers.print'); // <-- Pastikan ini ada
+    Route::get('/export/{format}', [TransferController::class, 'export'])->name('transfers.export');
+});
