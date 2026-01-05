@@ -19,18 +19,18 @@ use App\Exports\TransfersExport;
 class TransferController extends Controller
 {
     /**
-     * Create transfer - FIXED VERSION with proper validation
+     * Create transfer - FIXED VERSION with USER SAP CREDENTIALS
      */
     public function createTransfer(Request $request, $documentId)
     {
         DB::beginTransaction();
 
         try {
-            Log::info('=== TRANSFER PROCESS START ===', [
+            Log::info('=== TRANSFER PROCESS START (WITH USER SAP CREDENTIALS) ===', [
                 'document_id' => $documentId,
                 'user' => Auth::user()->name,
                 'time' => now()->toDateTimeString(),
-                'request_data' => $request->all()
+                'has_sap_credentials' => !empty($request->sap_credentials)
             ]);
 
             // 1. GET DOCUMENT
@@ -43,10 +43,25 @@ class TransferController extends Controller
                 'has_sloc_supply' => !empty($document->sloc_supply)
             ]);
 
-            // 2. VALIDATE REQUEST
+            // 2. VALIDATE REQUEST - INCLUDING SAP CREDENTIALS FROM USER
             $validated = $this->validateTransferRequest($request);
 
-            // 3. CRITICAL: DETERMINE PLANT SUPPLY from document sloc_supply
+            // 3. GET SAP CREDENTIALS FROM USER INPUT (MODAL)
+            $sapCredentials = $request->input('sap_credentials', []);
+
+            // Validate SAP credentials
+            if (empty($sapCredentials) ||
+                empty($sapCredentials['user']) ||
+                empty($sapCredentials['passwd'])) {
+                throw new \Exception('SAP username and password are required from user input');
+            }
+
+            // Mask credentials for logging
+            $maskedCreds = $sapCredentials;
+            $maskedCreds['passwd'] = '******';
+            Log::info('Using SAP credentials from user input:', $maskedCreds);
+
+            // 4. DETERMINE PLANT SUPPLY from document sloc_supply
             $plantSupply = $document->sloc_supply;
 
             if (empty($plantSupply)) {
@@ -63,7 +78,7 @@ class TransferController extends Controller
                 throw new \Exception('Plant supply is required but empty. Document: ' . $document->document_no);
             }
 
-            // 4. DETERMINE MOVE TYPE BASED ON PLANT
+            // 5. DETERMINE MOVE TYPE BASED ON PLANT
             // Jika plant supply sama dengan plant destination, gunakan 311 (dalam plant)
             // Jika berbeda, gunakan 301 (antar plant)
             $moveType = ($plantSupply == $document->plant) ? '311' : '301';
@@ -81,36 +96,44 @@ class TransferController extends Controller
                 'plant_supply' => $plantSupply,
                 'move_type' => $moveType,
                 'remarks' => $remarks,
-                'item_count' => count($validated['items'])
+                'item_count' => count($validated['items']),
+                'sap_user' => substr($sapCredentials['user'], 0, 3) . '...'
             ]);
 
-            // 5. VALIDATE EACH ITEM (FIXED VALIDATION)
+            // 6. VALIDATE EACH ITEM
             foreach ($validated['items'] as $index => $item) {
                 $this->validateTransferItem($document, $item, $index);
             }
 
-            // 6. CALL SAP API - WITH PLANT SUPPLY AND MOVE TYPE IN EACH ITEM
-            $sapResponse = $this->callSapTransferService($document, $plantSupply, $validated, $moveType);
+            // 7. CALL SAP API - WITH USER SAP CREDENTIALS
+            $sapResponse = $this->callSapTransferServiceWithUserCredentials(
+                $document,
+                $plantSupply,
+                $validated,
+                $moveType,
+                $sapCredentials
+            );
 
             if (!$sapResponse['success']) {
                 throw new \Exception('SAP transfer failed: ' . ($sapResponse['message'] ?? 'Unknown error'));
             }
 
-            // 7. GET UNIQUE TRANSFER NUMBER FROM SAP
+            // 8. GET UNIQUE TRANSFER NUMBER FROM SAP
             $transferNo = $sapResponse['transfer_no'];
 
             if (empty($transferNo)) {
                 throw new \Exception('No transfer number received from SAP');
             }
 
-            Log::info('SAP transfer successful', [
+            Log::info('SAP transfer successful with user credentials', [
                 'transfer_no' => $transferNo,
                 'move_type_used' => $moveType,
                 'sap_status' => $sapResponse['status'] ?? 'UNKNOWN',
-                'sap_message' => $sapResponse['message'] ?? ''
+                'sap_message' => $sapResponse['message'] ?? '',
+                'sap_user' => substr($sapCredentials['user'], 0, 3) . '...'
             ]);
 
-            // 8. CHECK FOR EXISTING TRANSFER NUMBER - WITH DUPLICATE HANDLING
+            // 9. CHECK FOR EXISTING TRANSFER NUMBER - WITH DUPLICATE HANDLING
             $existingTransfer = ReservationTransfer::where('transfer_no', $transferNo)->first();
 
             if ($existingTransfer) {
@@ -150,15 +173,15 @@ class TransferController extends Controller
                 $transfer = $this->createNewTransferRecord($document, $plantSupply, $moveType, $transferNo, $validated, $sapResponse);
             }
 
-            // 9. CREATE TRANSFER ITEMS
+            // 10. CREATE TRANSFER ITEMS
             foreach ($validated['items'] as $index => $itemData) {
                 $this->createTransferItem($transfer, $document, $itemData, $index + 1);
             }
 
-            // 10. UPDATE DOCUMENT QUANTITIES
+            // 11. UPDATE DOCUMENT QUANTITIES
             $this->updateDocumentQuantities($document, $validated['items']);
 
-            // 11. COMMIT TRANSACTION
+            // 12. COMMIT TRANSACTION
             DB::commit();
 
             Log::info('=== TRANSFER PROCESS COMPLETED SUCCESSFULLY ===', [
@@ -167,7 +190,8 @@ class TransferController extends Controller
                 'document_no' => $document->document_no,
                 'move_type' => $moveType,
                 'item_count' => $transfer->total_items,
-                'total_qty' => $transfer->total_qty
+                'total_qty' => $transfer->total_qty,
+                'sap_user' => substr($sapCredentials['user'], 0, 3) . '...'
             ]);
 
             return response()->json([
@@ -197,6 +221,217 @@ class TransferController extends Controller
                 'message' => 'Transfer failed: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Call SAP transfer service with USER SAP CREDENTIALS
+     */
+    private function callSapTransferServiceWithUserCredentials($document, $plantSupply, $data, $moveType, $userSapCredentials)
+    {
+        $pythonServiceUrl = env('PYTHON_SERVICE_URL', 'http://localhost:5000');
+        $user = Auth::user();
+
+        // VALIDATE USER SAP CREDENTIALS
+        if (empty($userSapCredentials['user']) || empty($userSapCredentials['passwd'])) {
+            throw new \Exception('SAP username and password are required from user input');
+        }
+
+        // CRITICAL: Ensure plant_supply is not empty
+        if (empty($plantSupply)) {
+            throw new \Exception('Plant supply cannot be empty when calling SAP service');
+        }
+
+        // Prepare transfer data for Flask/SAP
+        $transferData = [
+            'document_no' => $document->document_no,
+            'plant_supply' => $plantSupply,
+            'plant_destination' => $document->plant,
+            'move_type' => $moveType,
+            'posting_date' => now()->format('Ymd'),
+            'created_by' => $user->name,
+            'created_at' => now()->toDateTimeString(),
+            'items' => []
+        ];
+
+        foreach ($data['items'] as $item) {
+            $batchSloc = $item['batch_sloc'] ?? '';
+            // Remove SLOC: prefix
+            if (strpos($batchSloc, 'SLOC:') === 0) {
+                $batchSloc = substr($batchSloc, 5);
+            }
+
+            // Include plant_supply in EACH ITEM
+            $itemData = [
+                'material_code' => $item['material_code'],
+                'material_desc' => $item['material_desc'],
+                'quantity' => (float) $item['quantity'],
+                'unit' => $item['unit'],
+                'plant_tujuan' => $item['plant_tujuan'],
+                'sloc_tujuan' => $item['sloc_tujuan'],
+                'batch' => $item['batch'] ?? '',
+                'batch_sloc' => $batchSloc,
+                'plant_supply' => $plantSupply,
+            ];
+
+            $transferData['items'][] = $itemData;
+        }
+
+        Log::info('Sending to SAP service with USER SAP CREDENTIALS:', [
+            'url' => $pythonServiceUrl . '/api/sap/transfer',
+            'plant_supply' => $plantSupply,
+            'plant_destination' => $document->plant,
+            'move_type' => $moveType,
+            'item_count' => count($transferData['items']),
+            'sap_user' => substr($userSapCredentials['user'], 0, 3) . '...',
+            'sap_client' => $userSapCredentials['client'] ?? 'Not provided'
+        ]);
+
+        try {
+            // USE USER SAP CREDENTIALS, NOT ENVIRONMENT CREDENTIALS
+            $response = Http::timeout(120)->post("{$pythonServiceUrl}/api/sap/transfer", [
+                'transfer_data' => $transferData,
+                'sap_credentials' => $userSapCredentials, // User credentials from modal
+                'user_id' => $user->id,
+                'user_name' => $user->name
+            ]);
+
+            if (!$response->successful()) {
+                $errorBody = $response->body();
+                Log::error('SAP service call failed with user credentials:', [
+                    'status' => $response->status(),
+                    'body' => $errorBody,
+                    'plant_supply' => $plantSupply,
+                    'move_type' => $moveType,
+                    'sap_user' => substr($userSapCredentials['user'], 0, 3) . '...'
+                ]);
+                throw new \Exception('SAP service call failed: ' . $errorBody);
+            }
+
+            $result = $response->json();
+
+            if (!isset($result['success']) || !$result['success']) {
+                Log::error('SAP transfer failed with user credentials:', [
+                    'result' => $result,
+                    'plant_supply' => $plantSupply,
+                    'move_type' => $moveType,
+                    'sap_user' => substr($userSapCredentials['user'], 0, 3) . '...'
+                ]);
+                throw new \Exception('SAP transfer failed: ' . ($result['message'] ?? 'Unknown error'));
+            }
+
+            return $result;
+
+        } catch (\Exception $e) {
+            Log::error('Exception during SAP service call with user credentials:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'python_url' => $pythonServiceUrl,
+                'move_type' => $moveType,
+                'sap_user' => substr($userSapCredentials['user'], 0, 3) . '...'
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Call SAP for SYNC DATA ONLY - USES ENVIRONMENT CREDENTIALS
+     * This is for data synchronization, not for transfers
+     */
+    public function syncDataFromSap(Request $request)
+    {
+        try {
+            $pythonServiceUrl = env('PYTHON_SERVICE_URL', 'http://localhost:5000');
+
+            // Use ENVIRONMENT credentials for sync (read-only operations)
+            $envSapCredentials = [
+                'ashost' => env('SAP_ASHOST'),
+                'sysnr' => env('SAP_SYSNR'),
+                'client' => env('SAP_CLIENT'),
+                'user' => env('SAP_USERNAME'),
+                'passwd' => env('SAP_PASSWORD'),
+                'lang' => env('SAP_LANG', 'EN')
+            ];
+
+            Log::info('Syncing data from SAP using ENVIRONMENT credentials (read-only)', [
+                'sap_user' => substr($envSapCredentials['user'], 0, 3) . '...'
+            ]);
+
+            $response = Http::timeout(120)->post("{$pythonServiceUrl}/api/sap/sync", [
+                'plant' => $request->plant,
+                'pro_numbers' => $request->pro_numbers,
+                'user_id' => Auth::id(),
+                'sap_credentials' => $envSapCredentials // Environment credentials for sync
+            ]);
+
+            // ... rest of sync logic
+
+        } catch (\Exception $e) {
+            Log::error('Sync failed:', ['error' => $e->getMessage()]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Call SAP for STOCK CHECK ONLY - USES ENVIRONMENT CREDENTIALS
+     * This is for checking stock availability, not for transfers
+     */
+    public function checkStockFromSap(Request $request)
+    {
+        try {
+            $pythonServiceUrl = env('PYTHON_SERVICE_URL', 'http://localhost:5000');
+
+            // Use ENVIRONMENT credentials for stock check (read-only operations)
+            $envSapCredentials = [
+                'ashost' => env('SAP_ASHOST'),
+                'sysnr' => env('SAP_SYSNR'),
+                'client' => env('SAP_CLIENT'),
+                'user' => env('SAP_USERNAME'),
+                'passwd' => env('SAP_PASSWORD'),
+                'lang' => env('SAP_LANG', 'EN')
+            ];
+
+            Log::info('Checking stock from SAP using ENVIRONMENT credentials (read-only)', [
+                'sap_user' => substr($envSapCredentials['user'], 0, 3) . '...'
+            ]);
+
+            $response = Http::timeout(120)->post("{$pythonServiceUrl}/api/sap/stock", [
+                'plant' => $request->plant,
+                'matnr' => $request->matnr,
+                'sap_credentials' => $envSapCredentials // Environment credentials for stock check
+            ]);
+
+            // ... rest of stock check logic
+
+        } catch (\Exception $e) {
+            Log::error('Stock check failed:', ['error' => $e->getMessage()]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Simple validation - UPDATED to include sap_credentials
+     */
+    private function validateTransferRequest(Request $request)
+    {
+        return $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.material_code' => 'required|string',
+            'items.*.material_desc' => 'required|string',
+            'items.*.quantity' => 'required|numeric|min:0.001',
+            'items.*.unit' => 'required|string|max:10',
+            'items.*.plant_tujuan' => 'required|string|max:10',
+            'items.*.sloc_tujuan' => 'required|string|max:10',
+            'items.*.batch' => 'nullable|string',
+            'items.*.batch_sloc' => 'required|string|max:10',
+            'remarks' => 'nullable|string',
+            'sap_credentials' => 'required|array',
+            'sap_credentials.user' => 'required|string|min:1',
+            'sap_credentials.passwd' => 'required|string|min:1',
+            'sap_credentials.client' => 'nullable|string',
+            'sap_credentials.lang' => 'nullable|string',
+            'sap_credentials.ashost' => 'nullable|string',
+            'sap_credentials.sysnr' => 'nullable|string'
+        ]);
     }
 
     /**
@@ -247,56 +482,7 @@ class TransferController extends Controller
     }
 
     /**
-     * Generate unique transfer number when duplicate occurs
-     */
-    private function generateUniqueTransferNo($baseTransferNo)
-    {
-        $counter = 1;
-        $newTransferNo = $baseTransferNo;
-
-        while (ReservationTransfer::where('transfer_no', $newTransferNo)->exists()) {
-            $newTransferNo = $baseTransferNo . '_' . str_pad($counter, 3, '0', STR_PAD_LEFT);
-            $counter++;
-
-            if ($counter > 100) {
-                throw new \Exception('Cannot generate unique transfer number after 100 attempts');
-            }
-        }
-
-        Log::info('Generated unique transfer number', [
-            'original' => $baseTransferNo,
-            'new' => $newTransferNo
-        ]);
-
-        return $newTransferNo;
-    }
-
-    /**
-     * Simple validation
-     */
-    private function validateTransferRequest(Request $request)
-    {
-        return $request->validate([
-            'items' => 'required|array|min:1',
-            'items.*.material_code' => 'required|string',
-            'items.*.material_desc' => 'required|string',
-            'items.*.quantity' => 'required|numeric|min:0.001',
-            'items.*.unit' => 'required|string|max:10',
-            'items.*.plant_tujuan' => 'required|string|max:10',
-            'items.*.sloc_tujuan' => 'required|string|max:10',
-            'items.*.batch' => 'nullable|string',
-            'items.*.batch_sloc' => 'required|string|max:10',
-            'remarks' => 'nullable|string'
-        ]);
-    }
-
-    /**
-     * Validate each transfer item - FIXED VERSION
-     * ONLY check:
-     * 1. Item exists in document
-     * 2. Not force completed
-     * 3. Has available stock
-     * 4. Not in completed/closed status
+     * Validate each transfer item
      */
     private function validateTransferItem($document, $item, $index)
     {
@@ -307,7 +493,7 @@ class TransferController extends Controller
             'batch_sloc' => $item['batch_sloc'] ?? null
         ]);
 
-        // 1. Find document item
+        // Find document item
         $docItem = ReservationDocumentItem::where('document_id', $document->id)
             ->where('material_code', $item['material_code'])
             ->first();
@@ -324,22 +510,22 @@ class TransferController extends Controller
             'force_completed' => $docItem->force_completed
         ]);
 
-        // 2. Check if force completed - TIDAK BOLEH TRANSFER
+        // Check if force completed - TIDAK BOLEH TRANSFER
         if ($docItem->force_completed) {
             throw new \Exception("Item {$index}: Material {$item['material_code']} is force completed and cannot be transferred");
         }
 
-        // 3. Check if item is already completed (remaining_qty = 0) - TIDAK BOLEH TRANSFER
+        // Check if item is already completed (remaining_qty = 0) - TIDAK BOLEH TRANSFER
         if ($docItem->remaining_qty <= 0) {
             throw new \Exception("Item {$index}: Material {$item['material_code']} is already completed (remaining quantity: {$docItem->remaining_qty})");
         }
 
-        // 4. Check if document is closed - TIDAK BOLEH TRANSFER
+        // Check if document is closed - TIDAK BOLEH TRANSFER
         if ($document->status === 'closed') {
             throw new \Exception("Item {$index}: Document {$document->document_no} is closed and cannot be transferred");
         }
 
-        // 5. Check stock availability (PRIMARY VALIDATION)
+        // Check stock availability (PRIMARY VALIDATION)
         $batch = $item['batch'] ?? null;
         $batchSloc = $item['batch_sloc'] ?? null;
 
@@ -380,8 +566,7 @@ class TransferController extends Controller
             throw new \Exception("Item {$index}: Batch and storage location are required for stock validation");
         }
 
-        // 6. Check if requested quantity exceeds remaining quantity - HANYA PERINGATAN, BUKAN ERROR
-        // Jika quantity melebihi remaining_qty, tetap izinkan tapi log warning
+        // Check if requested quantity exceeds remaining quantity - HANYA PERINGATAN, BUKAN ERROR
         if ($item['quantity'] > $docItem->remaining_qty) {
             Log::warning("Item {$index}: Requested quantity ({$item['quantity']}) exceeds remaining quantity ({$docItem->remaining_qty}) for {$item['material_code']}");
             // TIDAK throw exception, biarkan proses berlanjut
@@ -395,129 +580,28 @@ class TransferController extends Controller
     }
 
     /**
-     * Call SAP transfer service - INCLUDES MOVE TYPE
+     * Generate unique transfer number when duplicate occurs
      */
-    private function callSapTransferService($document, $plantSupply, $data, $moveType)
+    private function generateUniqueTransferNo($baseTransferNo)
     {
-        $pythonServiceUrl = env('PYTHON_SERVICE_URL', 'http://localhost:5000');
-        $user = Auth::user();
+        $counter = 1;
+        $newTransferNo = $baseTransferNo;
 
-        // CRITICAL: Ensure plant_supply is not empty
-        if (empty($plantSupply)) {
-            throw new \Exception('Plant supply cannot be empty when calling SAP service');
-        }
+        while (ReservationTransfer::where('transfer_no', $newTransferNo)->exists()) {
+            $newTransferNo = $baseTransferNo . '_' . str_pad($counter, 3, '0', STR_PAD_LEFT);
+            $counter++;
 
-        // Prepare transfer data for Flask/SAP
-        $transferData = [
-            'document_no' => $document->document_no,
-            'plant_supply' => $plantSupply,
-            'plant_destination' => $document->plant,
-            'move_type' => $moveType, // Use the determined move type
-            'posting_date' => now()->format('Ymd'),
-            'created_by' => $user->name,
-            'created_at' => now()->toDateTimeString(),
-            'items' => []
-        ];
-
-        foreach ($data['items'] as $item) {
-            $batchSloc = $item['batch_sloc'] ?? '';
-            // Remove SLOC: prefix
-            if (strpos($batchSloc, 'SLOC:') === 0) {
-                $batchSloc = substr($batchSloc, 5);
+            if ($counter > 100) {
+                throw new \Exception('Cannot generate unique transfer number after 100 attempts');
             }
-
-            // Include plant_supply in EACH ITEM
-            $itemData = [
-                'material_code' => $item['material_code'],
-                'material_desc' => $item['material_desc'],
-                'quantity' => (float) $item['quantity'],
-                'unit' => $item['unit'],
-                'plant_tujuan' => $item['plant_tujuan'],
-                'sloc_tujuan' => $item['sloc_tujuan'],
-                'batch' => $item['batch'] ?? '',
-                'batch_sloc' => $batchSloc,
-                'plant_supply' => $plantSupply,
-            ];
-
-            $transferData['items'][] = $itemData;
         }
 
-        Log::info('Sending to SAP service:', [
-            'url' => $pythonServiceUrl . '/api/sap/transfer',
-            'plant_supply' => $plantSupply,
-            'plant_destination' => $document->plant,
-            'move_type' => $moveType,
-            'item_count' => count($transferData['items']),
-            'first_item_sample' => $transferData['items'][0] ?? 'No items'
+        Log::info('Generated unique transfer number', [
+            'original' => $baseTransferNo,
+            'new' => $newTransferNo
         ]);
 
-        // Get SAP credentials
-        $sapCredentials = $this->getSapCredentials();
-
-        try {
-            $response = Http::timeout(120)->post("{$pythonServiceUrl}/api/sap/transfer", [
-                'transfer_data' => $transferData,
-                'sap_credentials' => $sapCredentials,
-                'user_id' => $user->id,
-                'user_name' => $user->name
-            ]);
-
-            if (!$response->successful()) {
-                $errorBody = $response->body();
-                Log::error('SAP service call failed:', [
-                    'status' => $response->status(),
-                    'body' => $errorBody,
-                    'plant_supply' => $plantSupply,
-                    'move_type' => $moveType,
-                    'transfer_data_sample' => json_encode($transferData)
-                ]);
-                throw new \Exception('SAP service call failed: ' . $errorBody);
-            }
-
-            $result = $response->json();
-
-            if (!isset($result['success']) || !$result['success']) {
-                Log::error('SAP transfer failed:', [
-                    'result' => $result,
-                    'plant_supply' => $plantSupply,
-                    'move_type' => $moveType
-                ]);
-                throw new \Exception('SAP transfer failed: ' . ($result['message'] ?? 'Unknown error'));
-            }
-
-            return $result;
-
-        } catch (\Exception $e) {
-            Log::error('Exception during SAP service call:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'python_url' => $pythonServiceUrl,
-                'move_type' => $moveType
-            ]);
-            throw $e;
-        }
-    }
-
-    /**
-     * Get SAP credentials from environment
-     */
-    private function getSapCredentials()
-    {
-        $creds = [
-            'ashost' => env('SAP_ASHOST'),
-            'sysnr' => env('SAP_SYSNR'),
-            'client' => env('SAP_CLIENT'),
-            'user' => env('SAP_USERNAME'),
-            'passwd' => env('SAP_PASSWORD'),
-            'lang' => env('SAP_LANG', 'EN')
-        ];
-
-        // Log credentials (mask password for security)
-        $maskedCreds = $creds;
-        $maskedCreds['passwd'] = '******';
-        Log::info('Using SAP credentials', $maskedCreds);
-
-        return $creds;
+        return $newTransferNo;
     }
 
     /**
