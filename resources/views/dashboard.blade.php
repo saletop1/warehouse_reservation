@@ -429,6 +429,28 @@
     </div>
 </div>
 
+{{-- Transfer Detail Modal (Sama dengan di index.blade.php) --}}
+<div class="modal fade" id="transferDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-bottom bg-light py-2 px-3">
+                <div class="d-flex align-items-center w-100">
+                    <div>
+                        <h5 class="modal-title fw-semibold mb-0" style="font-size: 1.1rem;">
+                            <i class="fas fa-exchange-alt me-2 text-primary"></i>Transfer Details
+                        </h5>
+                        <div class="text-muted small" id="transferNoLabel">Loading...</div>
+                    </div>
+                    <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0" id="transferDetailContent">
+                <!-- Content loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
 /* Mobile-first responsive design */
 .avatar-circle {
@@ -490,6 +512,52 @@
 
 .activity-card:hover {
     transform: scale(1.02);
+}
+
+/* Transfer Detail Modal Styles untuk dashboard */
+.plant-supply {
+    color: #28a745 !important;
+    border-color: #28a745 !important;
+    background-color: rgba(40, 167, 69, 0.1) !important;
+}
+
+.plant-destination {
+    color: #007bff !important;
+    border-color: #007bff !important;
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+
+.compact-table {
+    font-size: 12.5px;
+}
+
+.compact-table td, .compact-table th {
+    padding: 0.25rem 0.5rem;
+}
+
+.message-box {
+    font-size: 12.5px;
+    padding: 0.5rem;
+    margin: 0;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.material-description {
+    max-width: 200px;
+    word-break: break-word;
+    white-space: normal;
+}
+
+/* Transfer Detail Modal Spesifik */
+#transferDetailModal .modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+#transferDetailModal .transfer-detail {
+    min-height: 300px;
 }
 
 /* Responsive table adjustments */
@@ -584,6 +652,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Fungsi untuk memuat transfer quick view
     function loadQuickTransfer(id) {
         fetch(`/transfers/${id}`)
             .then(response => response.json())
@@ -622,17 +691,467 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </div>
                         <div class="d-grid gap-2">
-                            <a href="/transfers/${id}/view" class="btn btn-sm btn-outline-primary">Full Details</a>
+                            <button class="btn btn-sm btn-outline-primary" onclick="loadTransferDetailsFromDashboard(${id})">Full Details</button>
                         </div>
                     `;
                     document.getElementById('quickTransferContent').innerHTML = content;
-                    new bootstrap.Modal(document.getElementById('quickTransferModal')).show();
+
+                    // Gunakan cara yang lebih aman untuk membuka modal
+                    const quickModalEl = document.getElementById('quickTransferModal');
+                    if (quickModalEl) {
+                        const quickModal = bootstrap.Modal.getOrCreateInstance(quickModalEl);
+                        quickModal.show();
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error loading transfer:', error);
             });
     }
+
+    // Fungsi untuk memuat detail transfer lengkap
+    function loadTransferDetailsFromDashboard(id) {
+        // Tutup modal quick view dengan cara yang aman
+        const quickModalEl = document.getElementById('quickTransferModal');
+        if (quickModalEl) {
+            const quickModal = bootstrap.Modal.getInstance(quickModalEl);
+            if (quickModal) {
+                quickModal.hide();
+            }
+        }
+
+        // Buka modal detail lengkap
+        const modalEl = document.getElementById('transferDetailModal');
+        if (!modalEl) {
+            console.error('Transfer Detail Modal element not found');
+            return;
+        }
+
+        const modal = new bootstrap.Modal(modalEl);
+        const contentDiv = document.getElementById('transferDetailContent');
+
+        // Show loading state
+        contentDiv.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted">Loading transfer details...</p>
+            </div>
+        `;
+
+        modal.show();
+
+        fetch(`/transfers/${id}?_details=1`)
+            .then(response => {
+                if (!response.ok) throw new Error('Network response was not ok');
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    const transfer = data.data;
+                    document.getElementById('transferNoLabel').textContent = transfer.transfer_no || 'N/A';
+                    contentDiv.innerHTML = generateTransferDetailContent(transfer);
+                } else {
+                    contentDiv.innerHTML = `
+                        <div class="text-center py-3">
+                            <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                            <h6 class="text-danger mb-2">Failed to load transfer details</h6>
+                            <p class="text-muted small">${data.message || 'Unknown error'}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                contentDiv.innerHTML = `
+                    <div class="text-center py-3">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                        <h6 class="text-danger mb-2">Error loading transfer details</h6>
+                        <p class="text-muted small">${error.message}</p>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="loadTransferDetailsFromDashboard(${id})">
+                            <i class="fas fa-redo me-1"></i>Retry
+                        </button>
+                    </div>
+                `;
+            });
+    }
+
+    // Fungsi untuk generate konten detail transfer
+    function generateTransferDetailContent(transfer) {
+        const formattedDate = transfer.created_at ?
+            new Date(transfer.created_at).toLocaleString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }) : 'N/A';
+
+        const completedDate = transfer.completed_at ?
+            new Date(transfer.completed_at).toLocaleString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }) : 'Not completed';
+
+        // Calculate total quantity from items
+        let totalQty = 0;
+        if (transfer.items && transfer.items.length > 0) {
+            totalQty = transfer.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+        } else if (transfer.total_qty) {
+            totalQty = parseFloat(transfer.total_qty);
+        }
+
+        return `
+            <div class="transfer-detail">
+                {{-- Compact Header --}}
+                <div class="p-3 border-bottom bg-light-subtle">
+                    <div class="row align-items-center g-2">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-2">
+                                    <i class="fas fa-exchange-alt text-primary"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-0">${transfer.transfer_no || 'N/A'}</h6>
+                                    <div class="text-muted small">
+                                        <i class="fas fa-file-alt me-1"></i>Doc: ${transfer.document_no || 'N/A'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            <span class="badge ${getStatusClass(transfer.status)} px-3 py-1">
+                                <i class="fas fa-${getStatusIcon(transfer.status)} me-1"></i>
+                                ${transfer.status || 'UNKNOWN'}
+                            </span>
+                            <div class="text-muted small mt-1">
+                                Created: ${formattedDate}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Compact Main Content --}}
+                <div class="p-3">
+                    {{-- Compact Information Row --}}
+                    <div class="row g-3 mb-3">
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Move Type</div>
+                                    <div class="fw-semibold">${transfer.move_type || '311'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Total Items</div>
+                                    <div class="fw-semibold">${transfer.total_items || 0}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Total Quantity</div>
+                                    <div class="fw-bold">${formatFullNumber(totalQty)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Completion</div>
+                                    <span class="badge ${transfer.completed_at ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'}">
+                                        ${transfer.completed_at ? 'Completed' : 'In Progress'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Plant Information --}}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="card border h-100">
+                                <div class="card-header bg-transparent py-2 px-3">
+                                    <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
+                                        <i class="fas fa-building me-2 text-primary"></i>Plant Information
+                                    </h6>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Supply Plant</div>
+                                            <div class="badge plant-supply px-3 py-1">
+                                                ${transfer.plant_supply || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Dest Plant</div>
+                                            <div class="badge plant-destination px-3 py-1">
+                                                ${transfer.plant_destination || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Created By</div>
+                                            <div class="fw-semibold small">${transfer.created_by_name || 'System'}</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Completed At</div>
+                                            <div class="fw-semibold small">${completedDate}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Remarks Section --}}
+                        <div class="col-md-6">
+                            <div class="card border h-100">
+                                <div class="card-header bg-transparent py-2 px-3">
+                                    <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
+                                        <i class="fas fa-sticky-note me-2 text-warning"></i>Remarks & SAP Message
+                                    </h6>
+                                </div>
+                                <div class="card-body p-2">
+                                    ${transfer.remarks ? `
+                                    <div class="mb-2">
+                                        <div class="text-muted small mb-1">Remarks:</div>
+                                        <div class="message-box bg-light p-2 rounded">${transfer.remarks}</div>
+                                    </div>
+                                    ` : ''}
+
+                                    ${transfer.sap_message ? `
+                                    <div>
+                                        <div class="text-muted small mb-1">SAP Message:</div>
+                                        <div class="message-box bg-light p-2 rounded">${transfer.sap_message}</div>
+                                    </div>
+                                    ` : ''}
+
+                                    ${!transfer.remarks && !transfer.sap_message ? `
+                                    <div class="text-center py-3">
+                                        <i class="fas fa-comment-slash text-muted fa-lg mb-2"></i>
+                                        <p class="text-muted small mb-0">No remarks or messages</p>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Transfer Items Table --}}
+                    <div class="card border">
+                        <div class="card-header bg-transparent border-bottom py-2 px-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
+                                    <i class="fas fa-boxes me-2 text-primary"></i>Transfer Items
+                                    <span class="badge bg-primary-subtle text-primary ms-1">
+                                        ${transfer.items?.length || 0} items
+                                    </span>
+                                </h6>
+                                <div class="text-muted small">
+                                    Total: ${formatFullNumber(totalQty)}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                <table class="table table-sm mb-0 compact-table">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3 py-1 fw-semibold">#</th>
+                                            <th class="py-1 fw-semibold">Material Code</th>
+                                            <th class="py-1 fw-semibold">Description</th>
+                                            <th class="py-1 fw-semibold">Batch</th>
+                                            <th class="py-1 fw-semibold text-end">Quantity</th>
+                                            <th class="pe-3 py-1 fw-semibold">Unit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${generateCompactItemsTable(transfer.items || [])}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Action Buttons --}}
+                    <div class="d-flex gap-2 mt-3">
+                        ${transfer.document_id ? `
+                        <a href="/documents/${transfer.document_id}" class="btn btn-sm btn-outline-info">
+                            <i class="fas fa-file-alt me-1"></i>View Document
+                        </a>
+                        ` : ''}
+                        <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="copyTransferDetailsNow(${transfer.id})">
+                            <i class="fas fa-copy me-1"></i>Copy Details
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Fungsi helper untuk generate tabel items
+    function generateCompactItemsTable(items) {
+        if (!items || items.length === 0) {
+            return `
+                <tr>
+                    <td colspan="6" class="text-center py-3 text-muted small">
+                        <i class="fas fa-box-open me-1"></i>No items found
+                    </td>
+                </tr>
+            `;
+        }
+
+        return items.slice(0, 10).map((item, index) => {
+            const materialCode = item.material_code || 'N/A';
+            const formattedCode = /^\d+$/.test(materialCode) ?
+                materialCode.replace(/^0+/, '') : materialCode;
+            const description = item.material_description || '-';
+
+            return `
+                <tr>
+                    <td class="ps-3">${index + 1}</td>
+                    <td>
+                        <div class="fw-semibold" style="font-size: 11.5px;">${formattedCode}</div>
+                    </td>
+                    <td class="material-description">
+                        <div class="text-muted small" style="font-size: 11.5px; line-height: 1.3;">${description}</div>
+                    </td>
+                    <td>${item.batch || '-'}</td>
+                    <td class="text-end fw-semibold">${formatFullNumber(item.quantity || 0)}</td>
+                    <td class="pe-3">${item.unit || 'PC'}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Fungsi helper untuk status
+    function getStatusClass(status) {
+        switch(status?.toUpperCase()) {
+            case 'COMPLETED': return 'bg-success-subtle text-success border-success';
+            case 'SUBMITTED': return 'bg-warning-subtle text-warning border-warning';
+            case 'FAILED': return 'bg-danger-subtle text-danger border-danger';
+            case 'PENDING': return 'bg-secondary-subtle text-secondary border-secondary';
+            case 'PROCESSING': return 'bg-info-subtle text-info border-info';
+            default: return 'bg-light text-dark border';
+        }
+    }
+
+    function getStatusIcon(status) {
+        switch(status?.toUpperCase()) {
+            case 'COMPLETED': return 'check-circle';
+            case 'SUBMITTED': return 'clock';
+            case 'FAILED': return 'times-circle';
+            case 'PENDING': return 'hourglass-half';
+            case 'PROCESSING': return 'sync-alt';
+            default: return 'question-circle';
+        }
+    }
+
+    function formatFullNumber(num) {
+        return new Intl.NumberFormat('id-ID').format(num);
+    }
+
+    // Fungsi untuk copy transfer details
+    function copyTransferDetailsNow(id) {
+        if (!id) {
+            showToast('Transfer ID is required', 'error');
+            return;
+        }
+
+        fetch(`/transfers/${id}?_details=1`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const transfer = data.data;
+
+                    // Calculate total quantity
+                    let totalQty = 0;
+                    if (transfer.items && transfer.items.length > 0) {
+                        totalQty = transfer.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+                    } else if (transfer.total_qty) {
+                        totalQty = parseFloat(transfer.total_qty);
+                    }
+
+                    const text = `
+TRANSFER DETAILS
+────────────────
+Transfer No: ${transfer.transfer_no || 'N/A'}
+Document No: ${transfer.document_no || 'N/A'}
+Status: ${transfer.status || 'N/A'}
+Move Type: ${transfer.move_type || '311'}
+Plant Supply: ${transfer.plant_supply || 'N/A'}
+Plant Destination: ${transfer.plant_destination || 'N/A'}
+Total Items: ${transfer.total_items || 0}
+Total Quantity: ${formatFullNumber(totalQty)}
+Created By: ${transfer.created_by_name || 'System'}
+Created At: ${transfer.created_at ? new Date(transfer.created_at).toLocaleString('id-ID') : 'N/A'}
+Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocaleString('id-ID') : 'Not completed'}
+                    `.trim();
+
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast('Transfer details copied to clipboard!', 'success');
+                    }).catch(err => {
+                        console.error('Copy failed:', err);
+                        // Fallback method
+                        const textArea = document.createElement('textarea');
+                        textArea.value = text;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        showToast('Transfer details copied!', 'success');
+                    });
+                } else {
+                    showToast('Failed to load transfer details', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error loading transfer details', 'error');
+            });
+    }
+
+    // Fungsi untuk show toast notification
+    function showToast(message, type = 'info') {
+        // Remove existing toasts
+        document.querySelectorAll('.toast-container').forEach(el => el.remove());
+
+        const toastHtml = `
+            <div class="toast-container position-fixed bottom-0 end-0 p-3">
+                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', toastHtml);
+
+        const toastElement = document.querySelector('.toast-container .toast');
+        const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+        toast.show();
+
+        // Remove after hide
+        toastElement.addEventListener('hidden.bs.toast', function () {
+            this.closest('.toast-container').remove();
+        });
+    }
+
+    // Export fungsi ke global scope
+    window.loadTransferDetailsFromDashboard = loadTransferDetailsFromDashboard;
+    window.copyTransferDetailsNow = copyTransferDetailsNow;
 
     // Auto refresh stats every 2 minutes
     setInterval(() => {

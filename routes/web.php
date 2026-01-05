@@ -179,4 +179,5 @@ Route::prefix('transfers')->group(function () {
     Route::post('/{id}/retry', [TransferController::class, 'retry'])->name('transfers.retry');
     Route::get('/{id}/print', [TransferController::class, 'print'])->name('transfers.print'); // <-- Pastikan ini ada
     Route::get('/export/{format}', [TransferController::class, 'export'])->name('transfers.export');
+    Route::get('/{id}', [TransferController::class, 'show'])->name('transfers.show');
 });

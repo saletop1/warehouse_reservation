@@ -874,7 +874,7 @@ class TransferController extends Controller
     public function index(Request $request)
     {
         try {
-            $perPage = $request->get('per_page', 20);
+            $perPage = $request->get('per_page', 50);
 
             $query = ReservationTransfer::with(['items', 'document'])
                 ->orderBy('created_at', 'desc');

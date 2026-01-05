@@ -11,19 +11,13 @@
                         <i class="fas fa-exchange-alt me-2 text-primary"></i>Transfer List
                     </h2>
                     <p class="text-muted mb-0">
-                        Total: {{ $transfers->count() }} transfers • Last sync: {{ now()->format('H:i') }}
+                        Total: {{ $transfers->total() }} transfers • Last sync: {{ now()->format('H:i') }}
                     </p>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
                     <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-1"></i>Back
                     </a>
-                    <button class="btn btn-outline-primary" onclick="syncTransfers()">
-                        <i class="fas fa-sync-alt me-1"></i>Sync
-                    </button>
-                    <button class="btn btn-primary" onclick="exportTransfers()">
-                        <i class="fas fa-download me-1"></i>Export
-                    </button>
                 </div>
             </div>
         </div>
@@ -38,7 +32,8 @@
                        id="liveSearch"
                        class="form-control border-0 shadow-none"
                        placeholder="Search anything in transfer list... (transfer no, document no, plant, status, etc.)"
-                       autocomplete="off">
+                       autocomplete="off"
+                       value="{{ request('search') }}">
                 <span id="searchResultCount" class="badge bg-primary ms-2 d-none">0 found</span>
             </div>
         </div>
@@ -51,16 +46,15 @@
                 <table class="table table-hover mb-0" id="transfersTable">
                     <thead class="table-light sticky-top" style="top: 0; z-index: 10;">
                         <tr>
-                            <th class="ps-3 py-3 fw-semibold" style="width: 15%; min-width: 140px">
+                            <th class="ps-3 py-3 fw-semibold" style="width: 20%; min-width: 160px">
                                 <i class="fas fa-hashtag me-2 text-muted"></i>Transfer No
                             </th>
-                            <th class="py-3 fw-semibold" style="width: 12%; min-width: 110px">Document</th>
-                            <th class="py-3 fw-semibold" style="width: 10%; min-width: 100px">Status</th>
-                            <th class="py-3 fw-semibold" style="width: 18%; min-width: 140px">Plants</th>
-                            <th class="py-3 fw-semibold text-center" style="width: 8%; min-width: 80px">Items</th>
-                            <th class="py-3 fw-semibold text-center" style="width: 10%; min-width: 90px">Quantity</th>
-                            <th class="py-3 fw-semibold" style="width: 12%; min-width: 110px">Created</th>
-                            <th class="py-3 fw-semibold text-center" style="width: 15%; min-width: 120px">Actions</th>
+                            <th class="py-3 fw-semibold" style="width: 15%; min-width: 130px">Document</th>
+                            <th class="py-3 fw-semibold" style="width: 12%; min-width: 110px">Status</th>
+                            <th class="py-3 fw-semibold" style="width: 20%; min-width: 160px">Plants</th>
+                            <th class="py-3 fw-semibold text-center" style="width: 10%; min-width: 90px">Items</th>
+                            <th class="py-3 fw-semibold text-center" style="width: 12%; min-width: 100px">Quantity</th>
+                            <th class="py-3 fw-semibold" style="width: 16%; min-width: 140px">Created</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -72,10 +66,16 @@
                             @php
                                 $transferKey = $transfer->transfer_no . '_' . $transfer->plant_destination;
 
-                                if (in_array($transferKey, $displayedTransfers) ||
-                                    empty($transfer->plant_destination) ||
-                                    $transfer->total_items == 0 ||
-                                    $transfer->total_qty == 0) {
+                                // HAPUS kondisi yang melewatkan data
+                                // if (in_array($transferKey, $displayedTransfers) ||
+                                //     empty($transfer->plant_destination) ||
+                                //     $transfer->total_items == 0 ||
+                                //     $transfer->total_qty == 0) {
+                                //     continue;
+                                // }
+
+                                // Hanya cek duplikat saja
+                                if (in_array($transferKey, $displayedTransfers)) {
                                     continue;
                                 }
 
@@ -84,25 +84,29 @@
 
                             <tr class="align-middle transfer-row">
                                 <td class="ps-3">
-                                    <div class="d-flex align-items-center">
-                                        <div class="me-2">
-                                            @if($transfer->status == 'COMPLETED')
-                                            <i class="fas fa-check-circle text-success"></i>
-                                            @elseif($transfer->status == 'SUBMITTED')
-                                            <i class="fas fa-clock text-warning"></i>
-                                            @elseif($transfer->status == 'FAILED')
-                                            <i class="fas fa-times-circle text-danger"></i>
-                                            @else
-                                            <i class="fas fa-question-circle text-secondary"></i>
-                                            @endif
-                                        </div>
-                                        <div>
-                                            <div class="fw-semibold transfer-no">{{ $transfer->transfer_no ?? 'N/A' }}</div>
-                                            <div class="text-muted">
-                                                {{ \Carbon\Carbon::parse($transfer->created_at)->format('H:i') }}
+                                    <a href="javascript:void(0);" class="text-decoration-none text-dark view-transfer-clickable"
+                                       data-id="{{ $transfer->id }}"
+                                       style="display: block;">
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-2">
+                                                @if($transfer->status == 'COMPLETED')
+                                                <i class="fas fa-check-circle text-success"></i>
+                                                @elseif($transfer->status == 'SUBMITTED')
+                                                <i class="fas fa-clock text-warning"></i>
+                                                @elseif($transfer->status == 'FAILED')
+                                                <i class="fas fa-times-circle text-danger"></i>
+                                                @else
+                                                <i class="fas fa-question-circle text-secondary"></i>
+                                                @endif
+                                            </div>
+                                            <div>
+                                                <div class="fw-semibold transfer-no text-primary">{{ $transfer->transfer_no ?? 'N/A' }}</div>
+                                                <div class="text-muted small">
+                                                    {{ \Carbon\Carbon::parse($transfer->created_at)->format('H:i') }}
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    </a>
                                 </td>
                                 <td>
                                     @if($transfer->document)
@@ -110,7 +114,7 @@
                                        class="text-decoration-none text-dark fw-medium d-block">
                                         {{ $transfer->document_no }}
                                     </a>
-                                    <div class="text-muted">
+                                    <div class="text-muted small">
                                         Plant: {{ $transfer->document->plant ?? 'N/A' }}
                                     </div>
                                     @else
@@ -139,7 +143,7 @@
                                             <div class="badge plant-supply border px-3 py-1" style="color: #28a745 !important; border-color: #28a745 !important; background-color: rgba(40, 167, 69, 0.1) !important;">
                                                 {{ $transfer->plant_supply ?? 'N/A' }}
                                             </div>
-                                            <div class="text-muted mt-1">Supply</div>
+                                            <div class="text-muted small mt-1">Supply</div>
                                         </div>
                                         @if(!empty($transfer->plant_destination) && $transfer->plant_destination != $transfer->plant_supply)
                                         <div class="me-2">
@@ -149,7 +153,7 @@
                                             <div class="badge plant-destination border px-3 py-1" style="color: #007bff !important; border-color: #007bff !important; background-color: rgba(0, 123, 255, 0.1) !important;">
                                                 {{ $transfer->plant_destination ?? 'N/A' }}
                                             </div>
-                                            <div class="text-muted mt-1">Dest</div>
+                                            <div class="text-muted small mt-1">Dest</div>
                                         </div>
                                         @endif
                                     </div>
@@ -172,66 +176,18 @@
                                         @endphp
                                         {{ number_format($totalQty, 0, ',', '.') }}
                                     </div>
-                                    <div class="text-muted">{{ $transfer->items->first()->unit ?? 'PC' }}</div>
+                                    <div class="text-muted small">{{ $transfer->items->first()->unit ?? 'PC' }}</div>
                                 </td>
                                 <td>
                                     <div>
                                         <div>{{ \Carbon\Carbon::parse($transfer->created_at)->format('d/m/y') }}</div>
-                                        <div class="text-muted">{{ $transfer->created_by_name ?? 'System' }}</div>
-                                    </div>
-                                </td>
-                                <td class="text-center">
-                                    <div class="btn-group" role="group">
-                                        <button class="btn btn-outline-primary view-transfer"
-                                                data-id="{{ $transfer->id }}"
-                                                title="View Details">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        @if($transfer->document_id)
-                                        <a href="{{ route('documents.show', $transfer->document_id) }}"
-                                           class="btn btn-outline-info"
-                                           title="View Document">
-                                            <i class="fas fa-file-alt"></i>
-                                        </a>
-                                        @endif
-                                        <button class="btn btn-outline-secondary dropdown-toggle"
-                                                type="button"
-                                                data-bs-toggle="dropdown">
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-end shadow">
-                                            <li>
-                                                <button class="dropdown-item" onclick="printTransferNow({{ $transfer->id }})">
-                                                    <i class="fas fa-print me-2 text-muted"></i>Print
-                                                </button>
-                                            </li>
-                                            <li>
-                                                <button class="dropdown-item" onclick="copyTransferDetailsNow({{ $transfer->id }})">
-                                                    <i class="fas fa-copy me-2 text-muted"></i>Copy Details
-                                                </button>
-                                            </li>
-                                            @if($transfer->status == 'FAILED')
-                                            <li><hr class="dropdown-divider"></li>
-                                            <li>
-                                                <button class="dropdown-item text-danger" onclick="retryTransfer({{ $transfer->id }})">
-                                                    <i class="fas fa-redo me-2"></i>Retry
-                                                </button>
-                                            </li>
-                                            @endif
-                                            @if(empty($transfer->plant_destination))
-                                            <li><hr class="dropdown-divider"></li>
-                                            <li>
-                                                <button class="dropdown-item text-warning" onclick="fixTransferData({{ $transfer->id }})">
-                                                    <i class="fas fa-wrench me-2"></i>Fix Data
-                                                </button>
-                                            </li>
-                                            @endif
-                                        </ul>
+                                        <div class="text-muted small">{{ $transfer->created_by_name ?? 'System' }}</div>
                                     </div>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="text-center py-5">
+                                <td colspan="7" class="text-center py-5">
                                     <div class="py-4">
                                         <i class="fas fa-exchange-alt fa-3x text-muted opacity-25 mb-3"></i>
                                         <h5 class="text-muted mb-2">No transfers found</h5>
@@ -245,15 +201,28 @@
             </div>
         </div>
 
-        {{-- Row Count Summary --}}
-        @if($transfers->count() > 0)
+        {{-- Debug Info --}}
+        <div class="card-footer bg-info bg-opacity-10 border-top py-2 px-3">
+            <div class="text-info small">
+                <i class="fas fa-info-circle me-1"></i>
+                Database has {{ $transfers->total() }} total transfers.
+            </div>
+        </div>
+
+        {{-- Pagination --}}
+        @php
+            // Perbaikan: Hanya tampilkan pagination jika ada lebih dari 1 halaman
+            $showPagination = $transfers->hasPages() && $transfers->lastPage() > 1;
+        @endphp
+
+        @if($showPagination)
         <div class="card-footer bg-transparent border-top py-3 px-4">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="text-muted">
-                    Showing <span id="visibleRowCount">{{ $displayedTransfers ? count($displayedTransfers) : 0 }}</span> transfers
+                    Showing {{ $transfers->firstItem() ?? 0 }} to {{ $transfers->lastItem() ?? 0 }} of {{ $transfers->total() }} transfers
                 </div>
-                <div class="text-muted">
-                    <i class="fas fa-info-circle me-1"></i>Scroll to see more rows
+                <div class="d-flex justify-content-end">
+                    {{ $transfers->onEachSide(1)->links('pagination::bootstrap-5') }}
                 </div>
             </div>
         </div>
@@ -278,59 +247,6 @@
             </div>
             <div class="modal-body p-0" id="transferDetailContent">
                 <!-- Content loaded via AJAX -->
-            </div>
-        </div>
-    </div>
-</div>
-
-{{-- Export Modal --}}
-<div class="modal fade" id="exportModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header border-bottom py-3">
-                <h5 class="modal-title fw-semibold">
-                    <i class="fas fa-download me-2 text-primary"></i>Export Transfers
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-3">
-                <div class="mb-3">
-                    <label class="form-label">Export Format</label>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-outline-primary flex-fill" onclick="exportToExcel()">
-                            <i class="fas fa-file-excel me-1"></i>Excel
-                        </button>
-                        <button class="btn btn-outline-success flex-fill" onclick="exportToCSV()">
-                            <i class="fas fa-file-csv me-1"></i>CSV
-                        </button>
-                        <button class="btn btn-outline-danger flex-fill" onclick="exportToPDF()">
-                            <i class="fas fa-file-pdf me-1"></i>PDF
-                        </button>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Date Range</label>
-                    <div class="input-group">
-                        <input type="date" id="exportDateFrom" class="form-control" value="{{ now()->subDays(7)->format('Y-m-d') }}">
-                        <span class="input-group-text">to</span>
-                        <input type="date" id="exportDateTo" class="form-control" value="{{ now()->format('Y-m-d') }}">
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Status Filter</label>
-                    <select id="exportStatus" class="form-select">
-                        <option value="">All Status</option>
-                        <option value="COMPLETED">Completed</option>
-                        <option value="SUBMITTED">Submitted</option>
-                        <option value="FAILED">Failed</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer py-3">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="confirmExport()">
-                    <i class="fas fa-download me-1"></i>Export
-                </button>
             </div>
         </div>
     </div>
@@ -475,6 +391,67 @@ body {
     background: #a8a8a8;
 }
 
+/* Clickable Transfer No Styling */
+.view-transfer-clickable:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+    border-radius: 4px;
+    padding: 4px;
+    margin: -4px;
+}
+
+.view-transfer-clickable:hover .transfer-no {
+    text-decoration: underline;
+}
+
+/* Pagination Styling - FIXED */
+.pagination {
+    margin-bottom: 0;
+    --bs-pagination-padding-x: 0.5rem;
+    --bs-pagination-padding-y: 0.25rem;
+    --bs-pagination-font-size: 0.875rem;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.pagination .page-link {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+    color: #007bff;
+    border: 1px solid #dee2e6;
+    min-width: 32px;
+    text-align: center;
+}
+
+.pagination .page-link:hover {
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+    color: #0056b3;
+}
+
+/* Style khusus untuk tombol Previous/Next */
+.pagination .page-item:first-child .page-link,
+.pagination .page-item:last-child .page-link {
+    padding: 0.25rem 0.75rem;
+    font-weight: 500;
+}
+
+/* Hilangkan border radius berlebihan */
+.pagination .page-link {
+    border-radius: 0.25rem;
+}
+
+/* Style untuk disabled state */
+.pagination .page-item.disabled .page-link {
+    color: #6c757d;
+    pointer-events: none;
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+}
+
 /* Responsive Adjustments */
 @media (max-width: 768px) {
     body {
@@ -487,6 +464,24 @@ body {
 
     .table-container {
         max-height: 550px;
+    }
+
+    /* Compact pagination untuk mobile */
+    .pagination {
+        --bs-pagination-padding-x: 0.375rem;
+        --bs-pagination-padding-y: 0.125rem;
+        --bs-pagination-font-size: 0.75rem;
+    }
+
+    .pagination .page-link {
+        padding: 0.125rem 0.375rem;
+        min-width: 28px;
+        font-size: 0.75rem;
+    }
+
+    .pagination .page-item:first-child .page-link,
+    .pagination .page-item:last-child .page-link {
+        padding: 0.125rem 0.5rem;
     }
 }
 
@@ -503,62 +498,274 @@ body {
     .table > :not(caption) > * > * {
         padding: 0.5rem 0.25rem;
     }
+
+    .pagination {
+        flex-wrap: wrap;
+    }
+
+    .pagination .page-item .page-link {
+        padding: 0.2rem 0.4rem;
+        font-size: 11px;
+        min-width: 24px;
+    }
 }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Live Search Functionality
+    // Live Search Functionality - Now searches all pages via server
     const liveSearch = document.getElementById('liveSearch');
-    const searchResultCount = document.getElementById('searchResultCount');
-    const visibleRowCount = document.getElementById('visibleRowCount');
-    const transferRows = document.querySelectorAll('.transfer-row');
+    let searchTimeout;
 
     liveSearch.addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase().trim();
-        let visibleCount = 0;
+        const searchTerm = this.value.trim();
 
-        transferRows.forEach(row => {
-            const textContent = row.textContent.toLowerCase();
-            const transferNo = row.querySelector('.transfer-no')?.textContent.toLowerCase() || '';
-            const documentNo = row.querySelector('.document-no')?.textContent.toLowerCase() || '';
-            const transferStatus = row.querySelector('.transfer-status')?.textContent.toLowerCase() || '';
-            const plantSupply = row.querySelector('.plant-supply')?.textContent.toLowerCase() || '';
-            const plantDestination = row.querySelector('.plant-destination')?.textContent.toLowerCase() || '';
+        // Clear previous timeout
+        clearTimeout(searchTimeout);
 
-            const matches = searchTerm === '' ||
-                textContent.includes(searchTerm) ||
-                transferNo.includes(searchTerm) ||
-                documentNo.includes(searchTerm) ||
-                transferStatus.includes(searchTerm) ||
-                plantSupply.includes(searchTerm) ||
-                plantDestination.includes(searchTerm);
-
-            if (matches) {
-                row.style.display = '';
-                visibleCount++;
-            } else {
-                row.style.display = 'none';
+        // Set new timeout to debounce search
+        searchTimeout = setTimeout(() => {
+            if (searchTerm.length >= 1 || searchTerm.length === 0) {
+                performServerSearch(searchTerm);
             }
-        });
-
-        // Update counters
-        if (searchTerm) {
-            searchResultCount.textContent = `${visibleCount} found`;
-            searchResultCount.classList.remove('d-none');
-        } else {
-            searchResultCount.classList.add('d-none');
-        }
-
-        visibleRowCount.textContent = visibleCount;
+        }, 500); // 500ms debounce
     });
 
-    // View Transfer Details
-    document.querySelectorAll('.view-transfer').forEach(btn => {
-        btn.addEventListener('click', function() {
+    // Initial load with search term if exists
+    if (liveSearch.value.trim()) {
+        performServerSearch(liveSearch.value.trim());
+    }
+
+    // Perform server-side search
+    function performServerSearch(searchTerm) {
+        const url = new URL(window.location.href);
+        const params = new URLSearchParams(url.search);
+
+        if (searchTerm) {
+            params.set('search', searchTerm);
+        } else {
+            params.delete('search');
+        }
+
+        // Reset to page 1 when searching
+        params.set('page', 1);
+
+        // Show loading state
+        const tableBody = document.querySelector('#transfersTable tbody');
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted">Searching transfers...</p>
+                </td>
+            </tr>
+        `;
+
+        // Update URL and fetch
+        history.pushState({}, '', `${url.pathname}?${params.toString()}`);
+        fetch(`${url.pathname}?${params.toString()}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.text();
+        })
+        .then(html => {
+            // Parse the HTML response
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Extract just the table body content
+            const newTableBody = doc.querySelector('#transfersTable tbody');
+            const newPagination = doc.querySelector('.card-footer');
+            const newDebugInfo = doc.querySelector('.card-footer.bg-info');
+
+            // Update the table
+            if (newTableBody) {
+                tableBody.innerHTML = newTableBody.innerHTML;
+
+                // Re-attach event listeners to clickable transfer numbers
+                document.querySelectorAll('.view-transfer-clickable').forEach(link => {
+                    link.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const transferId = this.dataset.id;
+                        loadTransferDetails(transferId);
+                    });
+                });
+            }
+
+            // Update pagination
+            if (newPagination) {
+                const currentPagination = document.querySelector('.card-footer.bg-transparent');
+                if (currentPagination) {
+                    currentPagination.innerHTML = newPagination.innerHTML;
+                }
+            } else {
+                // Hapus pagination jika tidak ada di response
+                const currentPagination = document.querySelector('.card-footer.bg-transparent');
+                if (currentPagination) {
+                    currentPagination.remove();
+                }
+            }
+
+            // Update debug info
+            if (newDebugInfo) {
+                const currentDebugInfo = document.querySelector('.card-footer.bg-info');
+                if (currentDebugInfo) {
+                    currentDebugInfo.innerHTML = newDebugInfo.innerHTML;
+                }
+            }
+
+            // Update search result count
+            const searchResultCount = document.getElementById('searchResultCount');
+            const transferRows = document.querySelectorAll('.transfer-row');
+
+            if (searchTerm) {
+                searchResultCount.textContent = `${transferRows.length} found`;
+                searchResultCount.classList.remove('d-none');
+            } else {
+                searchResultCount.classList.add('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                        <p>Error loading search results</p>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    // Click on Transfer No to view details
+    document.querySelectorAll('.view-transfer-clickable').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
             const transferId = this.dataset.id;
             loadTransferDetails(transferId);
         });
+    });
+
+    // Event delegation untuk pagination
+    document.addEventListener('click', function(e) {
+        // Cek jika yang diklik adalah link pagination
+        if (e.target.closest('.pagination a')) {
+            e.preventDefault();
+            const pageLink = e.target.closest('.pagination a');
+            const url = pageLink.getAttribute('href');
+
+            if (url && url !== '#') {
+                loadPage(url);
+            }
+        }
+    });
+
+    // Load page dengan AJAX
+    function loadPage(url) {
+        const tableBody = document.querySelector('#transfersTable tbody');
+        const searchTerm = document.getElementById('liveSearch').value.trim();
+
+        // Gabungkan search term dengan URL pagination
+        const urlObj = new URL(url, window.location.origin);
+        if (searchTerm) {
+            urlObj.searchParams.set('search', searchTerm);
+        }
+
+        // Tampilkan loading state
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted">Loading transfers...</p>
+                </td>
+            </tr>
+        `;
+
+        fetch(urlObj.toString(), {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.text();
+        })
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Update table body
+            const newTableBody = doc.querySelector('#transfersTable tbody');
+            if (newTableBody) {
+                tableBody.innerHTML = newTableBody.innerHTML;
+
+                // Re-attach event listeners
+                document.querySelectorAll('.view-transfer-clickable').forEach(link => {
+                    link.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const transferId = this.dataset.id;
+                        loadTransferDetails(transferId);
+                    });
+                });
+            }
+
+            // Update pagination
+            const newPagination = doc.querySelector('.card-footer.bg-transparent');
+            if (newPagination) {
+                const currentPagination = document.querySelector('.card-footer.bg-transparent');
+                if (currentPagination) {
+                    currentPagination.innerHTML = newPagination.innerHTML;
+                }
+            } else {
+                // Hapus pagination jika tidak ada di response
+                const currentPagination = document.querySelector('.card-footer.bg-transparent');
+                if (currentPagination) {
+                    currentPagination.remove();
+                }
+            }
+
+            // Update debug info
+            const newDebugInfo = doc.querySelector('.card-footer.bg-info');
+            if (newDebugInfo) {
+                const currentDebugInfo = document.querySelector('.card-footer.bg-info');
+                if (currentDebugInfo) {
+                    currentDebugInfo.innerHTML = newDebugInfo.innerHTML;
+                }
+            }
+
+            // Update URL tanpa reload page
+            window.history.pushState({}, '', urlObj.toString());
+
+            // Scroll ke atas tabel
+            document.querySelector('.table-container').scrollTop = 0;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                        <p>Error loading page</p>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', function() {
+        loadPage(window.location.href);
     });
 
     // Load Transfer Details with Complete Data
@@ -825,6 +1032,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         <button class="btn btn-sm btn-outline-secondary" onclick="copyTransferDetailsNow(${transfer.id})">
                             <i class="fas fa-copy me-1"></i>Copy Details
                         </button>
+                        ${transfer.status === 'FAILED' ? `
+                        <button class="btn btn-sm btn-outline-danger" onclick="retryTransfer(${transfer.id})">
+                            <i class="fas fa-redo me-1"></i>Retry
+                        </button>
+                        ` : ''}
+                        ${!transfer.plant_destination ? `
+                        <button class="btn btn-sm btn-outline-warning" onclick="fixTransferData(${transfer.id})">
+                            <i class="fas fa-wrench me-1"></i>Fix Data
+                        </button>
+                        ` : ''}
                         ${transfer.document_id ? `
                         <a href="/documents/${transfer.document_id}" class="btn btn-sm btn-outline-info ms-auto">
                             <i class="fas fa-file-alt me-1"></i>View Document
@@ -998,23 +1215,6 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         }
     }
 
-    // Export Functions
-    function exportTransfers() {
-        new bootstrap.Modal(document.getElementById('exportModal')).show();
-    }
-
-    function syncTransfers() {
-        const btn = event.currentTarget;
-        const originalHtml = btn.innerHTML;
-
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
-        btn.disabled = true;
-
-        setTimeout(() => {
-            window.location.reload();
-        }, 1500);
-    }
-
     function copyTransferNo(text) {
         navigator.clipboard.writeText(text).then(() => {
             showToast('Transfer number copied to clipboard!', 'success');
@@ -1042,38 +1242,6 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                 }
             });
         }
-    }
-
-    function exportToExcel() {
-        const params = buildExportParams();
-        window.open(`/transfers/export/excel?${params}`, '_blank');
-        bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();
-    }
-
-    function exportToCSV() {
-        const params = buildExportParams();
-        window.open(`/transfers/export/csv?${params}`, '_blank');
-        bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();
-    }
-
-    function exportToPDF() {
-        const params = buildExportParams();
-        window.open(`/transfers/export/pdf?${params}`, '_blank');
-        bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();
-    }
-
-    function confirmExport() {
-        exportToExcel();
-    }
-
-    function buildExportParams() {
-        const params = new URLSearchParams({
-            date_from: document.getElementById('exportDateFrom').value,
-            date_to: document.getElementById('exportDateTo').value,
-            status: document.getElementById('exportStatus').value,
-            search: document.getElementById('liveSearch').value
-        });
-        return params.toString();
     }
 
     function showToast(message, type = 'info') {
@@ -1105,7 +1273,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         });
     }
 
-    // Global functions for dropdown menu
+    // Global functions for modal actions
     window.printTransferNow = printTransferNow;
     window.copyTransferDetailsNow = copyTransferDetailsNow;
     window.fixTransferData = fixTransferData;
