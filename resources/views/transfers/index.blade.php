@@ -11,10 +11,13 @@
                         <i class="fas fa-exchange-alt me-2 text-primary"></i>Transfer List
                     </h2>
                     <p class="text-muted mb-0">
-                        Total: {{ $transfers->total() }} transfers • Last sync: {{ now()->format('H:i') }}
+                        Total: <span id="totalCount">{{ $transfers->total() }}</span> transfers
                     </p>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-outline-primary" id="clearSearchBtn" style="display: none;">
+                        <i class="fas fa-times me-1"></i>Clear Search
+                    </button>
                     <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-1"></i>Back
                     </a>
@@ -26,20 +29,21 @@
     {{-- Live Search --}}
     <div class="card border-0 shadow-sm rounded-3 mb-3">
         <div class="card-body p-3">
-            <div class="d-flex align-items-center mb-0">
+            <div class="d-flex align-items-center">
                 <i class="fas fa-search me-2 text-primary"></i>
                 <input type="text"
-                       id="liveSearch"
-                       class="form-control border-0 shadow-none"
-                       placeholder="Search anything in transfer list... (transfer no, document no, plant, status, etc.)"
-                       autocomplete="off"
-                       value="{{ request('search') }}">
+                    id="liveSearch"
+                    class="form-control border-0 shadow-none"
+                    placeholder="Search transfers (Transfer No, Document No, Plant, Status, etc)..."
+                    autocomplete="off"
+                    value="{{ request('search') }}">
+                <div class="spinner-border spinner-border-sm text-primary ms-2 d-none" id="searchSpinner"></div>
                 <span id="searchResultCount" class="badge bg-primary ms-2 d-none">0 found</span>
             </div>
         </div>
     </div>
 
-    {{-- Transfers Table with Sticky Header --}}
+    {{-- Transfers Table --}}
     <div class="card border-0 shadow-sm rounded-3">
         <div class="card-body p-0">
             <div class="table-container" style="max-height: 700px; overflow-y: auto;">
@@ -57,145 +61,8 @@
                             <th class="py-3 fw-semibold" style="width: 16%; min-width: 140px">Created</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @php
-                            $displayedTransfers = [];
-                        @endphp
-
-                        @forelse($transfers as $transfer)
-                            @php
-                                $transferKey = $transfer->transfer_no . '_' . $transfer->plant_destination;
-
-                                // HAPUS kondisi yang melewatkan data
-                                // if (in_array($transferKey, $displayedTransfers) ||
-                                //     empty($transfer->plant_destination) ||
-                                //     $transfer->total_items == 0 ||
-                                //     $transfer->total_qty == 0) {
-                                //     continue;
-                                // }
-
-                                // Hanya cek duplikat saja
-                                if (in_array($transferKey, $displayedTransfers)) {
-                                    continue;
-                                }
-
-                                $displayedTransfers[] = $transferKey;
-                            @endphp
-
-                            <tr class="align-middle transfer-row">
-                                <td class="ps-3">
-                                    <a href="javascript:void(0);" class="text-decoration-none text-dark view-transfer-clickable"
-                                       data-id="{{ $transfer->id }}"
-                                       style="display: block;">
-                                        <div class="d-flex align-items-center">
-                                            <div class="me-2">
-                                                @if($transfer->status == 'COMPLETED')
-                                                <i class="fas fa-check-circle text-success"></i>
-                                                @elseif($transfer->status == 'SUBMITTED')
-                                                <i class="fas fa-clock text-warning"></i>
-                                                @elseif($transfer->status == 'FAILED')
-                                                <i class="fas fa-times-circle text-danger"></i>
-                                                @else
-                                                <i class="fas fa-question-circle text-secondary"></i>
-                                                @endif
-                                            </div>
-                                            <div>
-                                                <div class="fw-semibold transfer-no text-primary">{{ $transfer->transfer_no ?? 'N/A' }}</div>
-                                                <div class="text-muted small">
-                                                    {{ \Carbon\Carbon::parse($transfer->created_at)->format('H:i') }}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                </td>
-                                <td>
-                                    @if($transfer->document)
-                                    <a href="{{ route('documents.show', $transfer->document->id) }}"
-                                       class="text-decoration-none text-dark fw-medium d-block">
-                                        {{ $transfer->document_no }}
-                                    </a>
-                                    <div class="text-muted small">
-                                        Plant: {{ $transfer->document->plant ?? 'N/A' }}
-                                    </div>
-                                    @else
-                                    <div class="text-muted document-no">{{ $transfer->document_no }}</div>
-                                    @endif
-                                </td>
-                                <td>
-                                    @php
-                                        $statusConfig = [
-                                            'COMPLETED' => ['class' => 'success', 'icon' => 'check-circle', 'label' => 'Done'],
-                                            'SUBMITTED' => ['class' => 'warning', 'icon' => 'clock', 'label' => 'Sent'],
-                                            'FAILED' => ['class' => 'danger', 'icon' => 'times-circle', 'label' => 'Failed'],
-                                            'PENDING' => ['class' => 'secondary', 'icon' => 'hourglass-half', 'label' => 'Pending'],
-                                            'PROCESSING' => ['class' => 'info', 'icon' => 'sync-alt', 'label' => 'Processing'],
-                                        ];
-                                        $config = $statusConfig[$transfer->status] ?? ['class' => 'secondary', 'icon' => 'question-circle', 'label' => $transfer->status];
-                                    @endphp
-                                    <span class="badge bg-{{ $config['class'] }}-subtle text-{{ $config['class'] }} border border-{{ $config['class'] }}-subtle px-3 py-1 transfer-status">
-                                        <i class="fas fa-{{ $config['icon'] }} me-1"></i>
-                                        {{ $config['label'] }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <div class="text-center me-2">
-                                            <div class="badge plant-supply border px-3 py-1" style="color: #28a745 !important; border-color: #28a745 !important; background-color: rgba(40, 167, 69, 0.1) !important;">
-                                                {{ $transfer->plant_supply ?? 'N/A' }}
-                                            </div>
-                                            <div class="text-muted small mt-1">Supply</div>
-                                        </div>
-                                        @if(!empty($transfer->plant_destination) && $transfer->plant_destination != $transfer->plant_supply)
-                                        <div class="me-2">
-                                            <i class="fas fa-arrow-right text-muted"></i>
-                                        </div>
-                                        <div class="text-center">
-                                            <div class="badge plant-destination border px-3 py-1" style="color: #007bff !important; border-color: #007bff !important; background-color: rgba(0, 123, 255, 0.1) !important;">
-                                                {{ $transfer->plant_destination ?? 'N/A' }}
-                                            </div>
-                                            <div class="text-muted small mt-1">Dest</div>
-                                        </div>
-                                        @endif
-                                    </div>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-light text-dark border px-3 py-1">
-                                        {{ $transfer->total_items ?? 0 }}
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <div class="fw-bold">
-                                        @php
-                                            // Calculate total quantity from all transfer items
-                                            $totalQty = 0;
-                                            if($transfer->items && $transfer->items->count() > 0) {
-                                                $totalQty = $transfer->items->sum('quantity');
-                                            } elseif($transfer->total_qty) {
-                                                $totalQty = $transfer->total_qty;
-                                            }
-                                        @endphp
-                                        {{ number_format($totalQty, 0, ',', '.') }}
-                                    </div>
-                                    <div class="text-muted small">{{ $transfer->items->first()->unit ?? 'PC' }}</div>
-                                </td>
-                                <td>
-                                    <div>
-                                        <div>{{ \Carbon\Carbon::parse($transfer->created_at)->format('d/m/y') }}</div>
-                                        <div class="text-muted small">{{ $transfer->created_by_name ?? 'System' }}</div>
-                                    </div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="7" class="text-center py-5">
-                                    <div class="py-4">
-                                        <i class="fas fa-exchange-alt fa-3x text-muted opacity-25 mb-3"></i>
-                                        <h5 class="text-muted mb-2">No transfers found</h5>
-                                        <p class="text-muted mb-3">No valid transfer records available</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        @endforelse
+                    <tbody id="transfersTableBody">
+                        @include('transfers.partials.table', ['transfers' => $transfers])
                     </tbody>
                 </table>
             </div>
@@ -205,21 +72,16 @@
         <div class="card-footer bg-info bg-opacity-10 border-top py-2 px-3">
             <div class="text-info small">
                 <i class="fas fa-info-circle me-1"></i>
-                Database has {{ $transfers->total() }} total transfers.
+                <span id="debugInfo">Showing {{ $transfers->firstItem() ?? 0 }}-{{ $transfers->lastItem() ?? 0 }} of {{ $transfers->total() }} transfers</span>
             </div>
         </div>
 
         {{-- Pagination --}}
-        @php
-            // Perbaikan: Hanya tampilkan pagination jika ada lebih dari 1 halaman
-            $showPagination = $transfers->hasPages() && $transfers->lastPage() > 1;
-        @endphp
-
-        @if($showPagination)
-        <div class="card-footer bg-transparent border-top py-3 px-4">
+        @if($transfers->hasPages() && $transfers->lastPage() > 1)
+        <div class="card-footer bg-transparent border-top py-3 px-4" id="paginationContainer">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="text-muted">
-                    Showing {{ $transfers->firstItem() ?? 0 }} to {{ $transfers->lastItem() ?? 0 }} of {{ $transfers->total() }} transfers
+                    Page {{ $transfers->currentPage() }} of {{ $transfers->lastPage() }}
                 </div>
                 <div class="d-flex justify-content-end">
                     {{ $transfers->onEachSide(1)->links('pagination::bootstrap-5') }}
@@ -452,6 +314,20 @@ body {
     border-color: #dee2e6;
 }
 
+/* Search Highlight */
+.search-highlight {
+    background-color: #fff3cd;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 600;
+}
+
+/* Loading State */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
 /* Responsive Adjustments */
 @media (max-width: 768px) {
     body {
@@ -513,183 +389,172 @@ body {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Live Search Functionality - Now searches all pages via server
     const liveSearch = document.getElementById('liveSearch');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const searchSpinner = document.getElementById('searchSpinner');
+    const searchResultCount = document.getElementById('searchResultCount');
+    const transfersTableBody = document.getElementById('transfersTableBody');
+    const paginationContainer = document.getElementById('paginationContainer');
+    const debugInfo = document.getElementById('debugInfo');
+    const totalCount = document.getElementById('totalCount');
+
     let searchTimeout;
+    let currentSearch = '';
 
-    liveSearch.addEventListener('input', function() {
-        const searchTerm = this.value.trim();
-
-        // Clear previous timeout
-        clearTimeout(searchTimeout);
-
-        // Set new timeout to debounce search
-        searchTimeout = setTimeout(() => {
-            if (searchTerm.length >= 1 || searchTerm.length === 0) {
-                performServerSearch(searchTerm);
-            }
-        }, 500); // 500ms debounce
-    });
-
-    // Initial load with search term if exists
-    if (liveSearch.value.trim()) {
-        performServerSearch(liveSearch.value.trim());
+    // Initialize from URL
+    if (liveSearch.value) {
+        currentSearch = liveSearch.value;
+        updateClearButton();
     }
 
-    // Perform server-side search
-    function performServerSearch(searchTerm) {
-        const url = new URL(window.location.href);
-        const params = new URLSearchParams(url.search);
+    // Live Search with Debounce
+    liveSearch.addEventListener('input', function() {
+        const searchTerm = this.value.trim();
+        currentSearch = searchTerm;
+
+        clearTimeout(searchTimeout);
+
+        updateClearButton();
+
+        // Search immediately when typing
+        searchTimeout = setTimeout(() => {
+            performSearch(searchTerm);
+        }, 300);
+    });
+
+    // Clear Search
+    clearSearchBtn.addEventListener('click', function() {
+        liveSearch.value = '';
+        currentSearch = '';
+        performSearch('');
+        updateClearButton();
+    });
+
+    function updateClearButton() {
+        clearSearchBtn.style.display = currentSearch ? 'block' : 'none';
+    }
+
+    // Perform Search
+    function performSearch(searchTerm) {
+        searchSpinner.classList.remove('d-none');
+
+        // Build URL with search parameter
+        let url = '{{ route("transfers.index") }}';
+        const params = new URLSearchParams();
 
         if (searchTerm) {
-            params.set('search', searchTerm);
-        } else {
-            params.delete('search');
+            params.append('search', searchTerm);
         }
 
-        // Reset to page 1 when searching
-        params.set('page', 1);
+        params.append('_ajax', '1');
 
-        // Show loading state
-        const tableBody = document.querySelector('#transfersTable tbody');
-        tableBody.innerHTML = `
-            <tr>
-                <td colspan="7" class="text-center py-5">
-                    <div class="spinner-border text-primary mb-3" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="text-muted">Searching transfers...</p>
-                </td>
-            </tr>
-        `;
+        const fullUrl = `${url}?${params.toString()}`;
 
-        // Update URL and fetch
-        history.pushState({}, '', `${url.pathname}?${params.toString()}`);
-        fetch(`${url.pathname}?${params.toString()}`, {
+        // Make AJAX request
+        fetch(fullUrl, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Accept': 'application/json'
             }
         })
-        .then(response => {
-            if (!response.ok) throw new Error('Network response was not ok');
-            return response.text();
-        })
-        .then(html => {
-            // Parse the HTML response
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update table body
+                transfersTableBody.innerHTML = data.html;
 
-            // Extract just the table body content
-            const newTableBody = doc.querySelector('#transfersTable tbody');
-            const newPagination = doc.querySelector('.card-footer');
-            const newDebugInfo = doc.querySelector('.card-footer.bg-info');
-
-            // Update the table
-            if (newTableBody) {
-                tableBody.innerHTML = newTableBody.innerHTML;
-
-                // Re-attach event listeners to clickable transfer numbers
-                document.querySelectorAll('.view-transfer-clickable').forEach(link => {
-                    link.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        const transferId = this.dataset.id;
-                        loadTransferDetails(transferId);
-                    });
-                });
-            }
-
-            // Update pagination
-            if (newPagination) {
-                const currentPagination = document.querySelector('.card-footer.bg-transparent');
-                if (currentPagination) {
-                    currentPagination.innerHTML = newPagination.innerHTML;
+                // Update pagination
+                if (paginationContainer) {
+                    if (data.pagination) {
+                        paginationContainer.innerHTML = data.pagination;
+                        attachPaginationEvents();
+                    } else {
+                        paginationContainer.style.display = 'none';
+                    }
                 }
+
+                // Update counts
+                totalCount.textContent = data.total;
+
+                if (searchTerm) {
+                    searchResultCount.textContent = `${data.count} results`;
+                    searchResultCount.classList.remove('d-none');
+                } else {
+                    searchResultCount.classList.add('d-none');
+                }
+
+                // Update debug info
+                debugInfo.textContent = `Showing ${data.count} of ${data.total} transfers`;
+
+                // Update URL without reload
+                updateUrl(searchTerm);
+
+                // Reattach event listeners
+                attachTransferClickEvents();
             } else {
-                // Hapus pagination jika tidak ada di response
-                const currentPagination = document.querySelector('.card-footer.bg-transparent');
-                if (currentPagination) {
-                    currentPagination.remove();
-                }
-            }
-
-            // Update debug info
-            if (newDebugInfo) {
-                const currentDebugInfo = document.querySelector('.card-footer.bg-info');
-                if (currentDebugInfo) {
-                    currentDebugInfo.innerHTML = newDebugInfo.innerHTML;
-                }
-            }
-
-            // Update search result count
-            const searchResultCount = document.getElementById('searchResultCount');
-            const transferRows = document.querySelectorAll('.transfer-row');
-
-            if (searchTerm) {
-                searchResultCount.textContent = `${transferRows.length} found`;
-                searchResultCount.classList.remove('d-none');
-            } else {
-                searchResultCount.classList.add('d-none');
+                console.error('Error:', data.message);
+                showToast(data.message, 'danger');
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="7" class="text-center py-5 text-danger">
-                        <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
-                        <p>Error loading search results</p>
-                    </td>
-                </tr>
-            `;
+            console.error('Fetch error:', error);
+            showToast('Error loading data', 'danger');
+        })
+        .finally(() => {
+            searchSpinner.classList.add('d-none');
         });
     }
 
-    // Click on Transfer No to view details
-    document.querySelectorAll('.view-transfer-clickable').forEach(link => {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            const transferId = this.dataset.id;
-            loadTransferDetails(transferId);
-        });
-    });
+    // Update URL
+    function updateUrl(searchTerm) {
+        const url = new URL(window.location);
 
-    // Event delegation untuk pagination
-    document.addEventListener('click', function(e) {
-        // Cek jika yang diklik adalah link pagination
-        if (e.target.closest('.pagination a')) {
-            e.preventDefault();
-            const pageLink = e.target.closest('.pagination a');
-            const url = pageLink.getAttribute('href');
-
-            if (url && url !== '#') {
-                loadPage(url);
-            }
-        }
-    });
-
-    // Load page dengan AJAX
-    function loadPage(url) {
-        const tableBody = document.querySelector('#transfersTable tbody');
-        const searchTerm = document.getElementById('liveSearch').value.trim();
-
-        // Gabungkan search term dengan URL pagination
-        const urlObj = new URL(url, window.location.origin);
         if (searchTerm) {
-            urlObj.searchParams.set('search', searchTerm);
+            url.searchParams.set('search', searchTerm);
+        } else {
+            url.searchParams.delete('search');
         }
 
-        // Tampilkan loading state
-        tableBody.innerHTML = `
-            <tr>
-                <td colspan="7" class="text-center py-5">
-                    <div class="spinner-border text-primary mb-3" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="text-muted">Loading transfers...</p>
-                </td>
-            </tr>
-        `;
+        history.replaceState({}, '', url);
+    }
+
+    // Attach transfer click events
+    function attachTransferClickEvents() {
+        document.querySelectorAll('.view-transfer-clickable').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const transferId = this.dataset.id;
+                loadTransferDetails(transferId);
+            });
+        });
+    }
+
+    // Attach pagination events
+    function attachPaginationEvents() {
+        if (!paginationContainer) return;
+
+        document.querySelectorAll('.pagination a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const url = this.getAttribute('href');
+                if (url && url !== '#') {
+                    loadPage(url);
+                }
+            });
+        });
+    }
+
+    // Load specific page
+    function loadPage(url) {
+        searchSpinner.classList.remove('d-none');
+
+        // Add AJAX parameter to URL
+        const urlObj = new URL(url, window.location.origin);
+        urlObj.searchParams.append('_ajax', '1');
+
+        if (currentSearch) {
+            urlObj.searchParams.append('search', currentSearch);
+        }
 
         fetch(urlObj.toString(), {
             headers: {
@@ -697,83 +562,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 'Accept': 'application/json'
             }
         })
-        .then(response => {
-            if (!response.ok) throw new Error('Network response was not ok');
-            return response.text();
-        })
-        .then(html => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                transfersTableBody.innerHTML = data.html;
 
-            // Update table body
-            const newTableBody = doc.querySelector('#transfersTable tbody');
-            if (newTableBody) {
-                tableBody.innerHTML = newTableBody.innerHTML;
-
-                // Re-attach event listeners
-                document.querySelectorAll('.view-transfer-clickable').forEach(link => {
-                    link.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        const transferId = this.dataset.id;
-                        loadTransferDetails(transferId);
-                    });
-                });
-            }
-
-            // Update pagination
-            const newPagination = doc.querySelector('.card-footer.bg-transparent');
-            if (newPagination) {
-                const currentPagination = document.querySelector('.card-footer.bg-transparent');
-                if (currentPagination) {
-                    currentPagination.innerHTML = newPagination.innerHTML;
+                if (paginationContainer && data.pagination) {
+                    paginationContainer.innerHTML = data.pagination;
+                    attachPaginationEvents();
                 }
-            } else {
-                // Hapus pagination jika tidak ada di response
-                const currentPagination = document.querySelector('.card-footer.bg-transparent');
-                if (currentPagination) {
-                    currentPagination.remove();
-                }
+
+                // Update URL
+                history.pushState({}, '', urlObj.toString());
+
+                // Reattach events
+                attachTransferClickEvents();
             }
-
-            // Update debug info
-            const newDebugInfo = doc.querySelector('.card-footer.bg-info');
-            if (newDebugInfo) {
-                const currentDebugInfo = document.querySelector('.card-footer.bg-info');
-                if (currentDebugInfo) {
-                    currentDebugInfo.innerHTML = newDebugInfo.innerHTML;
-                }
-            }
-
-            // Update URL tanpa reload page
-            window.history.pushState({}, '', urlObj.toString());
-
-            // Scroll ke atas tabel
-            document.querySelector('.table-container').scrollTop = 0;
         })
         .catch(error => {
             console.error('Error:', error);
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="7" class="text-center py-5 text-danger">
-                        <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
-                        <p>Error loading page</p>
-                    </td>
-                </tr>
-            `;
+            showToast('Error loading page', 'danger');
+        })
+        .finally(() => {
+            searchSpinner.classList.add('d-none');
         });
     }
 
-    // Handle browser back/forward buttons
+    // Handle browser back/forward
     window.addEventListener('popstate', function() {
-        loadPage(window.location.href);
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchTerm = urlParams.get('search') || '';
+        liveSearch.value = searchTerm;
+        currentSearch = searchTerm;
+        updateClearButton();
+        performSearch(searchTerm);
     });
 
-    // Load Transfer Details with Complete Data
-    function loadTransferDetails(transferId) {
+    // Load Transfer Details
+    async function loadTransferDetails(transferId) {
         const modal = new bootstrap.Modal(document.getElementById('transferDetailModal'));
         const contentDiv = document.getElementById('transferDetailContent');
 
-        // Show loading state
         contentDiv.innerHTML = `
             <div class="text-center py-5">
                 <div class="spinner-border text-primary mb-3" role="status">
@@ -785,42 +614,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
         modal.show();
 
-        fetch(`/transfers/${transferId}?_details=1`)
-            .then(response => {
-                if (!response.ok) throw new Error('Network response was not ok');
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    const transfer = data.data;
-                    document.getElementById('transferNoLabel').textContent = transfer.transfer_no || 'N/A';
-                    contentDiv.innerHTML = generateTransferDetailContent(transfer);
-                } else {
-                    contentDiv.innerHTML = `
-                        <div class="text-center py-3">
-                            <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
-                            <h6 class="text-danger mb-2">Failed to load transfer details</h6>
-                            <p class="text-muted small">${data.message || 'Unknown error'}</p>
-                        </div>
-                    `;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
+        try {
+            const response = await fetch(`/transfers/${transferId}?_details=1`);
+            const data = await response.json();
+
+            if (data.success) {
+                const transfer = data.data;
+                document.getElementById('transferNoLabel').textContent = transfer.transfer_no || 'N/A';
+                contentDiv.innerHTML = generateTransferDetailContent(transfer);
+            } else {
                 contentDiv.innerHTML = `
                     <div class="text-center py-3">
                         <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
-                        <h6 class="text-danger mb-2">Error loading transfer details</h6>
-                        <p class="text-muted small">${error.message}</p>
-                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="loadTransferDetails(${transferId})">
-                            <i class="fas fa-redo me-1"></i>Retry
-                        </button>
+                        <h6 class="text-danger mb-2">Failed to load transfer details</h6>
+                        <p class="text-muted small">${data.message}</p>
                     </div>
                 `;
-            });
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            contentDiv.innerHTML = `
+                <div class="text-center py-3">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                    <h6 class="text-danger mb-2">Error loading transfer details</h6>
+                    <p class="text-muted small">${error.message}</p>
+                </div>
+            `;
+        }
     }
 
-    // Generate Compact Transfer Detail Content
+    // Generate Compact Transfer Detail Content - DESAIN ASLI YANG BAGUS
     function generateTransferDetailContent(transfer) {
         const formattedDate = transfer.created_at ?
             new Date(transfer.created_at).toLocaleString('id-ID', {
@@ -1111,24 +934,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function formatFullNumber(num) {
-        // Format number without abbreviation (no K, M)
         return new Intl.NumberFormat('id-ID').format(num);
     }
 
-    // Print Transfer Function
-    function printTransferNow(id) {
-        if (id) {
-            const url = `/transfers/${id}/print`;
-            console.log('Opening print URL:', url);
-            window.open(url, '_blank');
-            showToast('Opening print preview...', 'info');
-        } else {
-            showToast('Transfer ID is required', 'error');
-        }
+    // Toast notification
+    function showToast(message, type = 'info') {
+        const toast = `
+            <div class="toast-container position-fixed bottom-0 end-0 p-3">
+                <div class="toast align-items-center text-white bg-${type} border-0">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', toast);
+        const toastEl = document.querySelector('.toast-container .toast');
+        const bsToast = new bootstrap.Toast(toastEl, { delay: 3000 });
+        bsToast.show();
+
+        toastEl.addEventListener('hidden.bs.toast', function() {
+            this.closest('.toast-container').remove();
+        });
     }
 
-    // Copy Transfer Details Function
-    function copyTransferDetailsNow(id) {
+    // Global functions for modal actions
+    window.printTransferNow = function(id) {
+        if (id) {
+            const url = `/transfers/${id}/print`;
+            window.open(url, '_blank');
+            showToast('Opening print preview...', 'info');
+        }
+    };
+
+    window.copyTransferDetailsNow = function(id) {
         if (!id) {
             showToast('Transfer ID is required', 'error');
             return;
@@ -1139,8 +980,6 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success) {
                     const transfer = data.data;
-
-                    // Calculate total quantity
                     let totalQty = 0;
                     if (transfer.items && transfer.items.length > 0) {
                         totalQty = transfer.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
@@ -1168,7 +1007,6 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                         showToast('Transfer details copied to clipboard!', 'success');
                     }).catch(err => {
                         console.error('Copy failed:', err);
-                        // Fallback method
                         const textArea = document.createElement('textarea');
                         textArea.value = text;
                         document.body.appendChild(textArea);
@@ -1185,25 +1023,21 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                 console.error('Error:', error);
                 showToast('Error loading transfer details', 'error');
             });
-    }
+    };
 
-    // Fix Transfer Data
-    function fixTransferData(id) {
-        if (confirm('Fix this transfer data? This will try to complete missing information.')) {
+    window.fixTransferData = function(id) {
+        if (confirm('Fix this transfer data?')) {
             fetch(`/transfers/${id}/fix`, {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Content-Type': 'application/json'
                 }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     showToast('Transfer data fixed successfully', 'success');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1500);
+                    setTimeout(() => performSearch(), 1000);
                 } else {
                     showToast('Failed to fix transfer: ' + data.message, 'error');
                 }
@@ -1213,18 +1047,9 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                 showToast('Error fixing transfer data', 'error');
             });
         }
-    }
+    };
 
-    function copyTransferNo(text) {
-        navigator.clipboard.writeText(text).then(() => {
-            showToast('Transfer number copied to clipboard!', 'success');
-        }).catch(err => {
-            console.error('Copy failed:', err);
-            showToast('Failed to copy transfer number', 'error');
-        });
-    }
-
-    function retryTransfer(id) {
+    window.retryTransfer = function(id) {
         if (confirm('Retry this failed transfer?')) {
             fetch(`/transfers/${id}/retry`, {
                 method: 'POST',
@@ -1236,48 +1061,17 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             .then(data => {
                 if (data.success) {
                     showToast('Transfer retry initiated', 'success');
-                    setTimeout(() => window.location.reload(), 2000);
+                    setTimeout(() => performSearch(), 2000);
                 } else {
                     showToast('Failed to retry transfer', 'error');
                 }
             });
         }
-    }
+    };
 
-    function showToast(message, type = 'info') {
-        // Remove existing toasts
-        document.querySelectorAll('.toast-container').forEach(el => el.remove());
-
-        const toastHtml = `
-            <div class="toast-container position-fixed bottom-0 end-0 p-3">
-                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
-                    <div class="d-flex">
-                        <div class="toast-body">
-                            ${message}
-                        </div>
-                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', toastHtml);
-
-        const toastElement = document.querySelector('.toast-container .toast');
-        const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
-        toast.show();
-
-        // Remove after hide
-        toastElement.addEventListener('hidden.bs.toast', function () {
-            this.closest('.toast-container').remove();
-        });
-    }
-
-    // Global functions for modal actions
-    window.printTransferNow = printTransferNow;
-    window.copyTransferDetailsNow = copyTransferDetailsNow;
-    window.fixTransferData = fixTransferData;
-    window.retryTransfer = retryTransfer;
+    // Initialize events
+    attachTransferClickEvents();
+    attachPaginationEvents();
 });
 </script>
 @endsection

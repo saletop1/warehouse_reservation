@@ -35,12 +35,12 @@
                         <a class="nav-link {{ request()->routeIs('reservations.index') ? 'active' : '' }}" href="{{ route('reservations.index') }}">
                             <i class="fas fa-list"></i> Reservations
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ request()->routeIs('reservations.create') ? 'active' : '' }}" href="{{ route('reservations.create') }}">
-                            <i class="fas fa-plus-circle"></i> Create New
-                        </a>
-                    </li>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ request()->routeIs('transfers.index') ? 'active' : '' }}" href="{{ route('transfers.index') }}">
+                                <i class="fas fa-exchange-alt"></i> Transfer List
+                            </a>
+                        </li>
                     <li class="nav-item">
                         <a class="nav-link {{ request()->routeIs('documents.*') ? 'active' : '' }}" href="{{ route('documents.index') }}">
                             <i class="fas fa-file-alt"></i> Documents

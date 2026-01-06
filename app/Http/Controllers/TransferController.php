@@ -868,10 +868,7 @@ class TransferController extends Controller
         ]);
     }
 
-    /**
-     * Get transfer history
-     */
-    public function index(Request $request)
+        public function index(Request $request)
     {
         try {
             $perPage = $request->get('per_page', 50);
@@ -884,37 +881,18 @@ class TransferController extends Controller
                 ->where('total_items', '>', 0)
                 ->where('total_qty', '>', 0);
 
-            // Apply search filters
-            if ($request->filled('transfer_no')) {
-                $query->where('transfer_no', 'like', '%' . $request->transfer_no . '%');
-            }
-
-            if ($request->filled('document_no')) {
-                $query->where('document_no', 'like', '%' . $request->document_no . '%');
-            }
-
-            if ($request->filled('status')) {
-                $query->where('status', $request->status);
-            }
-
-            if ($request->filled('move_type')) {
-                $query->where('move_type', $request->move_type);
-            }
-
-            if ($request->filled('date_from')) {
-                $query->whereDate('created_at', '>=', $request->date_from);
-            }
-
-            if ($request->filled('date_to')) {
-                $query->whereDate('created_at', '<=', $request->date_to);
-            }
-
-            if ($request->filled('plant_supply')) {
-                $query->where('plant_supply', $request->plant_supply);
-            }
-
-            if ($request->filled('plant_destination')) {
-                $query->where('plant_destination', $request->plant_destination);
+            // Apply search - PERBAIKAN: Pencarian multi-field
+            if ($request->filled('search')) {
+                $searchTerm = $request->search;
+                $query->where(function($q) use ($searchTerm) {
+                    $q->where('transfer_no', 'like', "%{$searchTerm}%")
+                    ->orWhere('document_no', 'like', "%{$searchTerm}%")
+                    ->orWhere('plant_supply', 'like', "%{$searchTerm}%")
+                    ->orWhere('plant_destination', 'like', "%{$searchTerm}%")
+                    ->orWhere('status', 'like', "%{$searchTerm}%")
+                    ->orWhere('created_by_name', 'like', "%{$searchTerm}%")
+                    ->orWhere('move_type', 'like', "%{$searchTerm}%");
+                });
             }
 
             $transfers = $query->paginate($perPage);
@@ -929,13 +907,19 @@ class TransferController extends Controller
                 'move_type_311' => ReservationTransfer::where('move_type', '311')->count()
             ];
 
-            // Return JSON for API calls
-            if ($request->wantsJson() || $request->ajax()) {
+            // If AJAX request, return JSON
+            if ($request->ajax() || $request->has('_ajax')) {
+                // Render views
+                $tableHtml = view('transfers.partials.table', compact('transfers'))->render();
+                $paginationHtml = view('transfers.partials.pagination', compact('transfers'))->render();
+
                 return response()->json([
                     'success' => true,
-                    'data' => $transfers,
-                    'stats' => $stats,
-                    'message' => 'Transfers retrieved successfully'
+                    'html' => $tableHtml,
+                    'pagination' => $paginationHtml,
+                    'total' => $transfers->total(),
+                    'count' => $transfers->count(),
+                    'message' => 'Data loaded successfully'
                 ]);
             }
 
@@ -945,7 +929,7 @@ class TransferController extends Controller
         } catch (\Exception $e) {
             Log::error('Error fetching transfers: ' . $e->getMessage());
 
-            if ($request->wantsJson() || $request->ajax()) {
+            if ($request->ajax() || $request->has('_ajax')) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Error fetching transfers: ' . $e->getMessage()
@@ -957,9 +941,6 @@ class TransferController extends Controller
         }
     }
 
-    /**
-     * Get transfer details
-     */
     public function show($id)
     {
         try {

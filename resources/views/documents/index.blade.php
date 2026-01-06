@@ -53,18 +53,32 @@
                         <small class="text-muted">Browse and search through all reservation documents</small>
                     </div>
                     <div class="d-flex flex-column align-items-end">
-                        <!-- Search Box -->
-                        <div class="input-group input-group-sm mb-2" style="width: 300px;">
-                            <span class="input-group-text bg-transparent border-end-0">
-                                <i class="fas fa-search text-muted"></i>
-                            </span>
-                            <input type="text"
-                                   class="form-control border-start-0 ps-0"
-                                   id="liveSearch"
-                                   placeholder="Search documents...">
-                            <button class="btn btn-outline-secondary" type="button" id="clearSearch">
-                                <i class="fas fa-times"></i>
-                            </button>
+                        <!-- Search and Filter Controls -->
+                        <div class="d-flex align-items-center mb-2">
+                            <!-- Search Box -->
+                            <div class="input-group input-group-sm me-2" style="width: 250px;">
+                                <span class="input-group-text bg-transparent border-end-0">
+                                    <i class="fas fa-search text-muted"></i>
+                                </span>
+                                <input type="text"
+                                       class="form-control border-start-0 ps-0"
+                                       id="liveSearch"
+                                       placeholder="Search documents...">
+                            </div>
+                            <!-- Status Filter Dropdown -->
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="statusFilterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-filter me-1"></i> Status
+                                </button>
+                                <ul class="dropdown-menu" aria-labelledby="statusFilterDropdown">
+                                    <li><a class="dropdown-item status-filter" href="#" data-status="all">All Status</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item status-filter" href="#" data-status="booked">Booked</a></li>
+                                    <li><a class="dropdown-item status-filter" href="#" data-status="partial">Partial</a></li>
+                                    <li><a class="dropdown-item status-filter" href="#" data-status="closed">Closed</a></li>
+                                    <li><a class="dropdown-item status-filter" href="#" data-status="cancelled">Cancelled</a></li>
+                                </ul>
+                            </div>
                         </div>
                         <!-- Document Counter - DIPINDAHKAN DI SINI -->
                         <div class="text-muted small" id="documentCounter">
@@ -90,7 +104,7 @@
                             </thead>
                             <tbody>
                                 @forelse($documents as $document)
-                                    <tr class="align-middle document-row">
+                                    <tr class="align-middle document-row" data-status="{{ $document->status }}">
                                         <td class="ps-4">
                                             <a href="{{ route('documents.show', $document->id) }}"
                                                class="document-link {{ $document->plant == '3000' ? 'text-primary' : 'text-success' }} fw-bold d-flex align-items-center">
@@ -384,18 +398,6 @@
         min-width: 120px;
     }
 
-    /* HAPUS STYLE LAMA UNTUK #documentCounter */
-    /*
-    #documentCounter {
-        background-color: #f8f9fa;
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 0.9rem;
-        border: 1px solid #e9ecef;
-    }
-    */
-
-    /* GANTI DENGAN STYLE BARU */
     #documentCounter {
         font-size: 0.85rem;
         color: #6c757d;
@@ -431,6 +433,11 @@
         padding-bottom: 14px !important;
         border-bottom: 1px solid #f8f9fa !important;
     }
+
+    .dropdown-item.active {
+        background-color: #0d6efd;
+        color: white;
+    }
 </style>
 
 <script>
@@ -441,14 +448,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 
-    // Live Search Functionality
+    // Live Search and Filter Functionality
     const liveSearch = document.getElementById('liveSearch');
-    const clearSearch = document.getElementById('clearSearch');
     const documentsTable = document.getElementById('documentsTable');
     const rows = documentsTable.getElementsByTagName('tbody')[0].getElementsByClassName('document-row');
     const visibleCount = document.getElementById('visibleCount');
     const totalCount = {{ $documents->count() }};
     const noResults = document.getElementById('noResults');
+
+    // Status filter variables
+    let currentStatusFilter = 'all';
+    const statusFilterItems = document.querySelectorAll('.status-filter');
+    const statusFilterButton = document.getElementById('statusFilterDropdown');
 
     // Update visible count
     function updateVisibleCount() {
@@ -470,39 +481,59 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    liveSearch.addEventListener('keyup', function() {
-        const searchTerm = this.value.toLowerCase().trim();
+    // Filter documents based on search and status
+    function filterDocuments() {
+        const searchTerm = liveSearch.value.toLowerCase().trim();
 
         for (let row of rows) {
-            const cells = row.getElementsByTagName('td');
-            let found = false;
+            const rowStatus = row.getAttribute('data-status');
+            const rowText = row.textContent.toLowerCase();
 
-            for (let cell of cells) {
-                if (cell.textContent.toLowerCase().includes(searchTerm)) {
-                    found = true;
-                    break;
-                }
+            // Check search term match
+            const searchMatch = searchTerm === '' || rowText.includes(searchTerm);
+
+            // Check status match
+            const statusMatch = currentStatusFilter === 'all' || rowStatus === currentStatusFilter;
+
+            // Show row if both conditions match
+            if (searchMatch && statusMatch) {
+                row.style.display = '';
+                row.style.opacity = '1';
+            } else {
+                row.style.display = 'none';
+                row.style.opacity = '0.5';
             }
-
-            row.style.display = found ? '' : 'none';
-            row.style.opacity = found ? '1' : '0.5';
         }
 
         updateVisibleCount();
-    });
+    }
 
-    // Clear search
-    clearSearch.addEventListener('click', function() {
-        liveSearch.value = '';
-        for (let row of rows) {
-            row.style.display = '';
-            row.style.opacity = '1';
-        }
-        updateVisibleCount();
+    // Live search event listener
+    liveSearch.addEventListener('keyup', filterDocuments);
+
+    // Status filter event listeners
+    statusFilterItems.forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            // Update active state in dropdown
+            statusFilterItems.forEach(i => i.classList.remove('active'));
+            this.classList.add('active');
+
+            // Update current filter
+            currentStatusFilter = this.getAttribute('data-status');
+
+            // Update button text
+            const filterText = this.textContent;
+            statusFilterButton.innerHTML = `<i class="fas fa-filter me-1"></i> ${filterText}`;
+
+            // Apply filter
+            filterDocuments();
+        });
     });
 
     // Initialize with all rows visible
-    updateVisibleCount();
+    filterDocuments();
 
     // Add hover effects to table rows
     document.querySelectorAll('.document-row').forEach(row => {
