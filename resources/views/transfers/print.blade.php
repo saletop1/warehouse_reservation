@@ -240,8 +240,8 @@
             th, td {
                 border: 1px solid #ddd;
                 padding: 8px 10px;
-                text-align: left;
-                vertical-align: top;
+                text-align: center;
+                vertical-align: middle;
             }
 
             th {
@@ -274,9 +274,9 @@
 
             .status-badge {
                 display: inline-block;
-                padding: 4px 10px;
-                border-radius: 4px;
-                font-size: 12px;
+                padding: 1px 10px;
+                border-radius: 1px;
+                font-size: 13px;
                 font-weight: bold;
             }
 
@@ -306,11 +306,11 @@
 
             .plant-badge {
                 display: inline-block;
-                padding: 4px 10px;
-                border-radius: 4px;
+                padding: 1px 10px;
+                border-radius: 2px;
                 font-size: 12px;
                 font-weight: bold;
-                margin: 2px;
+                margin: 1px;
             }
 
             .plant-supply {
@@ -320,9 +320,9 @@
             }
 
             .plant-destination {
-                background-color: rgba(0, 123, 255, 0.1);
-                color: #007bff;
-                border: 1px solid #007bff;
+                background-color: rgba(224, 232, 4, 0.43);
+                color: #652020ff;
+                border: 1px solid #000000ff;
             }
 
             .total-row {
@@ -352,8 +352,8 @@
             }
 
             .signature-section {
-                margin-top: 50px;
-                padding-top: 30px;
+                margin-top: 20px;
+                padding-top: 110px;
                 border-top: 2px dashed #ddd;
             }
 
@@ -398,7 +398,7 @@
         }
 
         h2 {
-            font-size: 18px;
+            font-size: 12px;
             color: #333;
         }
 
@@ -422,7 +422,7 @@
 
         .info-label {
             display: inline-block;
-            width: 120px;
+            width: 100px;
             font-weight: bold;
             color: #666;
         }
@@ -434,7 +434,7 @@
 
         .material-code {
             font-family: monospace;
-            font-size: 11px;
+            font-size: 15px;
             background: #f8f9fa;
             padding: 2px 6px;
             border-radius: 3px;
@@ -485,21 +485,21 @@
             }
 
             .btn-print {
-                background-color: #007bff;
+                background-color: #21236eff;
                 color: white;
             }
 
             .btn-close {
-                background-color: #dc3545;
+                background-color: #21236eff;
                 color: white;
             }
 
             .btn-print:hover {
-                background-color: #0056b3;
+                background-color: #000000ff;
             }
 
             .btn-close:hover {
-                background-color: #c82333;
+                background-color: #000000ff;
             }
         </style>
     </div>

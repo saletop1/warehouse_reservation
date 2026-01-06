@@ -26,9 +26,19 @@
                 <i class="fas fa-arrow-left me-1"></i> Back
             </a>
             @if(in_array($document->status, ['booked', 'partial']))
-            <a href="{{ route('documents.edit', $document->id) }}" class="btn btn-outline-primary btn-sm">
-                <i class="fas fa-edit me-1"></i> Edit
-            </a>
+                @php
+                    $user = auth()->user();
+                    $isCreator = auth()->id() == $document->created_by;
+                    $allowedRoles = ['admin', 'supervisor', 'warehouse'];
+                    $userRole = $user->role ?? 'user';
+                    $canEdit = $isCreator || in_array($userRole, $allowedRoles);
+                @endphp
+
+                @if($canEdit)
+                <a href="{{ route('documents.edit', $document->id) }}" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-edit me-1"></i> Edit
+                </a>
+                @endif
             @endif
             <a href="{{ route('documents.print', $document->id) }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-print me-1"></i> Print

@@ -12,9 +12,31 @@ use Illuminate\Support\Facades\Log;
 
 class DocumentController extends Controller
 {
-    /**
-     * Show the form for editing the specified resource.
-     */
+    public function __construct()
+    {
+        // Middleware untuk edit dokumen - HANYA creator atau role tertentu
+        $this->middleware(function ($request, $next) {
+            if (in_array($request->route()->getName(), ['documents.edit', 'documents.update', 'documents.items.force-complete'])) {
+                $documentId = $request->route('id') ?? $request->route('document');
+                $document = Document::find($documentId);
+
+                if ($document) {
+                    $user = Auth::user();
+                    $isCreator = Auth::id() == $document->created_by;
+                    $allowedRoles = ['admin', 'supervisor', 'warehouse'];
+                    $userRole = $user->role ?? 'user';
+
+                    // Jika bukan creator DAN bukan role yang diizinkan
+                    if (!$isCreator && !in_array($userRole, $allowedRoles)) {
+                        return redirect()->route('documents.show', $document->id)
+                            ->with('info', 'Anda tidak memiliki izin untuk mengedit dokumen ini. Hanya creator atau admin/supervisor yang dapat mengedit.');
+                    }
+                }
+            }
+            return $next($request);
+        });
+    }
+
     public function edit($id)
     {
         try {
@@ -25,7 +47,17 @@ class DocumentController extends Controller
             // Check if user is authorized to edit (only creator can edit)
             if (Auth::id() != $document->created_by) {
                 return redirect()->route('documents.show', $id)
-                    ->with('info', 'You can only view this document. Only the creator can edit.');
+                    ->with('info', 'Anda bukan creator dokumen ini. Hanya creator yang dapat melakukan edit.');
+            }
+
+            // Tambahkan pengecekan role/tambahan jika diperlukan
+            $user = Auth::user();
+            $allowedRoles = ['admin', 'supervisor', 'warehouse'];
+            $userRole = $user->role ?? 'user';
+
+            if (!in_array($userRole, $allowedRoles) && Auth::id() != $document->created_by) {
+                return redirect()->route('documents.show', $id)
+                    ->with('info', 'Anda tidak memiliki izin untuk mengedit dokumen ini. Hanya creator atau admin/supervisor yang dapat mengedit.');
             }
 
             return view('documents.edit', compact('document'));
@@ -41,9 +73,6 @@ class DocumentController extends Controller
         }
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, $id)
     {
         $document = Document::findOrFail($id);
@@ -51,7 +80,7 @@ class DocumentController extends Controller
         // Check if user is authorized to edit (only creator can edit)
         if (Auth::id() != $document->created_by) {
             return redirect()->route('documents.show', $id)
-                ->with('error', 'You are not authorized to edit this document. Only the creator can edit.');
+                ->with('info', 'Anda bukan creator dokumen ini. Hanya creator yang dapat melakukan edit.');
         }
 
         // Check if document is editable (only booked or partial status)
@@ -144,75 +173,72 @@ class DocumentController extends Controller
         }
     }
 
-    /**
-                     * Force complete selected items - DIPERBAIKI
-                     */
-                    public function forceCompleteItems(Request $request, $id)
-                    {
-                        DB::beginTransaction();
+    public function forceCompleteItems(Request $request, $id)
+    {
+        DB::beginTransaction();
 
-                        try {
-                            $document = Document::findOrFail($id);
+        try {
+            $document = Document::findOrFail($id);
 
-                            // Check if user is authorized to edit (only creator can edit)
-                            if (Auth::id() != $document->created_by) {
-                                return back()->with('error', 'You are not authorized to force complete items from this document.');
-                            }
+            // Check if user is authorized to edit (only creator can edit)
+            if (Auth::id() != $document->created_by) {
+                return back()->with('info', 'Anda bukan creator dokumen ini. Hanya creator yang dapat melakukan force complete items.');
+            }
 
-                            // Check if document is editable (only booked or partial status)
-                            if (!in_array($document->status, ['booked', 'partial'])) {
-                                return back()->with('error', 'Cannot force complete items from a document with status: ' . $document->status);
-                            }
+            // Check if document is editable (only booked or partial status)
+            if (!in_array($document->status, ['booked', 'partial'])) {
+                return back()->with('error', 'Cannot force complete items from a document with status: ' . $document->status);
+            }
 
-                            // Get selected items from request
-                            $selectedItems = json_decode($request->input('selected_items', '[]'), true);
+            // Get selected items from request
+            $selectedItems = json_decode($request->input('selected_items', '[]'), true);
 
-                            if (empty($selectedItems)) {
-                                return back()->with('error', 'Please select items to force complete.');
-                            }
+            if (empty($selectedItems)) {
+                return back()->with('error', 'Please select items to force complete.');
+            }
 
-                            // Get reason
-                            $reason = $request->input('reason');
-                            if (empty($reason)) {
-                                return back()->with('error', 'Please provide a reason for force completing items.');
-                            }
+            // Get reason
+            $reason = $request->input('reason');
+            if (empty($reason)) {
+                return back()->with('error', 'Please provide a reason for force completing items.');
+            }
 
-                            // Log before force complete
-                            Log::info('Attempting to force complete items', [
-                                'document_id' => $document->id,
-                                'document_no' => $document->document_no,
-                                'selected_items' => $selectedItems,
-                                'user_id' => auth()->id(),
-                                'reason' => $reason
-                            ]);
+            // Log before force complete
+            Log::info('Attempting to force complete items', [
+                'document_id' => $document->id,
+                'document_no' => $document->document_no,
+                'selected_items' => $selectedItems,
+                'user_id' => auth()->id(),
+                'reason' => $reason
+            ]);
 
-                            // Force complete selected items
-                            $forceCompletedCount = 0;
-                            foreach ($selectedItems as $itemId) {
-                                $item = DocumentItem::where('id', $itemId)
-                                    ->where('document_id', $document->id)
-                                    ->first();
+            // Force complete selected items
+            $forceCompletedCount = 0;
+            foreach ($selectedItems as $itemId) {
+                $item = DocumentItem::where('id', $itemId)
+                    ->where('document_id', $document->id)
+                    ->first();
 
-                                if ($item && !$item->force_completed) {
-                                    // **PERBAIKAN: HANYA set flag force_completed, JANGAN ubah quantity**
-                                    $item->force_completed = true;
-                                    $item->force_complete_reason = $reason;
-                                    $item->force_completed_by = Auth::id();
-                                    $item->force_completed_at = now();
-                                    // **JANGAN ubah transferred_qty atau remaining_qty**
-                                    $item->save();
+                if ($item && !$item->force_completed) {
+                    // **PERBAIKAN: HANYA set flag force_completed, JANGAN ubah quantity**
+                    $item->force_completed = true;
+                    $item->force_complete_reason = $reason;
+                    $item->force_completed_by = Auth::id();
+                    $item->force_completed_at = now();
+                    // **JANGAN ubah transferred_qty atau remaining_qty**
+                    $item->save();
 
-                                    $forceCompletedCount++;
+                    $forceCompletedCount++;
 
-                                    Log::info('Item force completed', [
-                                        'item_id' => $item->id,
-                                        'material_code' => $item->material_code,
-                                        'requested_qty' => $item->requested_qty,
-                                        'transferred_qty' => $item->transferred_qty,
-                                        'remaining_qty' => $item->remaining_qty
-                                    ]);
-                                }
-                            }
+                    Log::info('Item force completed', [
+                        'item_id' => $item->id,
+                        'material_code' => $item->material_code,
+                        'requested_qty' => $item->requested_qty,
+                        'transferred_qty' => $item->transferred_qty,
+                        'remaining_qty' => $item->remaining_qty
+                    ]);
+                }
+            }
 
             // Recalculate document totals
             $this->recalculateDocumentTotals($document);
@@ -249,9 +275,6 @@ class DocumentController extends Controller
         }
     }
 
-    /**
-     * Recalculate document totals after item changes
-     */
     private function recalculateDocumentTotals(Document $document)
     {
         try {
@@ -329,9 +352,6 @@ class DocumentController extends Controller
     }
 }
 
-    /**
-     * Check and update document status based on item completion
-     */
     private function checkAndUpdateDocumentStatus(Document $document)
     {
         try {
@@ -384,9 +404,6 @@ class DocumentController extends Controller
         }
     }
 
-    /**
-     * Get item transfer history dengan JOIN ke reservation_transfers
-     */
     private function getItemTransferHistory($itemId)
     {
         try {

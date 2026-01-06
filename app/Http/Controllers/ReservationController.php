@@ -171,53 +171,53 @@ class ReservationController extends Controller
         }
     }
 
-    /**
-     * Show the form for editing the specified document.
-     */
-    public function editDocument($id)
-    {
-        try {
-            $document = ReservationDocument::with('items')->findOrFail($id);
+    // /**
+    //  * Show the form for editing the specified document.
+    //  */
+    // public function editDocument($id)
+    // {
+    //     try {
+    //         $document = ReservationDocument::with('items')->findOrFail($id);
 
-            // Hanya dokumen dengan status 'created' yang bisa diedit
-            if ($document->status != 'created') {
-                return redirect()->route('documents.show', $document->id)
-                    ->with('error', 'Only documents with status "Created" can be edited.');
-            }
+    //         // Hanya dokumen dengan status 'created' yang bisa diedit
+    //         if ($document->status != 'created') {
+    //             return redirect()->route('documents.show', $document->id)
+    //                 ->with('error', 'Only documents with status "Created" can be edited.');
+    //         }
 
-            // Process items untuk edit view - ambil sortf dari pro_details dan sales orders
-            foreach ($document->items as $item) {
-                // Decode sales orders untuk ditampilkan
-                $salesOrders = json_decode($item->sales_orders, true) ?? [];
-                $item->sales_orders = $salesOrders;
+    //         // Process items untuk edit view - ambil sortf dari pro_details dan sales orders
+    //         foreach ($document->items as $item) {
+    //             // Decode sales orders untuk ditampilkan
+    //             $salesOrders = json_decode($item->sales_orders, true) ?? [];
+    //             $item->sales_orders = $salesOrders;
 
-                // Set sortf dari kolom sortf, jika kosong gunakan default
-                $item->sortf = $item->sortf ?? '-';
+    //             // Set sortf dari kolom sortf, jika kosong gunakan default
+    //             $item->sortf = $item->sortf ?? '-';
 
-                // Get MRP from sap_reservations table for each item
-                $sapData = DB::table('sap_reservations')
-                    ->where('matnr', $item->material_code)
-                    ->where('sap_plant', $document->plant)
-                    ->first();
+    //             // Get MRP from sap_reservations table for each item
+    //             $sapData = DB::table('sap_reservations')
+    //                 ->where('matnr', $item->material_code)
+    //                 ->where('sap_plant', $document->plant)
+    //                 ->first();
 
-                $item->dispo = $sapData->dispo ?? $item->dispo ?? null;
-                $item->is_qty_editable = $this->isQtyEditableForMRP($item->dispo);
+    //             $item->dispo = $sapData->dispo ?? $item->dispo ?? null;
+    //             $item->is_qty_editable = $this->isQtyEditableForMRP($item->dispo);
 
-                // Log untuk debugging
-                \Log::info('Item in editDocument:', [
-                    'material_code' => $item->material_code,
-                    'dispo' => $item->dispo,
-                    'is_qty_editable' => $item->is_qty_editable,
-                    'sales_orders_count' => count($salesOrders)
-                ]);
-            }
+    //             // Log untuk debugging
+    //             \Log::info('Item in editDocument:', [
+    //                 'material_code' => $item->material_code,
+    //                 'dispo' => $item->dispo,
+    //                 'is_qty_editable' => $item->is_qty_editable,
+    //                 'sales_orders_count' => count($salesOrders)
+    //             ]);
+    //         }
 
-            return view('documents.edit', compact('document'));
-        } catch (\Exception $e) {
-            return redirect()->route('documents.index')
-                ->with('error', 'Document not found: ' . $e->getMessage());
-        }
-    }
+    //         return view('documents.edit', compact('document'));
+    //     } catch (\Exception $e) {
+    //         return redirect()->route('documents.index')
+    //             ->with('error', 'Document not found: ' . $e->getMessage());
+    //     }
+    // }
 
     /**
      * Check if quantity is editable based on MRP
@@ -232,74 +232,74 @@ class ReservationController extends Controller
         return in_array($dispo, $allowedMRP);
     }
 
-    /**
-     * Update the specified document in storage.
-     */
-    public function updateDocument(Request $request, $id)
-    {
-        DB::beginTransaction();
+    // /**
+    //  * Update the specified document in storage.
+    //  */
+    // public function updateDocument(Request $request, $id)
+    // {
+    //     DB::beginTransaction();
 
-        try {
-            $document = ReservationDocument::findOrFail($id);
+    //     try {
+    //         $document = ReservationDocument::findOrFail($id);
 
-            // Hanya dokumen dengan status 'created' yang bisa diupdate
-            if ($document->status != 'created') {
-                return redirect()->route('documents.show', $document->id)
-                    ->with('error', 'Only documents with status "Created" can be edited.');
-            }
+    //         // Hanya dokumen dengan status 'created' yang bisa diupdate
+    //         if ($document->status != 'created') {
+    //             return redirect()->route('documents.show', $document->id)
+    //                 ->with('error', 'Only documents with status "Created" can be edited.');
+    //         }
 
-            $request->validate([
-                'remarks' => 'nullable|string|max:500',
-                'items' => 'required|array',
-                'items.*.id' => 'required|exists:reservation_document_items,id',
-                'items.*.requested_qty' => 'required|numeric|min:0',
-            ]);
+    //         $request->validate([
+    //             'remarks' => 'nullable|string|max:500',
+    //             'items' => 'required|array',
+    //             'items.*.id' => 'required|exists:reservation_document_items,id',
+    //             'items.*.requested_qty' => 'required|numeric|min:0',
+    //         ]);
 
-            // Update remarks
-            $document->remarks = $request->remarks;
-            $document->save();
+    //         // Update remarks
+    //         $document->remarks = $request->remarks;
+    //         $document->save();
 
-            // Update items qty
-            $totalQty = 0;
-            foreach ($request->items as $itemData) {
-                $item = $document->items()->find($itemData['id']);
-                if ($item) {
-                    // Get MRP to check if quantity is editable
-                    $sapData = DB::table('sap_reservations')
-                        ->where('matnr', $item->material_code)
-                        ->where('sap_plant', $document->plant)
-                        ->first();
+    //         // Update items qty
+    //         $totalQty = 0;
+    //         foreach ($request->items as $itemData) {
+    //             $item = $document->items()->find($itemData['id']);
+    //             if ($item) {
+    //                 // Get MRP to check if quantity is editable
+    //                 $sapData = DB::table('sap_reservations')
+    //                     ->where('matnr', $item->material_code)
+    //                     ->where('sap_plant', $document->plant)
+    //                     ->first();
 
-                    $isEditable = $this->isQtyEditableForMRP($sapData->dispo ?? null);
+    //                 $isEditable = $this->isQtyEditableForMRP($sapData->dispo ?? null);
 
-                    if (!$isEditable) {
-                        // Skip quantity update for non-editable MRP
-                        $itemData['requested_qty'] = $item->requested_qty;
-                    }
+    //                 if (!$isEditable) {
+    //                     // Skip quantity update for non-editable MRP
+    //                     $itemData['requested_qty'] = $item->requested_qty;
+    //                 }
 
-                    $item->update([
-                        'requested_qty' => $itemData['requested_qty'],
-                    ]);
-                    $totalQty += $itemData['requested_qty'];
-                }
-            }
+    //                 $item->update([
+    //                     'requested_qty' => $itemData['requested_qty'],
+    //                 ]);
+    //                 $totalQty += $itemData['requested_qty'];
+    //             }
+    //         }
 
-            // Update document total qty
-            $document->update([
-                'total_qty' => $totalQty,
-            ]);
+    //         // Update document total qty
+    //         $document->update([
+    //             'total_qty' => $totalQty,
+    //         ]);
 
-            DB::commit();
+    //         DB::commit();
 
-            return redirect()->route('documents.show', $document->id)
-                ->with('success', 'Document updated successfully.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()
-                ->with('error', 'Failed to update document: ' . $e->getMessage())
-                ->withInput();
-        }
-    }
+    //         return redirect()->route('documents.show', $document->id)
+    //             ->with('success', 'Document updated successfully.');
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         return redirect()->back()
+    //             ->with('error', 'Failed to update document: ' . $e->getMessage())
+    //             ->withInput();
+    //     }
+    // }
 
     /**
      * Update the specified reservation in storage.

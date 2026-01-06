@@ -17,8 +17,11 @@ Route::get('/', function () {
 
 // Authentication Routes (for guests only)
 Route::middleware(['guest'])->group(function () {
+    // Login Routes
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
+
+    // Registration Routes
     Route::get('/register', [AuthController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
 
@@ -29,8 +32,10 @@ Route::middleware(['guest'])->group(function () {
     Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
 });
 
-// Logout Route
-Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+// Logout Route (available for authenticated users)
+Route::middleware(['auth'])->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+});
 
 // Email verification routes
 Route::middleware(['auth'])->group(function () {
@@ -48,16 +53,26 @@ Route::middleware(['auth'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Profile Routes
+    // Dashboard API Routes
+    Route::prefix('api/dashboard')->name('api.dashboard.')->group(function () {
+        Route::get('/stats', [DashboardController::class, 'getStats'])->name('stats');
+    });
+
+    // Profile Routes - FIXED: menggunakan name 'profile' bukan 'profile.index'
+    Route::prefix('profile')->name('profile.')->group(function () {
+        Route::get('/', [ProfileController::class, 'index'])->name('index'); // Ini akan jadi 'profile.index'
+        Route::get('/edit', [ProfileController::class, 'edit'])->name('edit');
+        Route::put('/update', [ProfileController::class, 'update'])->name('update');
+        Route::post('/update-password', [ProfileController::class, 'updatePassword'])->name('update.password');
+        Route::delete('/delete-account', [ProfileController::class, 'deleteAccount'])->name('delete');
+    });
+
+    // Juga tambahkan alias untuk 'profile' (tanpa .index) jika diperlukan
     Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
-    Route::get('/profile/index', [ProfileController::class, 'index'])->name('profile.index');
-    Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::put('/profile/update', [ProfileController::class, 'update'])->name('profile.update');
-    Route::post('/profile/update-password', [ProfileController::class, 'updatePassword'])->name('profile.update.password');
-    Route::delete('/profile/delete-account', [ProfileController::class, 'deleteAccount'])->name('profile.delete');
 
     // Reservation Routes
     Route::prefix('reservations')->name('reservations.')->group(function () {
+        // CRUD Operations
         Route::get('/', [ReservationController::class, 'index'])->name('index');
         Route::get('/create', [ReservationController::class, 'create'])->name('create');
         Route::post('/', [ReservationController::class, 'store'])->name('store');
@@ -65,26 +80,35 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{id}/edit', [ReservationController::class, 'edit'])->name('edit');
         Route::put('/{id}', [ReservationController::class, 'update'])->name('update');
         Route::delete('/{id}', [ReservationController::class, 'destroy'])->name('destroy');
+
+        // Bulk Operations
         Route::post('/bulk-delete', [ReservationController::class, 'bulkDelete'])->name('bulk-delete');
+
+        // Export
         Route::get('/export/{type?}', [ReservationController::class, 'export'])->name('export');
 
-        // Sync operations
+        // Sync Operations
         Route::post('/sync', [ReservationController::class, 'sync'])->name('sync');
         Route::post('/sync-from-sap', [ReservationController::class, 'syncFromSAP'])->name('sync.from-sap');
-        Route::post('/clear-and-create', [ReservationController::class, 'clearAndCreate'])->name('clear-and-create');
         Route::post('/clear-all-sync-data', [ReservationController::class, 'clearAllSyncData'])->name('clearAllSyncData');
 
-        // Sync status checking
+        // Data Management
+        Route::post('/clear-and-create', [ReservationController::class, 'clearAndCreate'])->name('clear-and-create');
+
+        // Status & Health Checks
         Route::get('/check-sync-data', [ReservationController::class, 'checkSyncData'])->name('check-sync-data');
         Route::get('/check-sync-status', [ReservationController::class, 'checkSyncStatus'])->name('check-sync-status');
-
-        // Search and autocomplete
-        Route::get('/search/autocomplete', [ReservationController::class, 'autocomplete'])->name('autocomplete');
-
-        // Service checking
         Route::get('/check-flask', [ReservationController::class, 'checkFlaskService'])->name('checkFlask');
+        Route::get('/test-flask-connection', [ReservationController::class, 'testFlaskConnection'])->name('testFlaskConnection');
 
-        // AJAX endpoints
+        // Search and Autocomplete
+        Route::get('/search', [ReservationController::class, 'search'])->name('search');
+        Route::get('/search/autocomplete', [ReservationController::class, 'autocomplete'])->name('autocomplete');
+        Route::post('/get-plants', [ReservationController::class, 'getPlants'])->name('getPlants');
+        Route::get('/get-statistics', [ReservationController::class, 'getStatistics'])->name('getStatistics');
+        Route::get('/debug-sync-data', [ReservationController::class, 'debugSyncData'])->name('debugSyncData');
+
+        // AJAX Endpoints (Document Creation Workflow)
         Route::post('/get-material-types', [ReservationController::class, 'getMaterialTypes'])->name('getMaterialTypes');
         Route::post('/get-materials-by-type', [ReservationController::class, 'getMaterialsByType'])->name('getMaterialsByType');
         Route::post('/get-pro-numbers', [ReservationController::class, 'getProNumbers'])->name('getProNumbers');
@@ -93,29 +117,31 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/create-document', [ReservationController::class, 'createDocument'])->name('createDocument');
     });
 
-    // Document Routes - PERBAIKAN: Consolidate all document routes
+    // Document Routes - Consolidated (using DocumentController for edit/update)
     Route::prefix('documents')->name('documents.')->group(function () {
-        // Document CRUD Routes (using ReservationDocumentController for most operations)
+        // Document Listing & Viewing
         Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
-        Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
-        Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
 
-        // Item Management Routes (using DocumentController for edit/update/force-complete)
+        // Document Editing (only creator can edit)
         Route::get('/{id}/edit', [DocumentController::class, 'edit'])->name('edit');
         Route::put('/{id}', [DocumentController::class, 'update'])->name('update');
-
-        // Item Selection Operations
-        Route::post('/{id}/print-selected', [ReservationDocumentController::class, 'printSelected'])->name('print-selected');
-        Route::post('/{id}/export-excel', [ReservationDocumentController::class, 'exportExcel'])->name('export-excel');
 
         // Force Complete Items
         Route::post('/{id}/items/force-complete', [DocumentController::class, 'forceCompleteItems'])->name('items.force-complete');
 
-        // Transfer Process Route
-        Route::post('/{id}/transfers/process', [TransferController::class, 'createTransfer'])
-            ->name('transfers.process');
-        Route::post('/transfers/{id}/fix', [TransferController::class, 'fixTransferData'])->name('transfers.fix');
+        // Export & Print Operations
+        Route::get('/{id}/print', [ReservationDocumentController::class, 'print'])->name('print');
+        Route::get('/{id}/pdf', [ReservationDocumentController::class, 'pdf'])->name('pdf');
+        Route::post('/{id}/print-selected', [ReservationDocumentController::class, 'printSelected'])->name('print-selected');
+        Route::post('/{id}/export-excel', [ReservationDocumentController::class, 'exportExcel'])->name('export-excel');
+
+        // Bulk Export
+        Route::post('/export-selected-excel', [ReservationDocumentController::class, 'exportSelectedExcel'])->name('exportSelectedExcel');
+        Route::post('/export-selected-pdf', [ReservationDocumentController::class, 'exportSelectedPdf'])->name('exportSelectedPdf');
+
+        // Document Export
+        Route::get('/export/{type?}', [ReservationDocumentController::class, 'export'])->name('export');
 
         // Transfer History
         Route::get('/{document}/items/{materialCode}/transfer-history',
@@ -124,16 +150,11 @@ Route::middleware(['auth'])->group(function () {
 
         // Document Status Management
         Route::patch('/{id}/toggle-status', [ReservationDocumentController::class, 'toggleStatus'])
-            ->name('toggle-status')
-            ->middleware('can:toggle_document_status');
+            ->name('toggle-status');
 
-        // System Maintenance Routes
-        Route::post('/{id}/fix-transfer-data', [ReservationDocumentController::class, 'fixTransferData'])
-            ->name('fix-transfer-data');
-        Route::post('/{id}/fix-status', [ReservationDocumentController::class, 'fixItemStatuses'])
-            ->name('fix-status');
-        Route::post('/{id}/log-unauthorized-attempt', [ReservationDocumentController::class, 'logUnauthorizedAttempt'])
-            ->name('log-unauthorized-attempt');
+        // Transfer Process
+        Route::post('/{id}/transfers/process', [TransferController::class, 'createTransfer'])
+            ->name('transfers.process');
     });
 
     // Stock Routes
@@ -146,38 +167,85 @@ Route::middleware(['auth'])->group(function () {
             ->name('fetch');
     });
 
-    // Transfer Routes (standalone)
+    // Transfer Routes
     Route::prefix('transfers')->name('transfers.')->group(function () {
+        // Listing & Viewing
         Route::get('/', [TransferController::class, 'index'])->name('index');
         Route::get('/{id}', [TransferController::class, 'show'])->name('show');
+        Route::get('/{id}/detailed', [TransferController::class, 'showDetailed'])->name('show.detailed');
+        Route::get('/{id}/print', [TransferController::class, 'print'])->name('print');
+
+        // CRUD Operations
         Route::put('/{id}/status', [TransferController::class, 'updateStatus'])->name('update-status');
         Route::delete('/{id}', [TransferController::class, 'destroy'])->name('destroy');
+
+        // Document-specific transfers
+        Route::get('/document/{documentId}', [TransferController::class, 'getTransfersByDocument'])->name('by-document');
+
+        // Transfer Validation
+        Route::get('/check-item/{documentId}/{materialCode}', [TransferController::class, 'checkItemTransferability'])->name('check-item');
+
+        // Data Fixing & Maintenance
+        Route::post('/{id}/fix', [TransferController::class, 'fixTransferData'])->name('fix');
+        Route::post('/fix-all', [TransferController::class, 'fixAllTransferData'])->name('fix.all');
+        Route::post('/cleanup-duplicates', [TransferController::class, 'cleanupDuplicates'])->name('cleanup-duplicates');
+        Route::post('/fix-duplicate/{transferNo}', [TransferController::class, 'fixDuplicateTransfer'])->name('fix-duplicate');
+
+        // Export Operations
+        Route::get('/export/excel', [TransferController::class, 'exportExcel'])->name('export.excel');
+        Route::get('/export/pdf', [TransferController::class, 'exportPDF'])->name('export.pdf');
+
+        // Statistics
+        Route::get('/stats', [TransferController::class, 'getTransferStats'])->name('stats');
     });
 
-    // Additional utility routes
+    // Settings Route
     Route::get('/settings', function () {
         return view('settings.index');
     })->name('settings');
+
+    // Service Checking Routes
+    Route::prefix('services')->name('services.')->group(function () {
+        Route::get('/check-flask-endpoint', [ReservationController::class, 'checkFlaskEndpoint'])->name('checkFlaskEndpoint');
+        Route::get('/check-flask-service', [ReservationController::class, 'checkFlaskService'])->name('checkFlaskService');
+        Route::get('/test-flask-connection', [ReservationController::class, 'testFlaskConnection'])->name('testFlaskConnection');
+    });
 });
 
 // Fallback route for 404
 Route::fallback(function () {
-    return response()->view('errors.404', [], 404);
+    if (auth()->check()) {
+        return redirect()->route('dashboard')->with('error', 'Halaman tidak ditemukan.');
+    }
+    return redirect()->route('login');
 });
 
-// Dashboard API routes
-Route::prefix('api/dashboard')->name('api.dashboard.')->middleware(['auth'])->group(function () {
-    Route::get('/stats', [DashboardController::class, 'getStats'])->name('stats');
-    Route::get('/activities', [DashboardController::class, 'getActivities'])->name('activities');
+// Additional Utility Routes (if needed for API)
+Route::middleware(['auth'])->group(function () {
+    // Health check endpoint
+    Route::get('/health', function () {
+        return response()->json(['status' => 'healthy', 'timestamp' => now()]);
+    })->name('health');
+
+    // System status
+    Route::get('/system-status', function () {
+        return response()->json([
+            'status' => 'ok',
+            'timestamp' => now()->toDateTimeString(),
+            'app' => config('app.name'),
+            'env' => config('app.env'),
+            'debug' => config('app.debug'),
+            'php_version' => PHP_VERSION
+        ]);
+    })->name('system.status');
 });
 
-// Di dalam grup 'transfers' atau tambahkan route baru
-Route::prefix('transfers')->group(function () {
-    Route::get('/', [TransferController::class, 'index'])->name('transfers.index');
-    Route::get('/{id}', [TransferController::class, 'show'])->name('transfers.show');
-    Route::post('/{id}/fix', [TransferController::class, 'fix'])->name('transfers.fix');
-    Route::post('/{id}/retry', [TransferController::class, 'retry'])->name('transfers.retry');
-    Route::get('/{id}/print', [TransferController::class, 'print'])->name('transfers.print'); // <-- Pastikan ini ada
-    Route::get('/export/{format}', [TransferController::class, 'export'])->name('transfers.export');
-    Route::get('/{id}', [TransferController::class, 'show'])->name('transfers.show');
+// Transfer routes yang terpisah (untuk menghindari konflik)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/transfers', [TransferController::class, 'index'])->name('transfers.index');
+    Route::get('/transfers/{id}', [TransferController::class, 'show'])->name('transfers.show');
+    Route::post('/transfers/{id}/fix', [TransferController::class, 'fixTransferData'])->name('transfers.fix');
+    Route::post('/transfers/{id}/retry', [TransferController::class, 'retry'])->name('transfers.retry');
+    Route::get('/transfers/{id}/print', [TransferController::class, 'print'])->name('transfers.print');
+    Route::get('/transfers/export/{format}', [TransferController::class, 'export'])->name('transfers.export');
 });
