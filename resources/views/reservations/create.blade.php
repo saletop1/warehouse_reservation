@@ -481,7 +481,7 @@
         color: white;
         font-size: 0.7rem;
         padding: 2px 6px;
-        border-radius: 3px;
+                        border-radius: 3px;
     }
 
     .mrp-badge-small {
@@ -877,6 +877,22 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25) !important;
     }
+
+    /* Styling khusus untuk input dengan rework */
+    .requested-qty[data-sortf*="rework"] {
+        border-color: #28a745 !important;
+        background-color: rgba(40, 167, 69, 0.05) !important;
+    }
+
+    .requested-qty[data-sortf*="rework"]:focus {
+        box-shadow: 0 0 0 0.25rem rgba(40, 167, 69, 0.25) !important;
+    }
+
+    /* Styling untuk pesan rework */
+    .text-success.d-block {
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
 </style>
 @endpush
 
@@ -1048,6 +1064,31 @@
     }
 
     // ============================
+    // FUNGSI UNTUK MENGECEK JIKA ADD INFO MENGANDUNG REWORK
+    // ============================
+
+    function hasReworkInAddInfo(sortf) {
+        if (!sortf) return false;
+        // Cek apakah sortf mengandung kata "rework" (case insensitive)
+        return sortf.toLowerCase().includes('rework');
+    }
+
+    // ============================
+    // FUNGSI UNTUK MENENTUKAN APAKAH QUANTITY DAPAT DIEDIT
+    // ============================
+
+    function isQuantityEditable(dispo, sortf) {
+        // PERUBAHAN: Tambahkan pengecekan untuk Add Info yang mengandung "rework"
+        if (hasReworkInAddInfo(sortf)) {
+            return true; // Selalu izinkan edit jika ada "rework"
+        }
+
+        // Jika tidak ada "rework", cek berdasarkan MRP yang diperbolehkan
+        if (!dispo) return true;
+        return allowedMRP.includes(dispo);
+    }
+
+    // ============================
     // VALIDATION FUNCTIONS
     // ============================
 
@@ -1072,7 +1113,7 @@
         $('.requested-qty').each(function() {
             const value = parseFloat($(this).val()) || 0;
             const minValue = parseFloat($(this).attr('min')) || 0;
-            const isEditable = !$(this).hasClass('qty-disabled');
+            const isEditable = !$(this).hasClass('qty-disabled') || hasReworkInAddInfo($(this).data('sortf'));
 
             if (isEditable && value < minValue) {
                 isValid = false;
@@ -1349,7 +1390,7 @@
         });
 
         $('#btn-prev-step2').on('click', function() {
-            currentStep = 2;
+            currentStep = 1;
             updateStepNavigation();
         });
 
@@ -1817,11 +1858,6 @@
     // STEP 5: REVIEW & CREATE
     // ============================
 
-    function isMRPAllowedForEdit(dispo) {
-        if (!dispo) return true;
-        return allowedMRP.includes(dispo);
-    }
-
     function populateMaterialsTable() {
         console.log('🔧 populateMaterialsTable called');
         console.log('loadedMaterials:', loadedMaterials);
@@ -1871,6 +1907,7 @@
                 material_code: material.material_code,
                 dispo: material.dispo,
                 dispc: material.dispc,
+                sortf: material.sortf, // Tambahkan log untuk sortf
                 total_qty: material.total_qty
             });
 
@@ -1921,6 +1958,7 @@
                 material_code: material.material_code,
                 dispo: material.dispo,
                 dispc: material.dispc,
+                sortf: material.sortf, // Tambahkan log untuk sortf
                 sources: sourcesArray.length,
                 originalQty: originalQty
             });
@@ -1930,9 +1968,12 @@
             // PERUBAHAN: Format untuk input berdasarkan UOM
             const formattedOriginalQtyForInput = formatNumberByUOM(originalQty, material.unit, true);
 
-            // Check if quantity is editable based on MRP
-            const isQtyEditable = isMRPAllowedForEdit(material.dispo);
-            console.log(`Qty editable for ${material.dispo}?`, isQtyEditable);
+            // PERUBAHAN: Gunakan fungsi baru isQuantityEditable yang juga mengecek Add Info
+            const isQtyEditable = isQuantityEditable(material.dispo, material.sortf);
+            const hasRework = hasReworkInAddInfo(material.sortf);
+
+            console.log(`Qty editable for ${material.dispo}?`, isQtyEditable,
+                        `Has rework in Add Info?`, hasRework);
 
             // PERUBAHAN: Tentukan step berdasarkan UOM
             const useDecimal = isDecimalUOM(material.unit);
@@ -1996,8 +2037,24 @@
             // PERUBAHAN: Tambahkan class column-hidden pada kolom Add Info jika tidak ada data
             const addInfoClass = hasAddInfoData ? '' : 'column-hidden';
 
+            // PERUBAHAN: Tentukan title untuk input field
+            let titleText = '';
+            if (!isQtyEditable && !hasRework) {
+                titleText = 'Quantity cannot be changed for this MRP';
+            } else if (hasRework) {
+                titleText = 'Quantity editable due to rework in Add Info';
+            }
+
+            // PERUBAHAN: Tentukan pesan yang ditampilkan di bawah input field
+            let infoMessage = '';
+            if (!isQtyEditable && !hasRework) {
+                infoMessage = '<small class="text-muted d-block">Fixed</small>';
+            } else if (hasRework) {
+                infoMessage = '<small class="text-success d-block">Editable (Rework)</small>';
+            }
+
             html += `
-                <tr class="${rowClass}" data-additional='${JSON.stringify(additionalData)}' data-index="${consolidatedIndex}" data-material="${material.material_code}">
+                <tr class="${rowClass}" data-additional='${JSON.stringify(additionalData)}' data-index="${consolidatedIndex}" data-material="${material.material_code}" data-sortf="${additionalInfo}">
                     <td class="text-center">${groupIndex + 1}</td>
                     <td class="text-center">${sourceBadges}</td>
                     <td class="text-center material-pro-cell">${materialPro}</td>
@@ -2022,8 +2079,10 @@
                             data-index="${consolidatedIndex}"
                             data-material="${material.material_code}"
                             data-dispo="${material.dispo || ''}"
-                            ${!isQtyEditable ? 'readonly title="Quantity cannot be changed for this MRP"' : ''}>
-                        ${!isQtyEditable ? '<small class="text-muted d-block">Fixed</small>' : ''}
+                            data-sortf="${additionalInfo}"
+                            title="${titleText}"
+                            ${!isQtyEditable ? 'readonly' : ''}>
+                        ${infoMessage}
                     </td>
                     <td class="text-center">${unitDisplay}</td>
                 </tr>
@@ -2048,6 +2107,21 @@
             validateCreateButton();
         });
 
+        // PERUBAHAN: Tambahkan event listener untuk menampilkan info saat hover pada input yang editable karena rework
+        $('.requested-qty').hover(
+            function() {
+                const $this = $(this);
+                const sortf = $this.data('sortf') || '';
+                if (hasReworkInAddInfo(sortf)) {
+                    $this.attr('title', 'Quantity editable due to rework in Add Info');
+                }
+            },
+            function() {
+                // Kosongkan title saat mouse keluar
+                $(this).attr('title', $(this).attr('title') || '');
+            }
+        );
+
         // PERUBAHAN: Initial validation setelah tabel terisi
         validateCreateButton();
     }
@@ -2070,7 +2144,8 @@
         $('.requested-qty').each(function() {
             const value = parseFloat($(this).val()) || 0;
             const minValue = parseFloat($(this).attr('min')) || 0;
-            const isEditable = !$(this).hasClass('qty-disabled');
+            const sortfValue = $(this).data('sortf') || '';
+            const isEditable = !$(this).hasClass('qty-disabled') || hasReworkInAddInfo(sortfValue);
 
             if (isEditable && value < minValue) {
                 isValid = false;
@@ -2096,7 +2171,10 @@
             const materialCode = $(this).data('material');
             const qtyInput = $(this).find('.requested-qty');
             const requestedQty = parseFloat(qtyInput.val()) || 0;
-            const isQtyEditable = !qtyInput.hasClass('qty-disabled');
+            const sortfValue = $(this).data('sortf') || '';
+
+            // PERUBAHAN: Gunakan fungsi untuk mengecek apakah quantity editable
+            const isQtyEditable = !qtyInput.hasClass('qty-disabled') || hasReworkInAddInfo(sortfValue);
 
             // Cari material asli dari loadedMaterials
             const originalMaterial = loadedMaterials.find(m => m.material_code === materialCode);
@@ -2114,6 +2192,7 @@
                 dispo: originalMaterial.dispo,
                 requested_qty: requestedQty,
                 is_qty_editable: isQtyEditable,
+                has_rework: hasReworkInAddInfo(originalMaterial.sortf), // Tambahkan flag rework
                 sources: originalMaterial.sources || [],
                 sales_orders: originalMaterial.sales_orders || [],
                 pro_details: originalMaterial.pro_details || [],
@@ -2143,7 +2222,8 @@
                 mathd: materialsData[0].mathd,
                 makhd: materialsData[0].makhd,
                 dispo: materialsData[0].dispo,
-                dispc: materialsData[0].dispc
+                dispc: materialsData[0].dispc,
+                has_rework: materialsData[0].has_rework
             } : 'No data'
         });
 

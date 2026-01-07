@@ -746,7 +746,7 @@ class TransferController extends Controller
     }
 
     /**
-     * CLEAN UP EXISTING DUPLICATE DATA
+     * CLEAN UP EXISTING DUPLICATE DATA - DIPERBAIKI
      */
     public function cleanupDuplicates()
     {
@@ -790,6 +790,7 @@ class TransferController extends Controller
                     $transfer->delete();
                     $mergedCount++;
 
+                    // PERBAIKAN: Mengubah $primaryTransfer menjadi $cleanTransfer
                     Log::info('Merged duplicate transfer', [
                         'dup_id' => $transfer->id,
                         'dup_transfer_no' => $transfer->transfer_no,
@@ -868,7 +869,7 @@ class TransferController extends Controller
         ]);
     }
 
-        public function index(Request $request)
+    public function index(Request $request)
     {
         try {
             $perPage = $request->get('per_page', 50);
@@ -969,7 +970,7 @@ class TransferController extends Controller
     }
 
     /**
-     * Get transfer details with complete data
+     * Get transfer details with complete data (MENYERTAKAN DOCUMENT REMARKS)
      */
     public function showDetailed($id)
     {
@@ -986,7 +987,8 @@ class TransferController extends Controller
                     ]);
                 },
                 'document' => function($query) {
-                    $query->select(['id', 'document_no', 'plant', 'sloc_supply', 'status']);
+                    // MENYERTAKAN FIELD REMARKS DARI DOCUMENT
+                    $query->select(['id', 'document_no', 'plant', 'sloc_supply', 'status', 'remarks']);
                 }
             ])->findOrFail($id);
 
@@ -1376,53 +1378,53 @@ class TransferController extends Controller
         }
     }
 
-            /**
-             * Print transfer
-             */
-            public function print($id)
-            {
-                try {
-                    $transfer = ReservationTransfer::with(['items', 'document'])->findOrFail($id);
+    /**
+     * Print transfer
+     */
+    public function print($id)
+    {
+        try {
+            $transfer = ReservationTransfer::with(['items', 'document'])->findOrFail($id);
 
-                    // Calculate total quantity from items
-                    $totalQty = 0;
-                    if ($transfer->items && $transfer->items->count() > 0) {
-                        $totalQty = $transfer->items->sum('quantity');
-                    } elseif ($transfer->total_qty) {
-                        $totalQty = $transfer->total_qty;
+            // Calculate total quantity from items
+            $totalQty = 0;
+            if ($transfer->items && $transfer->items->count() > 0) {
+                $totalQty = $transfer->items->sum('quantity');
+            } elseif ($transfer->total_qty) {
+                $totalQty = $transfer->total_qty;
+            }
+
+            $transfer->total_qty_calculated = $totalQty;
+
+            // Format dates for view
+            $transfer->created_at_formatted = $transfer->created_at
+                ? \Carbon\Carbon::parse($transfer->created_at)->format('d/m/Y H:i:s')
+                : 'N/A';
+
+            $transfer->completed_at_formatted = $transfer->completed_at
+                ? \Carbon\Carbon::parse($transfer->completed_at)->format('d/m/Y H:i:s')
+                : 'Not completed';
+
+            // Format material codes
+            if ($transfer->items) {
+                foreach ($transfer->items as $item) {
+                    if (ctype_digit($item->material_code)) {
+                        $item->material_code_formatted = ltrim($item->material_code, '0');
+                    } else {
+                        $item->material_code_formatted = $item->material_code;
                     }
-
-                    $transfer->total_qty_calculated = $totalQty;
-
-                    // Format dates for view
-                    $transfer->created_at_formatted = $transfer->created_at
-                        ? \Carbon\Carbon::parse($transfer->created_at)->format('d/m/Y H:i:s')
-                        : 'N/A';
-
-                    $transfer->completed_at_formatted = $transfer->completed_at
-                        ? \Carbon\Carbon::parse($transfer->completed_at)->format('d/m/Y H:i:s')
-                        : 'Not completed';
-
-                    // Format material codes
-                    if ($transfer->items) {
-                        foreach ($transfer->items as $item) {
-                            if (ctype_digit($item->material_code)) {
-                                $item->material_code_formatted = ltrim($item->material_code, '0');
-                            } else {
-                                $item->material_code_formatted = $item->material_code;
-                            }
-                        }
-                    }
-
-                    return view('transfers.print', compact('transfer'));
-
-                } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-                    abort(404, 'Transfer not found');
-                } catch (\Exception $e) {
-                    Log::error('Error printing transfer: ' . $e->getMessage());
-                    abort(500, 'Error generating printout');
                 }
             }
+
+            return view('transfers.print', compact('transfer'));
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            abort(404, 'Transfer not found');
+        } catch (\Exception $e) {
+            Log::error('Error printing transfer: ' . $e->getMessage());
+            abort(500, 'Error generating printout');
+        }
+    }
 
     /**
      * Get transfer statistics

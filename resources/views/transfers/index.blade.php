@@ -643,7 +643,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Generate Compact Transfer Detail Content - DESAIN ASLI YANG BAGUS
+    // Generate Compact Transfer Detail Content - Dengan 2 kolom baru dan 2 remarks
     function generateTransferDetailContent(transfer) {
         const formattedDate = transfer.created_at ?
             new Date(transfer.created_at).toLocaleString('id-ID', {
@@ -777,33 +777,33 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </div>
 
-                        {{-- Remarks Section --}}
+                        {{-- Remarks Section (Document & Transfer Remarks) --}}
                         <div class="col-md-6">
                             <div class="card border h-100">
                                 <div class="card-header bg-transparent py-2 px-3">
                                     <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
-                                        <i class="fas fa-sticky-note me-2 text-warning"></i>Remarks & SAP Message
+                                        <i class="fas fa-sticky-note me-2 text-warning"></i>Remarks
                                     </h6>
                                 </div>
                                 <div class="card-body p-2">
+                                    ${transfer.document && transfer.document.remarks ? `
+                                    <div class="mb-2">
+                                        <div class="text-muted small mb-1">Document Remarks:</div>
+                                        <div class="message-box bg-light p-2 rounded">${transfer.document.remarks}</div>
+                                    </div>
+                                    ` : ''}
+
                                     ${transfer.remarks ? `
                                     <div class="mb-2">
-                                        <div class="text-muted small mb-1">Remarks:</div>
+                                        <div class="text-muted small mb-1">Transfer Remarks:</div>
                                         <div class="message-box bg-light p-2 rounded">${transfer.remarks}</div>
                                     </div>
                                     ` : ''}
 
-                                    ${transfer.sap_message ? `
-                                    <div>
-                                        <div class="text-muted small mb-1">SAP Message:</div>
-                                        <div class="message-box bg-light p-2 rounded">${transfer.sap_message}</div>
-                                    </div>
-                                    ` : ''}
-
-                                    ${!transfer.remarks && !transfer.sap_message ? `
+                                    ${!transfer.remarks && (!transfer.document || !transfer.document.remarks) ? `
                                     <div class="text-center py-3">
                                         <i class="fas fa-comment-slash text-muted fa-lg mb-2"></i>
-                                        <p class="text-muted small mb-0">No remarks or messages</p>
+                                        <p class="text-muted small mb-0">No remarks</p>
                                     </div>
                                     ` : ''}
                                 </div>
@@ -811,7 +811,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     </div>
 
-                    {{-- Transfer Items Table --}}
+                    {{-- Transfer Items Table dengan Source Sloc & Dest Sloc --}}
                     <div class="card border">
                         <div class="card-header bg-transparent border-bottom py-2 px-3">
                             <div class="d-flex justify-content-between align-items-center">
@@ -835,6 +835,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <th class="py-1 fw-semibold">Material Code</th>
                                             <th class="py-1 fw-semibold">Description</th>
                                             <th class="py-1 fw-semibold">Batch</th>
+                                            <th class="py-1 fw-semibold">Source Sloc</th>
+                                            <th class="py-1 fw-semibold">Dest Sloc</th>
                                             <th class="py-1 fw-semibold text-end">Quantity</th>
                                             <th class="pe-3 py-1 fw-semibold">Unit</th>
                                         </tr>
@@ -880,7 +882,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!items || items.length === 0) {
             return `
                 <tr>
-                    <td colspan="6" class="text-center py-3 text-muted small">
+                    <td colspan="8" class="text-center py-3 text-muted small">
                         <i class="fas fa-box-open me-1"></i>No items found
                     </td>
                 </tr>
@@ -903,6 +905,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="text-muted small" style="font-size: 11.5px; line-height: 1.3;">${description}</div>
                     </td>
                     <td>${item.batch || '-'}</td>
+                    <td>${item.storage_location || '-'}</td>
+                    <td>${item.sloc_destination || '-'}</td>
                     <td class="text-end fw-semibold">${formatFullNumber(item.quantity || 0)}</td>
                     <td class="pe-3">${item.unit || 'PC'}</td>
                 </tr>

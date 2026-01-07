@@ -163,14 +163,28 @@
                                             $qtyValue = $item->requested_qty;
                                             $displayValue = fmod($qtyValue, 1) != 0 ? $qtyValue : intval($qtyValue);
 
-                                            // Check if quantity is editable based on MRP
+                                            // Check if quantity is editable based on MRP AND Add Info (rework)
                                             $isQtyEditable = $item->is_qty_editable ?? true;
                                             $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'D22', 'GF1', 'CH4', 'D26', 'D28', 'D23', 'DR1', 'DR2', 'WE2', 'GW2'];
 
                                             // Pastikan dispo ada di item
                                             $dispo = $item->dispo ?? null;
-                                            if ($dispo && !in_array($dispo, $allowedMRP)) {
+
+                                            // Ambil Add Info (sortf)
+                                            $addInfo = $item->sortf ?? '';
+                                            $hasRework = false;
+                                            if (!empty($addInfo)) {
+                                                $hasRework = stripos(strtolower($addInfo), 'rework') !== false;
+                                            }
+
+                                            // Logika penentuan apakah quantity dapat diedit
+                                            if ($hasRework) {
+                                                // Jika ada "rework" di Add Info, selalu izinkan edit
+                                                $isQtyEditable = true;
+                                            } elseif ($dispo && !in_array($dispo, $allowedMRP)) {
                                                 $isQtyEditable = false;
+                                            } else {
+                                                $isQtyEditable = true;
                                             }
 
                                             // Format material code: remove leading zeros if numeric
@@ -233,7 +247,7 @@
                                             <td>
                                                 @if($item->dispo)
                                                     <span class="badge bg-info">{{ $item->dispo }}</span>
-                                                    @if(!$isQtyEditable)
+                                                    @if(!$isQtyEditable && !$hasRework)
                                                         <small class="text-muted d-block">(Fixed Qty)</small>
                                                     @endif
                                                 @else
@@ -245,10 +259,14 @@
                                                     <input type="number"
                                                            step="0.001"
                                                            min="0"
-                                                           class="form-control text-end qty-input {{ $item->force_completed ? 'bg-success text-white' : '' }}"
+                                                           class="form-control text-end qty-input {{ $hasRework ? 'rework-editable' : '' }} {{ $item->force_completed ? 'bg-success text-white' : '' }}"
                                                            name="items[{{ $index }}][requested_qty]"
                                                            value="{{ old('items.'.$index.'.requested_qty', $displayValue) }}"
-                                                           required>
+                                                           required
+                                                           title="{{ $hasRework ? 'Quantity editable due to rework in Add Info' : 'Quantity can be edited' }}">
+                                                    @if($hasRework)
+                                                        <small class="text-success d-block">Editable (Rework)</small>
+                                                    @endif
                                                 @else
                                                     <input type="text"
                                                            class="form-control text-end bg-light"
@@ -533,6 +551,22 @@ tr.selected-row {
 /* Force completed rows */
 .table-success {
     background-color: rgba(25, 135, 84, 0.1) !important;
+}
+
+/* Styling khusus untuk input dengan rework */
+.rework-editable {
+    border-color: #28a745 !important;
+    background-color: rgba(40, 167, 69, 0.05) !important;
+}
+
+.rework-editable:focus {
+    box-shadow: 0 0 0 0.25rem rgba(40, 167, 69, 0.25) !important;
+}
+
+/* Styling untuk pesan rework */
+.text-success.d-block {
+    font-size: 0.75rem;
+    font-weight: 500;
 }
 </style>
 
