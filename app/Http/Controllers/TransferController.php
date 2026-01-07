@@ -153,6 +153,7 @@ class TransferController extends Controller
                         'status' => $sapResponse['status'] ?? 'COMPLETED',
                         'sap_message' => $sapResponse['message'] ?? 'Transfer completed',
                         'sap_response' => json_encode($sapResponse),
+                        'remarks' => $remarks, // Update remarks dari input terbaru
                         'updated_at' => now()
                     ]);
 
@@ -250,6 +251,7 @@ class TransferController extends Controller
             'posting_date' => now()->format('Ymd'),
             'created_by' => $user->name,
             'created_at' => now()->toDateTimeString(),
+            'remarks' => $data['remarks'] ?? "Transfer from Document {$document->document_no}",
             'items' => []
         ];
 
@@ -947,6 +949,10 @@ class TransferController extends Controller
         try {
             $transfer = ReservationTransfer::with(['items', 'document'])->findOrFail($id);
 
+            // Add remarks for API response
+            $transfer->document_remarks = $transfer->document->remarks ?? '';
+            $transfer->transfer_remarks = $transfer->remarks ?? '';
+
             return response()->json([
                 'success' => true,
                 'data' => $transfer,
@@ -991,6 +997,10 @@ class TransferController extends Controller
                     $query->select(['id', 'document_no', 'plant', 'sloc_supply', 'status', 'remarks']);
                 }
             ])->findOrFail($id);
+
+            // Add document remarks to transfer object
+            $transfer->document_remarks = $transfer->document->remarks ?? '';
+            $transfer->transfer_remarks = $transfer->remarks ?? '';
 
             // Calculate totals
             $transfer->total_items = $transfer->items->count();
@@ -1037,6 +1047,12 @@ class TransferController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get();
 
+            // Add document remarks to each transfer
+            foreach ($transfers as $transfer) {
+                $transfer->document_remarks = $transfer->document->remarks ?? '';
+                $transfer->transfer_remarks = $transfer->remarks ?? '';
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => $transfers,
@@ -1063,7 +1079,8 @@ class TransferController extends Controller
                 'status' => 'required|string',
                 'sap_message' => 'nullable|string',
                 'transfer_no' => 'nullable|string',
-                'move_type' => 'nullable|string|in:301,311'
+                'move_type' => 'nullable|string|in:301,311',
+                'remarks' => 'nullable|string' // Tambahkan field remarks untuk update
             ]);
 
             $transfer = ReservationTransfer::findOrFail($id);
@@ -1082,6 +1099,10 @@ class TransferController extends Controller
                 $updateData['move_type'] = $request->move_type;
             }
 
+            if ($request->has('remarks')) {
+                $updateData['remarks'] = $request->remarks;
+            }
+
             if ($request->status === 'COMPLETED') {
                 $updateData['completed_at'] = now();
             }
@@ -1092,7 +1113,8 @@ class TransferController extends Controller
                 'transfer_id' => $id,
                 'new_status' => $request->status,
                 'new_transfer_no' => $request->transfer_no ?? 'unchanged',
-                'new_move_type' => $request->move_type ?? 'unchanged'
+                'new_move_type' => $request->move_type ?? 'unchanged',
+                'remarks_updated' => $request->has('remarks') ? 'Yes' : 'No'
             ]);
 
             return response()->json([
@@ -1379,7 +1401,7 @@ class TransferController extends Controller
     }
 
     /**
-     * Print transfer
+     * Print transfer - DIPERBAIKI DENGAN MENAMBAHKAN REMARKS
      */
     public function print($id)
     {
@@ -1395,6 +1417,10 @@ class TransferController extends Controller
             }
 
             $transfer->total_qty_calculated = $totalQty;
+
+            // Tambahkan kedua remarks untuk print view
+            $transfer->document_remarks = $transfer->document->remarks ?? '';
+            $transfer->transfer_remarks = $transfer->remarks ?? '';
 
             // Format dates for view
             $transfer->created_at_formatted = $transfer->created_at
@@ -1594,6 +1620,33 @@ class TransferController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error checking item transferability: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get transfer with full remarks data
+     */
+    public function getTransferWithRemarks($id)
+    {
+        try {
+            $transfer = ReservationTransfer::with(['document'])->findOrFail($id);
+
+            // Add remarks data
+            $transfer->document_remarks = $transfer->document->remarks ?? '';
+            $transfer->transfer_remarks = $transfer->remarks ?? '';
+
+            return response()->json([
+                'success' => true,
+                'data' => $transfer,
+                'message' => 'Transfer with remarks retrieved successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting transfer with remarks: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
             ], 500);
         }
     }

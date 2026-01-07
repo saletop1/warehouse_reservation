@@ -831,7 +831,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <table class="table table-sm mb-0 compact-table">
                                     <thead class="table-light">
                                         <tr>
-                                            <th class="ps-3 py-1 fw-semibold">#</th>
+                                            <th class="ps-3 py-1 fw-semibold">No</th>
                                             <th class="py-1 fw-semibold">Material Code</th>
                                             <th class="py-1 fw-semibold">Description</th>
                                             <th class="py-1 fw-semibold">Batch</th>

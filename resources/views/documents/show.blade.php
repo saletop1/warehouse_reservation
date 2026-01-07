@@ -368,7 +368,7 @@
                                     <th class="border-0 py-1 px-1" style="width: 40px;">
                                         <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
                                     </th>
-                                    <th class="border-0 text-muted py-1 px-1" style="width: 40px;">#</th>
+                                    <th class="border-0 text-muted py-1 px-1" style="width: 40px;">No</th>
                                     <th class="border-0 text-muted py-1 px-1">Material</th>
                                     <th class="border-0 text-muted py-1 px-1">Description</th>
                                     <th class="border-0 text-muted py-1 px-1 text-center">Req Qty</th>

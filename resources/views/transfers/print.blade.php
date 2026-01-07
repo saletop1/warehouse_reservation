@@ -541,12 +541,12 @@
             <div class="col-6">
                 <h3>Transfer Information</h3>
                 <div class="info-row">
-                    <span class="info-label">Transfer No:</span>
-                    <span class="info-value">{{ $transfer->transfer_no ?? 'N/A' }}</span>
-                </div>
-                <div class="info-row">
                     <span class="info-label">Document No:</span>
                     <span class="info-value">{{ $transfer->document_no ?? 'N/A' }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Transfer No:</span>
+                    <span class="info-value">{{ $transfer->transfer_no ?? 'N/A' }}</span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Created By:</span>
@@ -609,12 +609,12 @@
         <table>
             <thead>
                 <tr>
-                    <th width="5%">#</th>
+                    <th width="5%">No</th>
                     <th width="15%">Material Code</th>
                     <th width="30%">Description</th>
                     <th width="10%">Batch</th>
-                    <th width="10%">Storage Loc</th>
-                    <th width="10%">Dest SLOC</th>
+                    <th width="10%">Source Sloc</th>
+                    <th width="10%">Dest Sloc</th>
                     <th width="10%" class="text-right">Quantity</th>
                     <th width="10%">Unit</th>
                 </tr>
@@ -659,21 +659,21 @@
         </table>
 
         <!-- Additional Information -->
-        @if($transfer->remarks || $transfer->sap_message)
+        @if($transfer->document_remarks || $transfer->transfer_remarks)
         <div class="mt-3">
             <h3>Additional Information</h3>
 
-            @if($transfer->remarks)
+            @if($transfer->document_remarks)
             <div class="remarks-box">
-                <strong>Remarks:</strong><br>
-                {{ $transfer->remarks }}
+                <strong>Document Remarks:</strong><br>
+                {{ $transfer->document_remarks }}
             </div>
             @endif
 
-            @if($transfer->sap_message)
+            @if($transfer->transfer_remarks)
             <div class="remarks-box">
-                <strong>SAP Message:</strong><br>
-                {{ $transfer->sap_message }}
+                <strong>Transfer Remarks:</strong><br>
+                {{ $transfer->transfer_remarks }}
             </div>
             @endif
         </div>
