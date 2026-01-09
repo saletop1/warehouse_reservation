@@ -154,7 +154,7 @@
                             <h5 class="mb-0 fw-semibold">{{ round($document->completion_rate ?? 0, 2) }}%</h5>
                             <div class="progress mt-2" style="height: 4px;">
                                 <div class="progress-bar bg-success" role="progressbar"
-                                     style="width: {{ round($document->completion_rate ?? 0, 2) }}%;"
+                                     style="width: {{ min(round($document->completion_rate ?? 0, 2), 100) }}%;"
                                      aria-valuenow="{{ round($document->completion_rate ?? 0, 2) }}"></div>
                             </div>
                         </div>
@@ -181,19 +181,7 @@
                 </div>
                 <div class="card-body p-3">
                     <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-2">
-                                <label class="form-label text-muted small mb-1">Created Date</label>
-                                <p class="fw-medium mb-0">
-                                    <i class="fas fa-calendar me-1 text-muted small"></i>
-                                    {{ \Carbon\Carbon::parse($document->created_at)->format('d/m/Y H:i:s') }}
-                                </p>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label text-muted small mb-1">Plant Request</label>
-                                <p class="fw-medium mb-0">{{ $document->plant }}</p>
-                            </div>
-                        </div>
+                        <!-- PERBAIKAN: Kolom pertama - Plant Supply dan Plant Request -->
                         <div class="col-md-4">
                             <div class="mb-2">
                                 <label class="form-label text-muted small mb-1">Plant Supply</label>
@@ -208,6 +196,21 @@
                                 </p>
                             </div>
                             <div class="mb-2">
+                                <label class="form-label text-muted small mb-1">Plant Request</label>
+                                <p class="fw-medium mb-0">{{ $document->plant }}</p>
+                            </div>
+                        </div>
+
+                        <!-- PERBAIKAN: Kolom kedua - Created Date dan Created By -->
+                        <div class="col-md-4">
+                            <div class="mb-2">
+                                <label class="form-label text-muted small mb-1">Created Date</label>
+                                <p class="fw-medium mb-0">
+                                    <i class="fas fa-calendar me-1 text-muted small"></i>
+                                    {{ \Carbon\Carbon::parse($document->created_at)->format('d/m/Y H:i:s') }}
+                                </p>
+                            </div>
+                            <div class="mb-2">
                                 <label class="form-label text-muted small mb-1">Created By</label>
                                 <p class="fw-medium mb-0">
                                     <i class="fas fa-user me-1 text-muted small"></i>
@@ -215,6 +218,8 @@
                                 </p>
                             </div>
                         </div>
+
+                        <!-- Kolom ketiga tetap untuk Remarks -->
                         <div class="col-md-4">
                             @if($document->remarks)
                             <div class="mb-2">
@@ -289,7 +294,7 @@
                         <label class="form-label text-muted small mb-1">Total Transferred</label>
                         <p class="fw-medium mb-0 small">
                             {{ number_format($document->total_transferred ?? 0) }} / {{ number_format($document->total_qty) }}
-                            ({{ round($document->completion_rate ?? 0, 2) }}%)
+                            ({{ round(min($document->completion_rate ?? 0, 100), 2) }}%)
                         </p>
                     </div>
 
@@ -443,17 +448,17 @@
 
                                     // Check if stock is available
                                     $hasStock = $totalStock > 0;
-                                    // PERBAIKAN: Transferable quantity hanya berdasarkan batch stock
+                                    // Transferable quantity hanya berdasarkan batch stock
                                     $transferableQty = 0;
                                     if (!empty($batchInfo)) {
                                         // Jumlahkan semua batch stock
                                         $transferableQty = array_sum(array_column($batchInfo, 'qty'));
                                     }
 
-                                    // PERBAIKAN: Cek force completed
+                                    // Cek force completed
                                     $isForceCompleted = $item->force_completed ?? false;
 
-                                    // PERBAIKAN: Check if item is transferable
+                                    // Check if item is transferable
                                     $isTransferable = !$isForceCompleted && $transferableQty > 0;
 
                                     // MRP Comp (dispc)

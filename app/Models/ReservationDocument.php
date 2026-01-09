@@ -66,13 +66,14 @@ class ReservationDocument extends Model
     }
 
     /**
-     * Accessor untuk completion_rate
+     * Accessor untuk completion rate - DIPERBAIKI: Tidak melebihi 100%
      */
     public function getCompletionRateAttribute($value)
     {
         // Jika sudah ada nilai di database, gunakan itu
         if (!is_null($value)) {
-            return (float)$value;
+            // Batasi maksimum 100%
+            return min((float)$value, 100);
         }
 
         // Hitung berdasarkan total transferred dan total qty
@@ -80,53 +81,60 @@ class ReservationDocument extends Model
         $totalTransferred = $this->total_transferred;
 
         if ($totalQty > 0) {
-            return round(($totalTransferred / $totalQty) * 100, 2);
+            $rate = round(($totalTransferred / $totalQty) * 100, 2);
+            // Batasi maksimum 100%
+            return min($rate, 100);
         }
 
         return 0;
     }
 
     // App\Models\ReservationDocument.php
-        public function recalculateTotals()
-        {
-            $totalTransferred = 0;
-            $totalRequested = 0;
+    public function recalculateTotals()
+    {
+        $totalTransferred = 0;
+        $totalRequested = 0;
 
-            foreach ($this->items as $item) {
-                // Hitung transferred_qty dari reservation_transfer_items
-                $transferredQty = DB::table('reservation_transfer_items')
-                    ->where('document_item_id', $item->id)
-                    ->sum('quantity');
+        foreach ($this->items as $item) {
+            // Hitung transferred_qty dari reservation_transfer_items
+            $transferredQty = DB::table('reservation_transfer_items')
+                ->where('document_item_id', $item->id)
+                ->sum('quantity');
 
-                $item->transferred_qty = $transferredQty;
-                $item->save();
+            $item->transferred_qty = $transferredQty;
+            $item->save();
 
-                $totalTransferred += $transferredQty;
-                $totalRequested += $item->requested_qty;
-            }
-
-            $this->total_transferred = $totalTransferred;
-            $this->total_qty = $totalRequested;
-            $this->completion_rate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
-            $this->save();
+            $totalTransferred += $transferredQty;
+            $totalRequested += $item->requested_qty;
         }
-        /**
-         * Recalculate all item transfer quantities and statuses
-         */
-        public function recalculateItemStatuses()
-        {
-            foreach ($this->items as $item) {
-                // Hitung transferred_qty dari reservation_transfer_items
-                $transferredQty = DB::table('reservation_transfer_items')
-                    ->where('document_item_id', $item->id)
-                    ->sum('quantity');
 
-                $item->transferred_qty = (float)$transferredQty;
-                $item->remaining_qty = max(0, (float)$item->requested_qty - (float)$transferredQty);
-                $item->save();
-            }
+        $this->total_transferred = $totalTransferred;
+        $this->total_qty = $totalRequested;
 
-            $this->recalculateTotals();
-            return $this;
+        // DIPERBAIKI: Batasi completion rate maksimum 100%
+        $completionRate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
+        $this->completion_rate = min($completionRate, 100);
+
+        $this->save();
+    }
+
+    /**
+     * Recalculate all item transfer quantities and statuses
+     */
+    public function recalculateItemStatuses()
+    {
+        foreach ($this->items as $item) {
+            // Hitung transferred_qty dari reservation_transfer_items
+            $transferredQty = DB::table('reservation_transfer_items')
+                ->where('document_item_id', $item->id)
+                ->sum('quantity');
+
+            $item->transferred_qty = (float)$transferredQty;
+            $item->remaining_qty = max(0, (float)$item->requested_qty - (float)$transferredQty);
+            $item->save();
         }
+
+        $this->recalculateTotals();
+        return $this;
+    }
 }

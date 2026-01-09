@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\ReservationDocument;
 use App\Models\ReservationDocumentItem;
 use App\Models\ReservationStock;
-use App\Models\ReservationTransfer;
 use Illuminate\Http\Request;
 use App\Exports\ReservationDocumentsSelectedExport;
 use App\Exports\DocumentItemsExport;
@@ -55,11 +54,11 @@ class ReservationDocumentController extends Controller
         foreach ($documents as $document) {
             $totalRequested = $document->items()->sum('requested_qty');
             $totalTransferred = $document->items()->sum('transferred_qty') ?? 0;
-
-            if ($totalTransferred >= $totalRequested && $document->status != 'closed') {
+            $effectiveTransferred = min($totalTransferred, $totalRequested);
+            if ($effectiveTransferred >= $totalRequested && $document->status != 'closed') {
                 $document->status = 'closed';
                 $document->save();
-            } elseif ($totalTransferred > 0 && $document->status == 'booked') {
+            } elseif ($effectiveTransferred > 0 && $document->status == 'booked') {
                 $document->status = 'partial';
                 $document->save();
             }
