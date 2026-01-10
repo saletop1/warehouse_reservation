@@ -361,9 +361,13 @@ class ReservationDocumentController extends Controller
         if ($item->force_completed ?? false) {
             return false;
         }
+        // PERBAIKAN: Tambah kondisi remaining_qty > 0
+        $remainingQty = $item->remaining_qty ?? 0;
+        if ($remainingQty <= 0) {
+            return false;
+        }
 
         // Cek remaining quantity dan stock
-        $remainingQty = $item->remaining_qty ?? 0;
         $totalStock = $item->stock_info['total_stock'] ?? 0;
 
         return $remainingQty > 0 && $totalStock > 0;

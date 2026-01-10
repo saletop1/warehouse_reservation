@@ -17,14 +17,14 @@
                         <thead class="table-light">
                             <tr>
                                 <th class="text-center">No</th>
-                                <th>Transfer No</th>
-                                <th>Created By</th>
-                                <th>Material Code</th>
-                                <th>Batch</th>
-                                <th class="text-center">Quantity</th>
+                                <th class="text-center">Transfer No</th>
+                                <th class="text-center">Created By</th>
+                                <th class="text-center">Material</th>
+                                <th class="text-center">Batch</th>
+                                <th class="text-center">Qty</th>
                                 <th class="text-center">Unit</th>
-                                <th>Batch SLOC</th>
-                                <th>SLOC Destination</th>
+                                <th class="text-center">From</th>
+                                <th class="text-center">Dest</th>
                                 <th class="text-center">Created At</th>
                             </tr>
                         </thead>

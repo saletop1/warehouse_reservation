@@ -382,7 +382,7 @@
                                     <th class="border-0 text-muted py-1 px-1 text-center">Stock</th>
                                     <th class="border-0 text-muted py-1 px-1 text-center">Status</th>
                                     <th class="border-0 text-muted py-1 px-1 text-center">Batch Source</th>
-                                    <th class="border-0 text-muted py-1 px-1 text-center">SO</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">Sales Order</th>
                                     <th class="border-0 text-muted py-1 px-1 text-center">Source PRO</th>
                                 </tr>
                             </thead>
@@ -459,7 +459,7 @@
                                     $isForceCompleted = $item->force_completed ?? false;
 
                                     // Check if item is transferable
-                                    $isTransferable = !$isForceCompleted && $transferableQty > 0;
+                                    $isTransferable = !$isForceCompleted && $transferableQty > 0 && $remainingQty > 0;
 
                                     // MRP Comp (dispc)
                                     $mrpComp = $item->dispc ?? ($item->mrp_comp ?? ($item->dispo ?? '-'));
@@ -583,6 +583,25 @@
                                             @endif
                                         @else
                                             <span class="text-muted small">-</span>
+                                        @endif
+                                    </td>
+
+                                    <!-- Kolom Stock - Tambahkan hover effect -->
+                                    <td class="align-middle text-center py-1 px-1 stock-cell"
+                                        title="{{ $isTransferable ? 'Click to view batch details' : ($totalStock > 0 ? 'Stock available but not transferable' : 'No stock available') }}"
+                                        data-bs-toggle="{{ $isTransferable ? 'tooltip' : '' }}"
+                                        data-bs-placement="top"
+                                        style="cursor: {{ $isTransferable ? 'pointer' : 'default' }};">
+                                        @if($totalStock > 0)
+                                            <span class="badge bg-{{ $remainingQty > 0 ? 'success' : 'warning' }} bg-opacity-10
+                                                text-{{ $remainingQty > 0 ? 'success' : 'warning' }} px-2 py-1 small stock-badge
+                                                {{ $isTransferable ? 'hover-effect' : '' }}">
+                                                {{ \App\Helpers\NumberHelper::formatStockNumber($totalStock) }}
+                                            </span>
+                                        @else
+                                            <span class="badge bg-danger bg-opacity-10 text-danger px-2 py-1 small">
+                                                No Stock
+                                            </span>
                                         @endif
                                     </td>
 
@@ -996,6 +1015,67 @@ body {
     font-weight: 500;
 }
 
+/* PERBAIKAN: Hover effect untuk stock cell */
+.stock-cell:hover .stock-badge.hover-effect {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s ease;
+}
+/* Cursor untuk row yang transferable */
+.draggable-row[data-can-transfer="true"] {
+    cursor: grab !important;
+}
+
+.draggable-row[data-can-transfer="true"]:hover {
+    cursor: grab !important;
+    background: rgba(74, 108, 247, 0.08) !important;
+}
+
+.draggable-row[data-can-transfer="true"]:active {
+    cursor: grabbing !important;
+}
+
+/* Cursor untuk kolom stock yang transferable */
+.stock-cell[style*="cursor: pointer;"]:hover {
+    background: rgba(74, 108, 247, 0.05);
+    border-radius: 4px;
+}
+
+/* Tooltip styling */
+.tooltip {
+    font-size: 0.85rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .stock-cell {
+        cursor: pointer !important; /* Always pointer on mobile for better UX */
+    }
+}
+
+/* Stock badge animation */
+.stock-badge.hover-effect {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.stock-badge.hover-effect::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.5s;
+}
+
+.stock-badge.hover-effect:hover::after {
+    left: 100%;
+}
+
+
 /* Responsive Design */
 @media (max-width: 768px) {
     body {
@@ -1181,6 +1261,56 @@ document.addEventListener('DOMContentLoaded', function() {
         return parseFloat(cleaned) || 0;
     }
 
+    // Setup tooltips untuk kolom stock
+    function setupStockTooltips() {
+        const stockCells = document.querySelectorAll('.stock-cell[data-bs-toggle="tooltip"]');
+        stockCells.forEach(cell => {
+            new bootstrap.Tooltip(cell, {
+                trigger: 'hover',
+                delay: { show: 300, hide: 100 }
+            });
+        });
+
+        // Setup click handler untuk kolom stock yang transferable
+        document.querySelectorAll('.stock-cell[style*="cursor: pointer;"]').forEach(cell => {
+            cell.addEventListener('click', function(e) {
+                e.stopPropagation();
+
+                // Cari row parent
+                const row = this.closest('.draggable-row');
+                if (!row) return;
+
+                const canTransfer = row.dataset.canTransfer === 'true';
+                const isForceCompleted = row.dataset.forceCompleted === 'true';
+                const itemId = row.dataset.itemId;
+
+                // Jika transferable dan tidak force completed, tambahkan ke transfer list
+                if (canTransfer && !isForceCompleted) {
+                    addItemById(itemId);
+                }
+            });
+        });
+    }
+
+    // Initialize all functions
+    function initialize() {
+        console.log('Initializing document show page...');
+
+        try {
+            // ... (inisialisasi lainnya tetap sama) ...
+
+            // 7. Setup stock tooltips dan click handlers
+            setupStockTooltips();
+            console.log('✅ Stock tooltips setup complete');
+
+            console.log('✅ All initialization complete');
+
+        } catch (error) {
+            console.error('❌ Error during initialization:', error);
+            showToast('Error initializing page: ' + error.message, 'error');
+        }
+    }
+    
     // Show/hide loading overlay
     function showLoading() {
         document.getElementById('loadingOverlay').classList.add('show');

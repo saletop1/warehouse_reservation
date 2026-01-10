@@ -277,54 +277,8 @@
             </div>
         </div>
 
-        {{-- Quick Actions & Transfers --}}
+        {{-- Recent Transfers Only --}}
         <div class="col-lg-4 mb-3 mb-md-4">
-            {{-- Quick Actions --}}
-            <div class="card border-0 shadow-sm rounded-3 mb-3">
-                <div class="card-header bg-transparent border-bottom py-3">
-                    <h5 class="mb-0 fw-semibold">
-                        <i class="fas fa-bolt me-2 text-warning"></i>Quick Actions
-                    </h5>
-                </div>
-                <div class="card-body p-2 p-md-3">
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <a href="{{ route('reservations.create') }}" class="quick-action-btn d-flex flex-column align-items-center p-2 rounded-2">
-                                <div class="icon-wrapper bg-primary-subtle p-2 rounded-2 mb-2">
-                                    <i class="fas fa-plus text-primary fs-5"></i>
-                                </div>
-                                <span class="small fw-medium text-center">New Doc</span>
-                            </a>
-                        </div>
-                        <div class="col-6">
-                            <a href="{{ route('reservations.index') }}" class="quick-action-btn d-flex flex-column align-items-center p-2 rounded-2">
-                                <div class="icon-wrapper bg-success-subtle p-2 rounded-2 mb-2">
-                                    <i class="fas fa-sync text-success fs-5"></i>
-                                </div>
-                                <span class="small fw-medium text-center">Sync SAP</span>
-                            </a>
-                        </div>
-                        <div class="col-6">
-                            <a href="{{ route('documents.index') }}" class="quick-action-btn d-flex flex-column align-items-center p-2 rounded-2">
-                                <div class="icon-wrapper bg-info-subtle p-2 rounded-2 mb-2">
-                                    <i class="fas fa-list text-info fs-5"></i>
-                                </div>
-                                <span class="small fw-medium text-center">All Docs</span>
-                            </a>
-                        </div>
-                        <div class="col-6">
-                            <a href="{{ route('transfers.index') }}" class="quick-action-btn d-flex flex-column align-items-center p-2 rounded-2">
-                                <div class="icon-wrapper bg-warning-subtle p-2 rounded-2 mb-2">
-                                    <i class="fas fa-truck text-warning fs-5"></i>
-                                </div>
-                                <span class="small fw-medium text-center">Transfers</span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Recent Transfers --}}
             <div class="card border-0 shadow-sm rounded-3">
                 <div class="card-header bg-transparent border-bottom py-3">
                     <h5 class="mb-0 fw-semibold">
@@ -366,48 +320,6 @@
                     <a href="{{ route('transfers.index') }}" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-list me-1"></i>All Transfers
                     </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- Activity Summary --}}
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm rounded-3">
-                <div class="card-header bg-transparent border-bottom py-3">
-                    <h5 class="mb-0 fw-semibold">
-                        <i class="fas fa-chart-bar me-2 text-info"></i>Today's Summary
-                        <small class="text-muted ms-2">{{ now()->format('d M') }}</small>
-                    </h5>
-                </div>
-                <div class="card-body p-2 p-md-3">
-                    <div class="row g-2">
-                        <div class="col-6 col-md-3">
-                            <div class="activity-card bg-primary-subtle border border-primary-subtle rounded-2 p-3 text-center">
-                                <h3 class="fw-bold text-primary mb-1">{{ $todayStats['documents_created'] ?? 0 }}</h3>
-                                <small class="text-muted d-block">Docs Created</small>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <div class="activity-card bg-success-subtle border border-success-subtle rounded-2 p-3 text-center">
-                                <h3 class="fw-bold text-success mb-1">{{ $todayStats['transfers_created'] ?? 0 }}</h3>
-                                <small class="text-muted d-block">Transfers</small>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <div class="activity-card bg-warning-subtle border border-warning-subtle rounded-2 p-3 text-center">
-                                <h3 class="fw-bold text-warning mb-1">{{ $todayStats['documents_closed'] ?? 0 }}</h3>
-                                <small class="text-muted d-block">Docs Closed</small>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <div class="activity-card bg-info-subtle border border-info-subtle rounded-2 p-3 text-center">
-                                <h3 class="fw-bold text-info mb-1">{{ $todayStats['total'] ?? 0 }}</h3>
-                                <small class="text-muted d-block">Total Activity</small>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -481,37 +393,12 @@
     box-shadow: 0 5px 15px rgba(0,0,0,0.08) !important;
 }
 
-.quick-action-btn {
-    text-decoration: none;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
-}
-
-.quick-action-btn:hover {
-    background-color: var(--bs-light);
-    border-color: var(--bs-border-color);
-    transform: translateY(-2px);
-}
-
-.icon-wrapper {
-    width: 40px;
-    height: 40px;
-}
-
 .transfer-item {
     transition: background-color 0.2s ease;
 }
 
 .transfer-item:hover {
     background-color: #f8f9fa;
-}
-
-.activity-card {
-    transition: transform 0.2s ease;
-}
-
-.activity-card:hover {
-    transform: scale(1.02);
 }
 
 /* Transfer Detail Modal Styles untuk dashboard */
