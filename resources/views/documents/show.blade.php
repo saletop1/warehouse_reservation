@@ -519,10 +519,16 @@
                                         <span class="text-muted small">{{ $unit }}</span>
                                     </td>
 
-                                    <td class="align-middle text-center py-1 px-1">
+                                    <!-- Kolom Stock - Tambahkan hover effect -->
+                                    <td class="align-middle text-center py-1 px-1 stock-cell"
+                                        title="{{ $isTransferable ? 'Click to view batch details' : ($totalStock > 0 ? 'Stock available but not transferable' : 'No stock available') }}"
+                                        data-bs-toggle="{{ $isTransferable ? 'tooltip' : '' }}"
+                                        data-bs-placement="top"
+                                        style="cursor: {{ $isTransferable ? 'pointer' : 'default' }};">
                                         @if($totalStock > 0)
                                             <span class="badge bg-{{ $remainingQty > 0 ? 'success' : 'warning' }} bg-opacity-10
-                                                text-{{ $remainingQty > 0 ? 'success' : 'warning' }} px-2 py-1 small">
+                                                text-{{ $remainingQty > 0 ? 'success' : 'warning' }} px-2 py-1 small stock-badge
+                                                {{ $isTransferable ? 'hover-effect' : '' }}">
                                                 {{ \App\Helpers\NumberHelper::formatStockNumber($totalStock) }}
                                             </span>
                                         @else
@@ -586,24 +592,7 @@
                                         @endif
                                     </td>
 
-                                    <!-- Kolom Stock - Tambahkan hover effect -->
-                                    <td class="align-middle text-center py-1 px-1 stock-cell"
-                                        title="{{ $isTransferable ? 'Click to view batch details' : ($totalStock > 0 ? 'Stock available but not transferable' : 'No stock available') }}"
-                                        data-bs-toggle="{{ $isTransferable ? 'tooltip' : '' }}"
-                                        data-bs-placement="top"
-                                        style="cursor: {{ $isTransferable ? 'pointer' : 'default' }};">
-                                        @if($totalStock > 0)
-                                            <span class="badge bg-{{ $remainingQty > 0 ? 'success' : 'warning' }} bg-opacity-10
-                                                text-{{ $remainingQty > 0 ? 'success' : 'warning' }} px-2 py-1 small stock-badge
-                                                {{ $isTransferable ? 'hover-effect' : '' }}">
-                                                {{ \App\Helpers\NumberHelper::formatStockNumber($totalStock) }}
-                                            </span>
-                                        @else
-                                            <span class="badge bg-danger bg-opacity-10 text-danger px-2 py-1 small">
-                                                No Stock
-                                            </span>
-                                        @endif
-                                    </td>
+
 
                                     <!-- Kolom Source PRO -->
                                     <td class="align-middle text-center py-1 px-1">
@@ -1310,7 +1299,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast('Error initializing page: ' + error.message, 'error');
         }
     }
-    
+
     // Show/hide loading overlay
     function showLoading() {
         document.getElementById('loadingOverlay').classList.add('show');
