@@ -225,10 +225,10 @@
                                             <div class="flex-grow-1 me-2">
                                                 <div class="progress" style="height: 6px;">
                                                     <div class="progress-bar bg-success progress-bar-striped"
-                                                         style="width: {{ $doc->completion_rate_calculated ?? 0 }}%"></div>
+                                                         style="width: {{ min($doc->completion_rate ?? 0, 100) }}%"></div>
                                                 </div>
                                             </div>
-                                            <span class="small fw-medium">{{ $doc->completion_rate_calculated ?? 0 }}%</span>
+                                            <span class="small fw-medium">{{ min(round($doc->completion_rate ?? 0, 2), 100) }}%</span>
                                         </div>
                                     </td>
                                     <td class="d-none d-lg-table-cell">

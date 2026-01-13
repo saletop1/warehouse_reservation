@@ -51,17 +51,9 @@ class ReservationDocumentController extends Controller
             ->paginate($perPage)
             ->appends($request->except('page'));
 
+        // REKALKULASI STATUS UNTUK SEMUA DOKUMEN DI HALAMAN INI
         foreach ($documents as $document) {
-            $totalRequested = $document->items()->sum('requested_qty');
-            $totalTransferred = $document->items()->sum('transferred_qty') ?? 0;
-            $effectiveTransferred = min($totalTransferred, $totalRequested);
-            if ($effectiveTransferred >= $totalRequested && $document->status != 'closed') {
-                $document->status = 'closed';
-                $document->save();
-            } elseif ($effectiveTransferred > 0 && $document->status == 'booked') {
-                $document->status = 'partial';
-                $document->save();
-            }
+            $this->recalculateDocumentStatus($document);
         }
 
         return view('documents.index', compact('documents', 'totalCount'));
@@ -73,6 +65,9 @@ class ReservationDocumentController extends Controller
             $document = ReservationDocument::with(['items', 'transfers'])->findOrFail($id);
 
             $this->loadStockDataForDocument($document);
+
+            // REKALKULASI STATUS SEBELUM DITAMPILKAN
+            $this->recalculateDocumentStatus($document);
 
             // Ambil semua transfer item IDs untuk dokumen ini
             $transferItemIds = DB::table('reservation_transfer_items')
@@ -106,6 +101,97 @@ class ReservationDocumentController extends Controller
             Log::error('Error in show document: ' . $e->getMessage());
             return redirect()->route('documents.index')
                 ->with('error', 'Document not found: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Hitung status dokumen dengan benar
+     */
+    private function calculateDocumentStatus($document)
+    {
+        // Pastikan items sudah diload
+        if (!$document->relationLoaded('items')) {
+            $document->load('items');
+        }
+
+        $allItemsCompleted = true;
+        $hasTransfers = false;
+        $hasPartial = false;
+
+        foreach ($document->items as $item) {
+            // Hitung transferred_qty jika belum ada
+            if (!isset($item->transferred_qty)) {
+                $transferredQty = DB::table('reservation_transfer_items')
+                    ->where('document_item_id', $item->id)
+                    ->sum('quantity');
+                $item->transferred_qty = $transferredQty ?? 0;
+            }
+
+            // Hitung remaining_qty
+            $remainingQty = max(0, $item->requested_qty - ($item->transferred_qty ?? 0));
+
+            // Cek apakah item sudah completed
+            $isItemCompleted = ($remainingQty == 0) || ($item->force_completed ?? false);
+
+            if (!$isItemCompleted) {
+                $allItemsCompleted = false;
+            }
+
+            if (($item->transferred_qty ?? 0) > 0) {
+                $hasTransfers = true;
+
+                // Jika ada transfer tapi remaining > 0, maka partial
+                if ($remainingQty > 0 && !$item->force_completed) {
+                    $hasPartial = true;
+                }
+            }
+        }
+
+        // Tentukan status berdasarkan kondisi
+        if ($allItemsCompleted) {
+            return 'closed';
+        } elseif ($hasPartial) {
+            return 'partial';
+        } elseif ($hasTransfers) {
+            // Jika ada transfer tapi tidak ada yang partial (semua completed), seharusnya closed
+            // Tapi karena allItemsCompleted sudah false, maka partial
+            return 'partial';
+        } else {
+            return 'booked';
+        }
+    }
+
+    /**
+     * Recalculate document status dan completion rate
+     */
+    private function recalculateDocumentStatus($document)
+    {
+        // Pastikan items sudah diload
+        if (!$document->relationLoaded('items')) {
+            $document->load('items');
+        }
+
+        $totalRequested = $document->items->sum('requested_qty');
+        $totalTransferred = $document->items->sum(function($item) {
+            return $item->transferred_qty ?? 0;
+        });
+
+        // Hitung status baru berdasarkan kondisi aktual
+        $newStatus = $this->calculateDocumentStatus($document);
+
+        // Update status hanya jika berubah
+        if ($document->status !== $newStatus) {
+            $document->status = $newStatus;
+        }
+
+        // Hitung completion rate berdasarkan transferred vs requested
+        $completionRate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
+        $document->completion_rate = min($completionRate, 100); // Maksimal 100%
+        $document->total_transferred = $totalTransferred;
+
+        // Simpan hanya jika ada perubahan
+        if ($document->isDirty()) {
+            $document->save();
         }
     }
 

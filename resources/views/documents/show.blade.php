@@ -151,11 +151,11 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <p class="text-muted mb-1 small">Completion Rate</p>
-                            <h5 class="mb-0 fw-semibold">{{ round($document->completion_rate ?? 0, 2) }}%</h5>
+                            <h5 class="mb-0 fw-semibold">{{ min(round($document->completion_rate ?? 0, 2), 100) }}%</h5>
                             <div class="progress mt-2" style="height: 4px;">
                                 <div class="progress-bar bg-success" role="progressbar"
                                      style="width: {{ min(round($document->completion_rate ?? 0, 2), 100) }}%;"
-                                     aria-valuenow="{{ round($document->completion_rate ?? 0, 2) }}"></div>
+                                     aria-valuenow="{{ min(round($document->completion_rate ?? 0, 2), 100) }}"></div>
                             </div>
                         </div>
                         <div class="avatar-sm flex-shrink-0">
@@ -302,7 +302,7 @@
                         <label class="form-label text-muted small mb-1">Total Transferred</label>
                         <p class="fw-medium mb-0 small">
                             {{ number_format($document->total_transferred ?? 0) }} / {{ number_format($document->total_qty) }}
-                            ({{ round(min($document->completion_rate ?? 0, 100), 2) }}%)
+                            ({{ min(round($document->completion_rate ?? 0, 2), 100) }}%)
                         </p>
                     </div>
 
