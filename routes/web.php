@@ -58,9 +58,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/stats', [DashboardController::class, 'getStats'])->name('stats');
     });
 
-    // Profile Routes - FIXED: menggunakan name 'profile' bukan 'profile.index'
+    // Profile Routes
     Route::prefix('profile')->name('profile.')->group(function () {
-        Route::get('/', [ProfileController::class, 'index'])->name('index'); // Ini akan jadi 'profile.index'
+        Route::get('/', [ProfileController::class, 'index'])->name('index');
         Route::get('/edit', [ProfileController::class, 'edit'])->name('edit');
         Route::put('/update', [ProfileController::class, 'update'])->name('update');
         Route::post('/update-password', [ProfileController::class, 'updatePassword'])->name('update.password');
@@ -117,10 +117,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/create-document', [ReservationController::class, 'createDocument'])->name('createDocument');
     });
 
-    // Document Routes - Consolidated (using DocumentController for edit/update)
+    // Document Routes - Consolidated (using DocumentController untuk index dengan fitur lengkap)
     Route::prefix('documents')->name('documents.')->group(function () {
-        // Document Listing & Viewing
-        Route::get('/', [ReservationDocumentController::class, 'index'])->name('index');
+        // Document Listing & Viewing - GUNAKAN DocumentController untuk fitur lengkap
+        Route::get('/', [DocumentController::class, 'index'])->name('index');
         Route::get('/{id}', [ReservationDocumentController::class, 'show'])->name('show');
 
         // Document Editing (only creator can edit)

@@ -37,6 +37,105 @@ class DocumentController extends Controller
         });
     }
 
+    public function index(Request $request)
+    {
+        // Log request untuk debugging
+        Log::info('Document index request:', [
+            'search' => $request->get('search'),
+            'status' => $request->get('status'),
+            'sort' => $request->get('sort'),
+            'direction' => $request->get('direction'),
+            'per_page' => $request->get('per_page')
+        ]);
+
+        $perPage = $request->get('per_page', 50);
+        $search = $request->get('search');
+        $status = $request->get('status');
+        $sort = $request->get('sort', 'created_at');
+        $direction = $request->get('direction', 'desc');
+
+        // Validasi sort column untuk mencegah SQL injection
+        $allowedSorts = ['document_no', 'plant', 'status', 'completion_rate', 'created_by_name', 'created_at'];
+        if (!in_array($sort, $allowedSorts)) {
+            $sort = 'created_at';
+        }
+
+        // Validasi direction
+        $direction = in_array(strtolower($direction), ['asc', 'desc']) ? $direction : 'desc';
+
+        $query = Document::query();
+
+        // Log total dokumen sebelum filter
+        Log::info('Total documents before filter:', ['count' => $query->count()]);
+
+        // Filter berdasarkan status - PERBAIKAN DI SINI
+        if ($status && $status !== 'all') {
+            // Jika status bukan 'all', filter berdasarkan status
+            if (in_array($status, ['booked', 'partial', 'closed', 'cancelled'])) {
+                $query->where('status', $status);
+                Log::info('Filtering by status:', ['status' => $status]);
+            }
+        }
+        // Jika status = 'all' atau null, tampilkan semua (tidak ada where clause tambahan)
+
+        // Search di semua kolom yang relevan
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('document_no', 'like', "%{$search}%")
+                  ->orWhere('plant', 'like', "%{$search}%")
+                  ->orWhere('remarks', 'like', "%{$search}%")
+                  ->orWhere('created_by_name', 'like', "%{$search}%")
+                  ->orWhere(DB::raw('CAST(id AS CHAR)'), 'like', "%{$search}%");
+            });
+            Log::info('Search applied:', ['term' => $search]);
+        }
+
+        // Sorting
+        $query->orderBy($sort, $direction);
+
+        // Pagination dengan 50 item per halaman default
+        $documents = $query->paginate($perPage);
+
+        // Append query parameters to pagination links
+        $documents->appends([
+            'search' => $search,
+            'status' => $status,
+            'sort' => $sort,
+            'direction' => $direction,
+            'per_page' => $perPage
+        ]);
+
+        // Log hasil akhir
+        Log::info('Document index results:', [
+            'total' => $documents->total(),
+            'per_page' => $documents->perPage(),
+            'current_page' => $documents->currentPage(),
+            'last_page' => $documents->lastPage()
+        ]);
+
+        // Log beberapa dokumen untuk debugging
+        if ($documents->count() > 0) {
+            $sampleDocs = $documents->take(3)->pluck('document_no', 'status')->toArray();
+            Log::info('Sample documents:', $sampleDocs);
+        }
+
+        if ($request->ajax()) {
+            // Untuk AJAX request, kembalikan view partials
+            $view = view('documents.partials.table', compact('documents'))->render();
+            $pagination = view('documents.partials.pagination', compact('documents'))->render();
+            $counter = view('documents.partials.counter', compact('documents'))->render();
+
+            return response()->json([
+                'success' => true,
+                'table' => $view,
+                'pagination' => $pagination,
+                'counter' => $counter
+            ]);
+        }
+
+        return view('documents.index', compact('documents'));
+    }
+
     public function edit($id)
     {
         try {
@@ -220,12 +319,10 @@ class DocumentController extends Controller
                     ->first();
 
                 if ($item && !$item->force_completed) {
-                    // **PERBAIKAN: HANYA set flag force_completed, JANGAN ubah quantity**
                     $item->force_completed = true;
                     $item->force_complete_reason = $reason;
                     $item->force_completed_by = Auth::id();
                     $item->force_completed_at = now();
-                    // **JANGAN ubah transferred_qty atau remaining_qty**
                     $item->save();
 
                     $forceCompletedCount++;
@@ -292,65 +389,63 @@ class DocumentController extends Controller
                 $completionRate = ($totalTransferred / $totalQty) * 100;
             }
 
-            // Check document status - PERBAIKAN: logic baru
-        $status = $document->status;
+            // Check document status
+            $status = $document->status;
 
-        // Cek apakah semua item sudah selesai (ditransfer atau force completed)
-        $allItemsFinalized = true;
-        $hasForceCompleted = false;
-        $hasTransfers = false;
+            // Cek apakah semua item sudah selesai (ditransfer atau force completed)
+            $allItemsFinalized = true;
+            $hasForceCompleted = false;
+            $hasTransfers = false;
 
-        foreach ($items as $item) {
-            if ($item->force_completed) {
-                $hasForceCompleted = true;
-                // Item force completed dianggap "selesai"
-                continue;
+            foreach ($items as $item) {
+                if ($item->force_completed) {
+                    $hasForceCompleted = true;
+                    continue;
+                }
+
+                if ($item->transferred_qty > 0) {
+                    $hasTransfers = true;
+                }
+
+                if (!$item->force_completed && $item->remaining_qty > 0) {
+                    $allItemsFinalized = false;
+                }
             }
 
-            if ($item->transferred_qty > 0) {
-                $hasTransfers = true;
+            // Update status
+            if ($allItemsFinalized) {
+                $status = 'closed';
+            } elseif ($hasForceCompleted && $document->status == 'booked') {
+                $status = 'partial';
+            } elseif ($hasTransfers && $document->status == 'booked') {
+                $status = 'partial';
             }
 
-            // Jika tidak force completed dan masih ada remaining_qty > 0
-            if (!$item->force_completed && $item->remaining_qty > 0) {
-                $allItemsFinalized = false;
-            }
+            // Update document
+            $document->update([
+                'total_qty' => $totalQty,
+                'total_transferred' => $totalTransferred,
+                'completion_rate' => round($completionRate, 2),
+                'status' => $status
+            ]);
+
+            Log::info('Document totals recalculated', [
+                'document_id' => $document->id,
+                'document_no' => $document->document_no,
+                'total_qty' => $totalQty,
+                'total_transferred' => $totalTransferred,
+                'completion_rate' => $completionRate,
+                'status' => $status,
+                'all_items_finalized' => $allItemsFinalized
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error recalculating document totals: ' . $e->getMessage(), [
+                'document_id' => $document->id
+            ]);
+            throw $e;
         }
-
-        // Update status
-        if ($allItemsFinalized) {
-            $status = 'closed';
-        } elseif ($hasForceCompleted && $document->status == 'booked') {
-            $status = 'partial';
-        } elseif ($hasTransfers && $document->status == 'booked') {
-            $status = 'partial';
-        }
-
-        // Update document - JANGAN update total_transferred dari force completed
-        $document->update([
-            'total_qty' => $totalQty,
-            'total_transferred' => $totalTransferred, // Hanya dari transfer sebenarnya
-            'completion_rate' => round($completionRate, 2),
-            'status' => $status
-        ]);
-
-        Log::info('Document totals recalculated', [
-            'document_id' => $document->id,
-            'document_no' => $document->document_no,
-            'total_qty' => $totalQty,
-            'total_transferred' => $totalTransferred,
-            'completion_rate' => $completionRate,
-            'status' => $status,
-            'all_items_finalized' => $allItemsFinalized
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error recalculating document totals: ' . $e->getMessage(), [
-            'document_id' => $document->id
-        ]);
-        throw $e;
     }
-}
 
     private function checkAndUpdateDocumentStatus(Document $document)
     {
@@ -387,7 +482,6 @@ class DocumentController extends Controller
                     'document_no' => $document->document_no
                 ]);
             } elseif ($hasForceCompletedItems && $document->status == 'booked') {
-                // If there are force completed items and document was booked, change to partial
                 $document->status = 'partial';
                 $document->save();
 

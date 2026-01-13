@@ -246,7 +246,7 @@
                         <label class="form-label text-muted small mb-1">Transfer Numbers</label>
                         @php
                             $validTransfers = $document->transfers->filter(function($transfer) {
-                                return !empty($transfer->transfer_no);
+                                return !empty($transfer->transfer_no) && !empty($transfer->id);
                             });
                             $transferCount = $validTransfers->count();
                         @endphp
@@ -255,9 +255,14 @@
                             @if($transferCount <= 2)
                                 @foreach($validTransfers as $transfer)
                                 <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="badge bg-soft-primary text-primary fw-medium py-1 px-2 small">
-                                        <i class="fas fa-truck me-1 small"></i>{{ $transfer->transfer_no }}
-                                    </span>
+                                    <a href="javascript:void(0);"
+                                       class="view-transfer-clickable text-decoration-none"
+                                       data-transfer-id="{{ $transfer->id }}"
+                                       title="View Transfer Details">
+                                        <span class="badge bg-soft-primary text-primary fw-medium py-1 px-2 small">
+                                            <i class="fas fa-truck me-1 small"></i>{{ $transfer->transfer_no }}
+                                        </span>
+                                    </a>
                                     <small class="text-muted">
                                         {{ \Carbon\Carbon::parse($transfer->created_at)->format('d/m/Y') }}
                                     </small>
@@ -272,7 +277,10 @@
                                 <ul class="dropdown-menu w-100" style="max-height: 200px; overflow-y: auto;">
                                     @foreach($validTransfers as $transfer)
                                     <li>
-                                        <a class="dropdown-item small py-1" href="#">
+                                        <a class="dropdown-item small py-1 view-transfer-clickable"
+                                           href="javascript:void(0);"
+                                           data-transfer-id="{{ $transfer->id }}"
+                                           title="View Transfer Details">
                                             <div class="d-flex justify-content-between align-items-center">
                                                 <span class="fw-medium">{{ $transfer->transfer_no }}</span>
                                                 <small class="text-muted">
@@ -521,7 +529,7 @@
 
                                     <!-- Kolom Stock - Tambahkan hover effect -->
                                     <td class="align-middle text-center py-1 px-1 stock-cell"
-                                        title="{{ $isTransferable ? 'Click to view batch details' : ($totalStock > 0 ? 'Stock available but not transferable' : 'No stock available') }}"
+                                        title="{{ $isTransferable ? 'Click me to add TF list' : ($totalStock > 0 ? 'Stock available but not transferable' : 'No stock available') }}"
                                         data-bs-toggle="{{ $isTransferable ? 'tooltip' : '' }}"
                                         data-bs-placement="top"
                                         style="cursor: {{ $isTransferable ? 'pointer' : 'default' }};">
@@ -591,8 +599,6 @@
                                             <span class="text-muted small">-</span>
                                         @endif
                                     </td>
-
-
 
                                     <!-- Kolom Source PRO -->
                                     <td class="align-middle text-center py-1 px-1">
@@ -697,6 +703,28 @@
 @include('documents.partials.transfer-details-modal')
 @include('documents.partials.transfer-preview-modal')
 @include('documents.partials.sap-credentials-modal')
+
+<!-- Transfer Detail Modal -->
+<div class="modal fade" id="transferDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-bottom bg-light py-2 px-3">
+                <div class="d-flex align-items-center w-100">
+                    <div>
+                        <h5 class="modal-title fw-semibold mb-0" style="font-size: 1.1rem;">
+                            <i class="fas fa-exchange-alt me-2 text-primary"></i>Transfer Details
+                        </h5>
+                        <div class="text-muted small" id="transferNoLabel">Loading...</div>
+                    </div>
+                    <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0" id="transferDetailContent">
+                <!-- Content loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Toast Container -->
 <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
@@ -1064,7 +1092,6 @@ body {
     left: 100%;
 }
 
-
 /* Responsive Design */
 @media (max-width: 768px) {
     body {
@@ -1217,6 +1244,70 @@ body {
     font-size: 0.8rem !important;
     padding: 4px 8px !important;
 }
+
+/* Styling untuk link Transfer No yang dapat diklik */
+.view-transfer-clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-block;
+}
+
+.view-transfer-clickable:hover {
+    opacity: 0.8;
+    transform: translateY(-1px);
+}
+
+.view-transfer-clickable:hover .badge {
+    box-shadow: 0 2px 8px rgba(74, 108, 247, 0.3);
+}
+
+/* Untuk dropdown items */
+.dropdown-item.view-transfer-clickable {
+    cursor: pointer;
+}
+
+.dropdown-item.view-transfer-clickable:hover {
+    background-color: rgba(74, 108, 247, 0.1);
+}
+
+/* Plant badges styling */
+.plant-supply {
+    color: #28a745 !important;
+    border-color: #28a745 !important;
+    background-color: rgba(40, 167, 69, 0.1) !important;
+}
+
+.plant-destination {
+    color: #007bff !important;
+    border-color: #007bff !important;
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+
+/* Message box styling */
+.message-box {
+    font-size: 12.5px;
+    padding: 0.5rem;
+    margin: 0;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+/* Compact table styling */
+.compact-table {
+    font-size: 12.5px;
+}
+
+.compact-table td, .compact-table th {
+    padding: 0.25rem 0.5rem;
+}
+
+/* Material description styling */
+.material-description {
+    max-width: 200px;
+    word-break: break-word;
+    white-space: normal;
+}
 </style>
 
 <script>
@@ -1250,55 +1341,535 @@ document.addEventListener('DOMContentLoaded', function() {
         return parseFloat(cleaned) || 0;
     }
 
-    // Setup tooltips untuk kolom stock
-    function setupStockTooltips() {
-        const stockCells = document.querySelectorAll('.stock-cell[data-bs-toggle="tooltip"]');
-        stockCells.forEach(cell => {
-            new bootstrap.Tooltip(cell, {
-                trigger: 'hover',
-                delay: { show: 300, hide: 100 }
-            });
-        });
+    // ==============================================
+    // TRANSFER DETAIL MODAL FUNCTIONS
+    // ==============================================
 
-        // Setup click handler untuk kolom stock yang transferable
-        document.querySelectorAll('.stock-cell[style*="cursor: pointer;"]').forEach(cell => {
-            cell.addEventListener('click', function(e) {
-                e.stopPropagation();
+    // Fungsi untuk memuat detail transfer
+    async function loadTransferDetails(transferId) {
+        // Validasi transfer ID
+        if (!transferId || isNaN(parseInt(transferId))) {
+            console.error('Invalid transfer ID provided:', transferId);
+            showToast('Invalid transfer ID', 'error');
+            return;
+        }
 
-                // Cari row parent
-                const row = this.closest('.draggable-row');
-                if (!row) return;
+        console.log('Loading transfer details for ID:', transferId);
 
-                const canTransfer = row.dataset.canTransfer === 'true';
-                const isForceCompleted = row.dataset.forceCompleted === 'true';
-                const itemId = row.dataset.itemId;
+        const modalElement = document.getElementById('transferDetailModal');
+        if (!modalElement) {
+            console.error('Transfer detail modal element not found');
+            showToast('Modal element not found', 'error');
+            return;
+        }
 
-                // Jika transferable dan tidak force completed, tambahkan ke transfer list
-                if (canTransfer && !isForceCompleted) {
-                    addItemById(itemId);
-                }
-            });
-        });
-    }
+        const contentDiv = document.getElementById('transferDetailContent');
+        if (!contentDiv) {
+            console.error('Transfer detail content div not found');
+            return;
+        }
 
-    // Initialize all functions
-    function initialize() {
-        console.log('Initializing document show page...');
+        // Tampilkan loading state
+        contentDiv.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted">Loading transfer details...</p>
+            </div>
+        `;
 
         try {
-            // ... (inisialisasi lainnya tetap sama) ...
+            // Initialize Bootstrap modal
+            let modal = bootstrap.Modal.getInstance(modalElement);
+            if (!modal) {
+                modal = new bootstrap.Modal(modalElement);
+            }
 
-            // 7. Setup stock tooltips dan click handlers
-            setupStockTooltips();
-            console.log('✅ Stock tooltips setup complete');
+            // Show modal immediately
+            modal.show();
 
-            console.log('✅ All initialization complete');
+            // Pastikan URL valid
+            const url = `/transfers/${transferId}?_details=1`;
+            console.log('Fetching URL:', url);
 
+            // Fetch transfer data
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('Transfer data received:', data);
+
+            if (data.success && data.data) {
+                const transfer = data.data;
+
+                // Update modal title
+                const titleElement = document.getElementById('transferNoLabel');
+                if (titleElement) {
+                    titleElement.textContent = transfer.transfer_no || 'N/A';
+                }
+
+                // Generate content
+                contentDiv.innerHTML = generateTransferDetailContent(transfer);
+
+                // Re-attach event listeners for buttons inside modal
+                attachModalButtonEvents();
+
+            } else {
+                contentDiv.innerHTML = `
+                    <div class="text-center py-3">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                        <h6 class="text-danger mb-2">Failed to load transfer details</h6>
+                        <p class="text-muted small">${data.message || 'Unknown error'}</p>
+                    </div>
+                `;
+            }
         } catch (error) {
-            console.error('❌ Error during initialization:', error);
-            showToast('Error initializing page: ' + error.message, 'error');
+            console.error('Error loading transfer details:', error);
+            contentDiv.innerHTML = `
+                <div class="text-center py-3">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                    <h6 class="text-danger mb-2">Error loading transfer details</h6>
+                    <p class="text-muted small">${error.message}</p>
+                </div>
+            `;
         }
     }
+
+    // Attach event listeners to buttons inside modal
+    function attachModalButtonEvents() {
+        // Print button
+        const printBtn = document.querySelector('[onclick^="printTransferNow"]');
+        if (printBtn) {
+            const onclickAttr = printBtn.getAttribute('onclick');
+            const match = onclickAttr.match(/printTransferNow\((\d+)\)/);
+            if (match && match[1]) {
+                const transferId = match[1];
+                printBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    printTransferNow(transferId);
+                });
+                printBtn.removeAttribute('onclick');
+            }
+        }
+
+        // Copy button
+        const copyBtn = document.querySelector('[onclick^="copyTransferDetailsNow"]');
+        if (copyBtn) {
+            const onclickAttr = copyBtn.getAttribute('onclick');
+            const match = onclickAttr.match(/copyTransferDetailsNow\((\d+)\)/);
+            if (match && match[1]) {
+                const transferId = match[1];
+                copyBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    copyTransferDetailsNow(transferId);
+                });
+                copyBtn.removeAttribute('onclick');
+            }
+        }
+    }
+
+    // Fungsi untuk generate konten modal detail transfer
+    function generateTransferDetailContent(transfer) {
+        const formattedDate = transfer.created_at ?
+            new Date(transfer.created_at).toLocaleString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }) : 'N/A';
+
+        const completedDate = transfer.completed_at ?
+            new Date(transfer.completed_at).toLocaleString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }) : 'Not completed';
+
+        // Calculate total quantity from items
+        let totalQty = 0;
+        if (transfer.items && transfer.items.length > 0) {
+            totalQty = transfer.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+        } else if (transfer.total_qty) {
+            totalQty = parseFloat(transfer.total_qty);
+        }
+
+        return `
+            <div class="transfer-detail">
+                <!-- Compact Header -->
+                <div class="p-3 border-bottom bg-light-subtle">
+                    <div class="row align-items-center g-2">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-2">
+                                    <i class="fas fa-exchange-alt text-primary"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-0">${transfer.transfer_no || 'N/A'}</h6>
+                                    <div class="text-muted small">
+                                        <i class="fas fa-file-alt me-1"></i>Doc: ${transfer.document_no || 'N/A'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            <span class="badge ${getStatusClass(transfer.status)} px-3 py-1">
+                                <i class="fas fa-${getStatusIcon(transfer.status)} me-1"></i>
+                                ${transfer.status || 'UNKNOWN'}
+                            </span>
+                            <div class="text-muted small mt-1">
+                                Created: ${formattedDate}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Compact Main Content -->
+                <div class="p-3">
+                    <!-- Compact Information Row -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Move Type</div>
+                                    <div class="fw-semibold">${transfer.move_type || '311'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Total Items</div>
+                                    <div class="fw-semibold">${transfer.total_items || 0}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Total Quantity</div>
+                                    <div class="fw-bold">${formatFullNumber(totalQty)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border h-100">
+                                <div class="card-body p-2 text-center">
+                                    <div class="text-muted small mb-1">Completion</div>
+                                    <span class="badge ${transfer.completed_at ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'}">
+                                        ${transfer.completed_at ? 'Completed' : 'In Progress'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Plant Information -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="card border h-100">
+                                <div class="card-header bg-transparent py-2 px-3">
+                                    <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
+                                        <i class="fas fa-building me-2 text-primary"></i>Plant Information
+                                    </h6>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Supply Plant</div>
+                                            <div class="badge plant-supply px-3 py-1">
+                                                ${transfer.plant_supply || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Dest Plant</div>
+                                            <div class="badge plant-destination px-3 py-1">
+                                                ${transfer.plant_destination || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Created By</div>
+                                            <div class="fw-semibold small">${transfer.created_by_name || 'System'}</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted small mb-1">Completed At</div>
+                                            <div class="fw-semibold small">${completedDate}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Remarks Section -->
+                        <div class="col-md-6">
+                            <div class="card border h-100">
+                                <div class="card-header bg-transparent py-2 px-3">
+                                    <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
+                                        <i class="fas fa-sticky-note me-2 text-warning"></i>Remarks
+                                    </h6>
+                                </div>
+                                <div class="card-body p-2">
+                                    ${transfer.document && transfer.document.remarks ? `
+                                    <div class="mb-2">
+                                        <div class="text-muted small mb-1">Document Remarks:</div>
+                                        <div class="message-box bg-light p-2 rounded">${transfer.document.remarks}</div>
+                                    </div>
+                                    ` : ''}
+
+                                    ${transfer.remarks ? `
+                                    <div class="mb-2">
+                                        <div class="text-muted small mb-1">Transfer Remarks:</div>
+                                        <div class="message-box bg-light p-2 rounded">${transfer.remarks}</div>
+                                    </div>
+                                    ` : ''}
+
+                                    ${!transfer.remarks && (!transfer.document || !transfer.document.remarks) ? `
+                                    <div class="text-center py-3">
+                                        <i class="fas fa-comment-slash text-muted fa-lg mb-2"></i>
+                                        <p class="text-muted small mb-0">No remarks</p>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Transfer Items Table -->
+                    <div class="card border">
+                        <div class="card-header bg-transparent border-bottom py-2 px-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 fw-semibold" style="font-size: 0.9rem;">
+                                    <i class="fas fa-boxes me-2 text-primary"></i>Transfer Items
+                                    <span class="badge bg-primary-subtle text-primary ms-1">
+                                        ${transfer.items?.length || 0} items
+                                    </span>
+                                </h6>
+                                <div class="text-muted small">
+                                    Total: ${formatFullNumber(totalQty)}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                <table class="table table-sm mb-0 compact-table">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3 py-1 fw-semibold">No</th>
+                                            <th class="py-1 fw-semibold">Material Code</th>
+                                            <th class="py-1 fw-semibold">Description</th>
+                                            <th class="py-1 fw-semibold">Batch</th>
+                                            <th class="py-1 fw-semibold">Source Sloc</th>
+                                            <th class="py-1 fw-semibold">Dest Sloc</th>
+                                            <th class="py-1 fw-semibold text-end">Quantity</th>
+                                            <th class="pe-3 py-1 fw-semibold">Unit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${generateCompactItemsTable(transfer.items || [])}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="printTransferNow(${transfer.id})">
+                            <i class="fas fa-print me-1"></i>Print
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyTransferDetailsNow(${transfer.id})">
+                            <i class="fas fa-copy me-1"></i>Copy Details
+                        </button>
+                        ${transfer.document_id ? `
+                        <a href="/documents/${transfer.document_id}" class="btn btn-sm btn-outline-info ms-auto">
+                            <i class="fas fa-file-alt me-1"></i>View Document
+                        </a>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Fungsi untuk generate tabel items yang kompak
+    function generateCompactItemsTable(items) {
+        if (!items || items.length === 0) {
+            return `
+                <tr>
+                    <td colspan="8" class="text-center py-3 text-muted small">
+                        <i class="fas fa-box-open me-1"></i>No items found
+                    </td>
+                </tr>
+            `;
+        }
+
+        return items.slice(0, 10).map((item, index) => {
+            const materialCode = item.material_code || 'N/A';
+            const formattedCode = /^\d+$/.test(materialCode) ?
+                materialCode.replace(/^0+/, '') : materialCode;
+            const description = item.material_description || '-';
+
+            return `
+                <tr>
+                    <td class="ps-3">${index + 1}</td>
+                    <td>
+                        <div class="fw-semibold" style="font-size: 11.5px;">${formattedCode}</div>
+                    </td>
+                    <td class="material-description">
+                        <div class="text-muted small" style="font-size: 11.5px; line-height: 1.3;">${description}</div>
+                    </td>
+                    <td>${item.batch || '-'}</td>
+                    <td>${item.storage_location || '-'}</td>
+                    <td>${item.sloc_destination || '-'}</td>
+                    <td class="text-end fw-semibold">${formatFullNumber(item.quantity || 0)}</td>
+                    <td class="pe-3">${item.unit || 'PC'}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Helper function untuk mendapatkan class status
+    function getStatusClass(status) {
+        switch(status?.toUpperCase()) {
+            case 'COMPLETED': return 'bg-success-subtle text-success border-success';
+            case 'SUBMITTED': return 'bg-warning-subtle text-warning border-warning';
+            case 'FAILED': return 'bg-danger-subtle text-danger border-danger';
+            case 'PENDING': return 'bg-secondary-subtle text-secondary border-secondary';
+            case 'PROCESSING': return 'bg-info-subtle text-info border-info';
+            default: return 'bg-light text-dark border';
+        }
+    }
+
+    // Helper function untuk mendapatkan icon status
+    function getStatusIcon(status) {
+        switch(status?.toUpperCase()) {
+            case 'COMPLETED': return 'check-circle';
+            case 'SUBMITTED': return 'clock';
+            case 'FAILED': return 'times-circle';
+            case 'PENDING': return 'hourglass-half';
+            case 'PROCESSING': return 'sync-alt';
+            default: return 'question-circle';
+        }
+    }
+
+    // Helper function untuk format angka
+    function formatFullNumber(num) {
+        return new Intl.NumberFormat('id-ID').format(num);
+    }
+
+    // Global functions untuk aksi modal
+    window.printTransferNow = function(id) {
+        if (id) {
+            const url = `/transfers/${id}/print`;
+            window.open(url, '_blank');
+            showToast('Opening print preview...', 'info');
+        }
+    };
+
+    window.copyTransferDetailsNow = function(id) {
+        if (!id) {
+            showToast('Transfer ID is required', 'error');
+            return;
+        }
+
+        fetch(`/transfers/${id}?_details=1`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const transfer = data.data;
+                    let totalQty = 0;
+                    if (transfer.items && transfer.items.length > 0) {
+                        totalQty = transfer.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+                    } else if (transfer.total_qty) {
+                        totalQty = parseFloat(transfer.total_qty);
+                    }
+
+                    const text = `
+TRANSFER DETAILS
+────────────────
+Transfer No: ${transfer.transfer_no || 'N/A'}
+Document No: ${transfer.document_no || 'N/A'}
+Status: ${transfer.status || 'N/A'}
+Move Type: ${transfer.move_type || '311'}
+Plant Supply: ${transfer.plant_supply || 'N/A'}
+Plant Destination: ${transfer.plant_destination || 'N/A'}
+Total Items: ${transfer.total_items || 0}
+Total Quantity: ${formatFullNumber(totalQty)}
+Created By: ${transfer.created_by_name || 'System'}
+Created At: ${transfer.created_at ? new Date(transfer.created_at).toLocaleString('id-ID') : 'N/A'}
+Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocaleString('id-ID') : 'Not completed'}
+                    `.trim();
+
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast('Transfer details copied to clipboard!', 'success');
+                    }).catch(err => {
+                        console.error('Copy failed:', err);
+                        const textArea = document.createElement('textarea');
+                        textArea.value = text;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        showToast('Transfer details copied!', 'success');
+                    });
+                } else {
+                    showToast('Failed to load transfer details', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error loading transfer details', 'error');
+            });
+    };
+
+    // ==============================================
+    // EVENT LISTENER UNTUK TRANSFER CLICKABLE (FIXED)
+    // ==============================================
+
+    // Event delegation untuk klik pada semua Transfer No
+    document.addEventListener('click', function(e) {
+        // Cari elemen view-transfer-clickable terdekat
+        const transferLink = e.target.closest('.view-transfer-clickable');
+
+        if (transferLink) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const transferId = transferLink.getAttribute('data-transfer-id');
+            console.log('Transfer link clicked, ID:', transferId);
+
+            // PERBAIKAN: Validasi yang lebih ketat
+            if (!transferId || transferId.trim() === '' || transferId === 'undefined' || transferId === 'null') {
+                console.warn('No valid transfer ID found on link:', transferLink);
+                // Tidak tampilkan error toast untuk mencegah spam
+                return;
+            }
+
+            // Pastikan transferId adalah angka valid
+            if (!/^\d+$/.test(transferId)) {
+                console.error('Invalid transfer ID format:', transferId);
+                showToast('Invalid transfer ID format', 'error');
+                return;
+            }
+
+            loadTransferDetails(transferId);
+        }
+    });
+
+    // ==============================================
+    // FUNGSI-FUNGSI UTAMA
+    // ==============================================
 
     // Show/hide loading overlay
     function showLoading() {
@@ -1353,24 +1924,42 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Setup event listener untuk view transfer details
-    function setupTransferDetailsListeners() {
-        console.log('Setting up transfer details listeners...');
-
-        // Debug: Tampilkan semua tombol transfer details
-        const transferButtons = document.querySelectorAll('.view-transfer-details');
-        console.log(`Found ${transferButtons.length} transfer detail buttons`);
-
-        transferButtons.forEach((btn, index) => {
-            console.log(`Button ${index + 1}:`, {
-                itemId: btn.getAttribute('data-item-id'),
-                materialCode: btn.getAttribute('data-material-code'),
-                hasHistory: btn.getAttribute('data-has-history'),
-                disabled: btn.disabled
+    // Setup tooltips untuk kolom stock
+    function setupStockTooltips() {
+        const stockCells = document.querySelectorAll('.stock-cell[data-bs-toggle="tooltip"]');
+        stockCells.forEach(cell => {
+            new bootstrap.Tooltip(cell, {
+                trigger: 'hover',
+                delay: { show: 300, hide: 100 }
             });
         });
 
-        // Event delegation
+        // Setup click handler untuk kolom stock yang transferable
+        document.querySelectorAll('.stock-cell[style*="cursor: pointer;"]').forEach(cell => {
+            cell.addEventListener('click', function(e) {
+                e.stopPropagation();
+
+                // Cari row parent
+                const row = this.closest('.draggable-row');
+                if (!row) return;
+
+                const canTransfer = row.dataset.canTransfer === 'true';
+                const isForceCompleted = row.dataset.forceCompleted === 'true';
+                const itemId = row.dataset.itemId;
+
+                // Jika transferable dan tidak force completed, tambahkan ke transfer list
+                if (canTransfer && !isForceCompleted) {
+                    addItemById(itemId);
+                }
+            });
+        });
+    }
+
+    // Setup event listener untuk view transfer details (tombol status)
+    function setupTransferDetailsListeners() {
+        console.log('Setting up transfer details listeners...');
+
+        // Event delegation untuk tombol transfer details
         document.addEventListener('click', function(e) {
             const target = e.target.closest('.view-transfer-details');
 
@@ -1449,6 +2038,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
+                // Show the modal with transfer history
                 showTransferDetailsModal(materialCode, materialDescription, data);
             })
             .catch(error => {
@@ -1459,111 +2049,115 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-            // Di dalam fungsi showTransferDetailsModal(), update row HTML:
-        function showTransferDetailsModal(materialCode, materialDescription, transferData) {
-            console.log('Showing transfer details modal');
+    // Fungsi untuk menampilkan modal transfer details
+    function showTransferDetailsModal(materialCode, materialDescription, transferData) {
+        console.log('Showing transfer details modal');
 
-            const modalElement = document.getElementById('transferDetailsModal');
-            if (!modalElement) {
-                console.error('Transfer details modal not found');
-                showToast('Transfer details modal not found', 'error');
-                return;
-            }
+        const modalElement = document.getElementById('transferDetailsModal');
+        if (!modalElement) {
+            console.error('Transfer details modal not found');
+            showToast('Transfer details modal not found', 'error');
+            return;
+        }
 
-            // Initialize Bootstrap modal jika belum
-            let modal = bootstrap.Modal.getInstance(modalElement);
-            if (!modal) {
-                modal = new bootstrap.Modal(modalElement);
-            }
+        // Initialize Bootstrap modal jika belum
+        let modal = bootstrap.Modal.getInstance(modalElement);
+        if (!modal) {
+            modal = new bootstrap.Modal(modalElement);
+        }
 
-            // Update modal content
-            const modalTitle = document.getElementById('transferDetailsModalLabel');
-            if (modalTitle) {
-                modalTitle.innerHTML = `<i class="fas fa-list-alt me-2 text-primary"></i>Transfer Details - ${materialCode}`;
-            }
+        // Update modal content
+        const modalTitle = document.getElementById('transferDetailsModalLabel');
+        if (modalTitle) {
+            modalTitle.innerHTML = `<i class="fas fa-list-alt me-2 text-primary"></i>Transfer Details - ${materialCode}`;
+        }
 
-            const materialDesc = document.getElementById('detailMaterialDescription');
-            if (materialDesc) {
-                materialDesc.textContent = materialDescription;
-            }
+        const materialDesc = document.getElementById('detailMaterialDescription');
+        if (materialDesc) {
+            materialDesc.textContent = materialDescription;
+        }
 
-            const tbody = document.querySelector('#transferDetailsTable tbody');
-            if (tbody) {
-                tbody.innerHTML = '';
+        const tbody = document.querySelector('#transferDetailsTable tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
 
-                if (transferData && Array.isArray(transferData) && transferData.length > 0) {
-                    transferData.forEach((transfer, index) => {
-                        const row = tbody.insertRow();
+            if (transferData && Array.isArray(transferData) && transferData.length > 0) {
+                transferData.forEach((transfer, index) => {
+                    // Format tanggal dengan fallback
+                    let formattedDate = '-';
+                    if (transfer.created_at) {
+                        // Coba parse jika bukan string kosong
+                        if (transfer.created_at.trim() !== '' &&
+                            transfer.created_at !== 'Tanggal tidak tersedia' &&
+                            transfer.created_at !== 'Format tidak valid') {
 
-                        // Format tanggal dengan fallback
-                        let formattedDate = '-';
-                        if (transfer.created_at) {
-                            // Coba parse jika bukan string kosong
-                            if (transfer.created_at.trim() !== '' &&
-                                transfer.created_at !== 'Tanggal tidak tersedia' &&
-                                transfer.created_at !== 'Format tidak valid') {
-
-                                // Jika sudah dalam format yang diinginkan (d/m/Y H:i:s)
-                                if (transfer.created_at.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/)) {
-                                    formattedDate = transfer.created_at;
-                                } else {
-                                    // Coba parse dengan berbagai format
-                                    try {
-                                        const dateObj = new Date(transfer.created_at);
-                                        if (!isNaN(dateObj.getTime())) {
-                                            formattedDate = dateObj.toLocaleDateString('id-ID', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                                second: '2-digit'
-                                            });
-                                        }
-                                    } catch (e) {
-                                        console.warn('Date parsing failed:', e);
+                            // Jika sudah dalam format yang diinginkan (d/m/Y H:i:s)
+                            if (transfer.created_at.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/)) {
+                                formattedDate = transfer.created_at;
+                            } else {
+                                // Coba parse dengan berbagai format
+                                try {
+                                    const dateObj = new Date(transfer.created_at);
+                                    if (!isNaN(dateObj.getTime())) {
+                                        formattedDate = dateObj.toLocaleDateString('id-ID', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            second: '2-digit'
+                                        });
                                     }
+                                } catch (e) {
+                                    console.warn('Date parsing failed:', e);
                                 }
                             }
                         }
+                    }
 
-                        row.innerHTML = `
-                            <td class="text-center align-middle">${index + 1}</td>
-                            <td class="align-middle">
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td class="text-center align-middle">${index + 1}</td>
+                        <td class="align-middle">
+                            <a href="javascript:void(0);"
+                               class="view-transfer-clickable text-decoration-none"
+                               data-transfer-id="${transfer.id || transfer.transfer_id || ''}"
+                               title="View Transfer Details">
                                 <span class="badge bg-soft-primary text-primary small">${transfer.transfer_no || '-'}</span>
-                            </td>
-                            <td class="align-middle small">
-                                ${transfer.created_by_name || 'N/A'}
-                            </td>
-                            <td class="align-middle small">
-                                <span class="fw-medium">${transfer.material_code || materialCode}</span>
-                            </td>
-                            <td class="align-middle small">${transfer.batch || '-'}</td>
-                            <td class="text-center align-middle fw-medium small">${formatAngka(transfer.quantity || 0)}</td>
-                            <td class="text-center align-middle small">${transfer.unit || 'PC'}</td>
-                            <td class="align-middle small">
-                                <span class="badge bg-soft-info text-info small">${transfer.batch_sloc || '-'}</span>
-                            </td>
-                            <td class="align-middle small">
-                                <span class="badge bg-soft-warning text-warning small">${transfer.sloc_destination || '-'}</span>
-                            </td>
-                            <td class="text-center align-middle small">${formattedDate}</td>
-                        `;
-                    });
-                } else {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="10" class="text-center text-muted py-3 small">
-                                <i class="fas fa-info-circle me-2"></i>No transfer history found
-                            </td>
-                        </tr>
+                            </a>
+                        </td>
+                        <td class="align-middle small">
+                            ${transfer.created_by_name || 'N/A'}
+                        </td>
+                        <td class="align-middle small">
+                            <span class="fw-medium">${transfer.material_code || materialCode}</span>
+                        </td>
+                        <td class="align-middle small">${transfer.batch || '-'}</td>
+                        <td class="text-center align-middle fw-medium small">${formatAngka(transfer.quantity || 0)}</td>
+                        <td class="text-center align-middle small">${transfer.unit || 'PC'}</td>
+                        <td class="align-middle small">
+                            <span class="badge bg-soft-info text-info small">${transfer.batch_sloc || '-'}</span>
+                        </td>
+                        <td class="align-middle small">
+                            <span class="badge bg-soft-warning text-warning small">${transfer.sloc_destination || '-'}</span>
+                        </td>
+                        <td class="text-center align-middle small">${formattedDate}</td>
                     `;
-                }
+                });
+            } else {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-3 small">
+                            <i class="fas fa-info-circle me-2"></i>No transfer history found
+                        </td>
+                    </tr>
+                `;
             }
-
-            // Show modal
-            modal.show();
         }
+
+        // Show modal
+        modal.show();
+    }
 
     // Setup drag and drop
     function setupDragAndDrop() {
@@ -2482,7 +3076,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const modal = new bootstrap.Modal(sapCredentialsModal);
             modal.show();
 
-            // Setup SAP form submission - PERBAIKAN: Gunakan event delegation
+            // Setup SAP form submission
             setTimeout(() => {
                 setupSapFormSubmission();
             }, 300);
@@ -2491,7 +3085,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Setup SAP form submission - PERBAIKAN: Gunakan event delegation
+    // Setup SAP form submission
     function setupSapFormSubmission() {
         const sapForm = document.getElementById('sapCredentialsForm');
         if (!sapForm) {
@@ -2752,12 +3346,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Initialize all functions
+    // ==============================================
+    // INISIALISASI UTAMA
+    // ==============================================
+
     function initialize() {
         console.log('Initializing document show page...');
 
         try {
-            // 1. Setup transfer details listeners
+            // 1. Setup transfer details listeners (untuk tombol status)
             setupTransferDetailsListeners();
             console.log('✅ Transfer details listeners setup complete');
 
@@ -2773,21 +3370,25 @@ document.addEventListener('DOMContentLoaded', function() {
             updateRemainingQuantities();
             console.log('✅ Remaining quantities updated');
 
-            // 5. Debug: Log semua transfer detail buttons
-            const transferButtons = document.querySelectorAll('.view-transfer-details');
-            console.log(`✅ Found ${transferButtons.length} transfer detail buttons`);
+            // 5. Setup stock tooltips dan click handlers
+            setupStockTooltips();
+            console.log('✅ Stock tooltips setup complete');
 
-            transferButtons.forEach((btn, index) => {
-                console.log(`Button ${index + 1}:`, {
-                    itemId: btn.getAttribute('data-item-id'),
-                    materialCode: btn.getAttribute('data-material-code'),
-                    materialDesc: btn.getAttribute('data-material-description'),
-                    hasHistory: btn.getAttribute('data-has-history'),
-                    disabled: btn.disabled
+            // 6. Debug: Cek semua elemen dengan class view-transfer-clickable
+            const allTransferLinks = document.querySelectorAll('.view-transfer-clickable');
+            console.log('Found', allTransferLinks.length, 'transfer links');
+
+            allTransferLinks.forEach((link, index) => {
+                const transferId = link.getAttribute('data-transfer-id');
+                console.log(`Link ${index + 1}:`, {
+                    element: link,
+                    hasDataTransferId: link.hasAttribute('data-transfer-id'),
+                    transferId: transferId,
+                    isValid: transferId && /^\d+$/.test(transferId)
                 });
             });
 
-            // 6. Auto-hide alerts setelah 5 detik
+            // 7. Auto-hide alerts setelah 5 detik
             setTimeout(function() {
                 document.querySelectorAll('.alert').forEach(function(alert) {
                     const bsAlert = new bootstrap.Alert(alert);
@@ -2803,10 +3404,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // TAMBAHKAN error handling untuk seluruh script
+    // Error handling untuk seluruh script
     window.addEventListener('error', function(e) {
         console.error('Global error:', e.error);
         console.error('Error at:', e.filename, 'line:', e.lineno);
+        showToast('Script error: ' + e.message, 'error');
     });
 
     // Run initialization
