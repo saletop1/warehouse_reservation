@@ -513,12 +513,9 @@
                 <div style="font-size: 12px; color: #666;">
                     <div class="company-details">
                         <strong>PT. Kayu Mebel Indonesia</strong><br>
-                        Jl. Manunggaljati KM No, 23, Jatikalang, Kec. Krian,<br>
-                        Kabupaten Sidoarjo, Jawa Timur 61262<br>
-                        Phone: (031) 8971048, Indonesia<br>
-                        Factory: Jl. Jend. Urip Sumoharjo No.134 50244<br>
-                        Ngaliyan Jawa Tengah<br>
-                        Phone: (024) 8665996
+                        Jl. Manunggal jati KM No, 23, Jatikalang, Kec. Krian, Kabupaten Sidoarjo, Jawa Timur 61262<br>
+                        Factory: Jl. Jend. Urip Sumoharjo No.134 50244 Ngaliyan, Jawa Tengah<br>
+                        Phone: (024) 8665996Phone: (031) 8971048, Indonesia
                     </div>
                 </div>
             </div>

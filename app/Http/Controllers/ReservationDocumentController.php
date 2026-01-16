@@ -105,7 +105,7 @@ class ReservationDocumentController extends Controller
     }
 
     /**
-     * Hitung status dokumen dengan benar
+     * Hitung status dokumen dengan LOGIKA BARU
      */
     private function calculateDocumentStatus($document)
     {
@@ -116,7 +116,7 @@ class ReservationDocumentController extends Controller
 
         $allItemsCompleted = true;
         $hasTransfers = false;
-        $hasPartial = false;
+        $hasAnyItemNotCompleted = false;
 
         foreach ($document->items as $item) {
             // Hitung transferred_qty jika belum ada
@@ -127,11 +127,26 @@ class ReservationDocumentController extends Controller
                 $item->transferred_qty = $transferredQty ?? 0;
             }
 
-            // Hitung remaining_qty
-            $remainingQty = max(0, $item->requested_qty - ($item->transferred_qty ?? 0));
+            // LOGIKA BARU: Tentukan apakah item completed
+            $isItemCompleted = false;
 
-            // Cek apakah item sudah completed
-            $isItemCompleted = ($remainingQty == 0) || ($item->force_completed ?? false);
+            // 1. Force completed langsung dianggap completed 100%
+            if ($item->force_completed ?? false) {
+                $isItemCompleted = true;
+            }
+            // 2. Transferred qty >= requested qty (termasuk kelebihan transfer)
+            elseif (($item->transferred_qty ?? 0) >= $item->requested_qty) {
+                $isItemCompleted = true;
+            }
+            // 3. Remaining qty = 0 (sudah terpenuhi semua)
+            elseif (max(0, $item->requested_qty - ($item->transferred_qty ?? 0)) == 0) {
+                $isItemCompleted = true;
+            }
+            // 4. Tidak completed
+            else {
+                $isItemCompleted = false;
+                $hasAnyItemNotCompleted = true;
+            }
 
             if (!$isItemCompleted) {
                 $allItemsCompleted = false;
@@ -139,22 +154,13 @@ class ReservationDocumentController extends Controller
 
             if (($item->transferred_qty ?? 0) > 0) {
                 $hasTransfers = true;
-
-                // Jika ada transfer tapi remaining > 0, maka partial
-                if ($remainingQty > 0 && !$item->force_completed) {
-                    $hasPartial = true;
-                }
             }
         }
 
-        // Tentukan status berdasarkan kondisi
+        // LOGIKA BARU: Tentukan status berdasarkan kondisi
         if ($allItemsCompleted) {
             return 'closed';
-        } elseif ($hasPartial) {
-            return 'partial';
         } elseif ($hasTransfers) {
-            // Jika ada transfer tapi tidak ada yang partial (semua completed), seharusnya closed
-            // Tapi karena allItemsCompleted sudah false, maka partial
             return 'partial';
         } else {
             return 'booked';
@@ -162,7 +168,7 @@ class ReservationDocumentController extends Controller
     }
 
     /**
-     * Recalculate document status dan completion rate
+     * Recalculate document status dan completion rate dengan LOGIKA BARU
      */
     private function recalculateDocumentStatus($document)
     {
@@ -171,10 +177,45 @@ class ReservationDocumentController extends Controller
             $document->load('items');
         }
 
-        $totalRequested = $document->items->sum('requested_qty');
-        $totalTransferred = $document->items->sum(function($item) {
-            return $item->transferred_qty ?? 0;
-        });
+        $totalRequested = 0;
+        $totalCompleted = 0;
+
+        foreach ($document->items as $item) {
+            // Hitung transferred_qty jika belum ada
+            if (!isset($item->transferred_qty)) {
+                $transferredQty = DB::table('reservation_transfer_items')
+                    ->where('document_item_id', $item->id)
+                    ->sum('quantity');
+                $item->transferred_qty = $transferredQty ?? 0;
+            }
+
+            // LOGIKA BARU: Hitung completed qty untuk item ini
+            $itemCompletedQty = 0;
+
+            // 1. Force completed: completed = requested_qty
+            if ($item->force_completed ?? false) {
+                $itemCompletedQty = $item->requested_qty;
+            }
+            // 2. Transferred qty >= requested qty: completed = requested_qty
+            elseif (($item->transferred_qty ?? 0) >= $item->requested_qty) {
+                $itemCompletedQty = $item->requested_qty;
+            }
+            // 3. Transferred qty < requested qty: completed = transferred_qty
+            else {
+                $itemCompletedQty = $item->transferred_qty ?? 0;
+            }
+
+            $totalRequested += $item->requested_qty;
+            $totalCompleted += $itemCompletedQty;
+
+            // Update item dengan completed_qty
+            $item->completed_qty = $itemCompletedQty;
+        }
+
+        // LOGIKA BARU: Completion rate = (total completed / total requested) × 100%
+        $completionRate = $totalRequested > 0 ? ($totalCompleted / $totalRequested) * 100 : 0;
+        $document->completion_rate = min(round($completionRate, 2), 100); // Maksimal 100%
+        $document->total_transferred = $totalCompleted; // Simpan sebagai total completed
 
         // Hitung status baru berdasarkan kondisi aktual
         $newStatus = $this->calculateDocumentStatus($document);
@@ -184,11 +225,6 @@ class ReservationDocumentController extends Controller
             $document->status = $newStatus;
         }
 
-        // Hitung completion rate berdasarkan transferred vs requested
-        $completionRate = $totalRequested > 0 ? ($totalTransferred / $totalRequested) * 100 : 0;
-        $document->completion_rate = min($completionRate, 100); // Maksimal 100%
-        $document->total_transferred = $totalTransferred;
-
         // Simpan hanya jika ada perubahan
         if ($document->isDirty()) {
             $document->save();
@@ -196,7 +232,7 @@ class ReservationDocumentController extends Controller
     }
 
     /**
-     * Calculate item transfer status
+     * Calculate item transfer status dengan LOGIKA BARU
      */
     private function calculateItemTransferStatus($item)
     {
@@ -207,21 +243,31 @@ class ReservationDocumentController extends Controller
             $item->transfer_icon = 'fa-check-double';
             $item->transfer_label = 'Force Completed';
             $item->has_transfer_history = true;
-        } elseif ($item->remaining_qty == 0) {
+            $item->is_completed = true;
+        }
+        // LOGIKA BARU: Transferred qty >= requested qty (termasuk kelebihan)
+        elseif (($item->transferred_qty ?? 0) >= $item->requested_qty) {
             $item->transfer_status = 'completed';
             $item->transfer_badge_class = 'bg-success';
             $item->transfer_icon = 'fa-check-circle';
             $item->transfer_label = 'Completed';
-        } elseif ($item->transferred_qty > 0 && $item->remaining_qty > 0) {
+            $item->is_completed = true;
+        }
+        // LOGIKA BARU: Transferred qty > 0 tapi belum mencapai requested
+        elseif (($item->transferred_qty ?? 0) > 0) {
             $item->transfer_status = 'partial';
             $item->transfer_badge_class = 'bg-info';
             $item->transfer_icon = 'fa-tasks';
             $item->transfer_label = 'Partial';
-        } else {
+            $item->is_completed = false;
+        }
+        // Belum ada transfer
+        else {
             $item->transfer_status = 'pending';
             $item->transfer_badge_class = 'bg-secondary';
             $item->transfer_icon = 'fa-clock';
             $item->transfer_label = 'Pending';
+            $item->is_completed = false;
         }
     }
 
@@ -263,8 +309,18 @@ class ReservationDocumentController extends Controller
 
             $transferredQty = $transferItems->sum('quantity');
 
-            // Calculate remaining quantity
+            // Calculate remaining quantity dengan LOGIKA BARU
             $remainingQty = max(0, $item->requested_qty - $transferredQty);
+
+            // LOGIKA BARU: Hitung completed qty untuk item
+            $completedQty = 0;
+            if ($item->force_completed ?? false) {
+                $completedQty = $item->requested_qty;
+            } elseif ($transferredQty >= $item->requested_qty) {
+                $completedQty = $item->requested_qty;
+            } else {
+                $completedQty = $transferredQty;
+            }
 
             // Prepare arrays for view
             $sources = is_string($item->sources) ? json_decode($item->sources, true) ?? [] : ($item->sources ?? []);
@@ -274,6 +330,7 @@ class ReservationDocumentController extends Controller
             $item->sales_orders_array = $salesOrders;
             $item->transferred_qty = $transferredQty;
             $item->remaining_qty = $remainingQty;
+            $item->completed_qty = $completedQty; // Tambahkan completed_qty
         }
     }
 
@@ -447,13 +504,21 @@ class ReservationDocumentController extends Controller
         if ($item->force_completed ?? false) {
             return false;
         }
-        // PERBAIKAN: Tambah kondisi remaining_qty > 0
-        $remainingQty = $item->remaining_qty ?? 0;
-        if ($remainingQty <= 0) {
+
+        // LOGIKA BARU: Cek apakah item sudah completed (termasuk kelebihan transfer)
+        $isCompleted = false;
+        if ($item->force_completed ?? false) {
+            $isCompleted = true;
+        } elseif (($item->transferred_qty ?? 0) >= $item->requested_qty) {
+            $isCompleted = true;
+        }
+
+        if ($isCompleted) {
             return false;
         }
 
         // Cek remaining quantity dan stock
+        $remainingQty = $item->remaining_qty ?? 0;
         $totalStock = $item->stock_info['total_stock'] ?? 0;
 
         return $remainingQty > 0 && $totalStock > 0;
@@ -867,3 +932,4 @@ class ReservationDocumentController extends Controller
         }
     }
 }
+

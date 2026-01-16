@@ -157,6 +157,9 @@
                                      style="width: {{ min(round($document->completion_rate ?? 0, 2), 100) }}%;"
                                      aria-valuenow="{{ min(round($document->completion_rate ?? 0, 2), 100) }}"></div>
                             </div>
+                            <p class="text-muted mb-0 small mt-1">
+                                {{ number_format($document->total_transferred ?? 0) }} / {{ number_format($document->total_qty) }} completed
+                            </p>
                         </div>
                         <div class="avatar-sm flex-shrink-0">
                             <span class="avatar-title bg-soft-info rounded fs-4">
@@ -172,7 +175,7 @@
     <!-- Document Details -->
     <div class="row mb-4">
         <!-- Document Information -->
-        <div class="col-lg-8">
+        <div class="col-lg-5">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header border-bottom bg-light py-2 px-3">
                     <h6 class="card-title mb-0">
@@ -234,7 +237,7 @@
         </div>
 
         <!-- Transfer Information -->
-        <div class="col-lg-4">
+        <div class="col-lg-7">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header border-bottom bg-light py-2 px-3">
                     <h6 class="card-title mb-0">
@@ -299,7 +302,7 @@
                     </div>
 
                     <div class="mb-2">
-                        <label class="form-label text-muted small mb-1">Total Transferred</label>
+                        <label class="form-label text-muted small mb-1">Total Completed</label>
                         <p class="fw-medium mb-0 small">
                             {{ number_format($document->total_transferred ?? 0) }} / {{ number_format($document->total_qty) }}
                             ({{ min(round($document->completion_rate ?? 0, 2), 100) }}%)
@@ -320,7 +323,7 @@
     <!-- Document Items and Transfer -->
     <div class="row">
         <!-- Items Table -->
-        <div class="col-lg-9">
+        <div class="col-lg-10">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header border-bottom bg-light py-1 px-2">
                     <div class="d-flex justify-content-between align-items-center">
@@ -344,7 +347,7 @@
                                         name="plant" placeholder="Plant"
                                         value="{{ request('plant', $document->plant) }}" required>
                                     <button type="submit" class="btn btn-primary btn-sm px-2">
-                                        <i class="fas fa-search"></i>
+                                        <i class="fas fa-search"></i> Sync Now
                                     </button>
                                 </div>
                             </form>
@@ -365,7 +368,7 @@
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-outline-secondary btn-sm px-2" title="Reset Stock Data">
-                                    <i class="fas fa-redo"></i>
+                                    <i class="fas fa-redo"></i> Reset Stock
                                 </button>
                             </form>
                             @endif
@@ -375,8 +378,8 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive" style="max-height: 500px;">
-                        <table class="table table-hover table-borderless mb-0">
-                            <thead class="table-light border-bottom">
+                        <table class="table table-hover table-borderless mb-0" id="stickyTable">
+                            <thead class="table-light border-bottom sticky-header">
                                 <tr>
                                     <th class="border-0 py-1 px-1" style="width: 40px;">
                                         <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
@@ -386,6 +389,7 @@
                                     <th class="border-0 text-muted py-1 px-1">Description</th>
                                     <th class="border-0 text-muted py-1 px-1 text-center">Req Qty</th>
                                     <th class="border-0 text-muted py-1 px-1 text-center">Remaining</th>
+                                    <th class="border-0 text-muted py-1 px-1 text-center">Transferred</th>
                                     <th class="border-0 text-muted py-1 px-1 text-center">Unit</th>
                                     <th class="border-0 text-muted py-1 px-1 text-center">Stock</th>
                                     <th class="border-0 text-muted py-1 px-1 text-center">Status</th>
@@ -433,6 +437,7 @@
                                     $requestedQty = $item->requested_qty;
                                     $transferredQty = $item->transferred_qty ?? 0;
                                     $remainingQty = $item->remaining_qty ?? 0;
+                                    $completedQty = $item->completed_qty ?? 0;
 
                                     // Stock information
                                     $stockInfo = $item->stock_info ?? null;
@@ -471,6 +476,9 @@
 
                                     // MRP Comp (dispc)
                                     $mrpComp = $item->dispc ?? ($item->mrp_comp ?? ($item->dispo ?? '-'));
+
+                                    // Tentukan apakah item completed
+                                    $isCompleted = $isForceCompleted || ($transferredQty >= $requestedQty);
                                 @endphp
 
                                 <tr class="item-row draggable-row"
@@ -481,14 +489,16 @@
                                     data-requested-qty="{{ $requestedQty }}"
                                     data-transferred-qty="{{ $transferredQty }}"
                                     data-remaining-qty="{{ $remainingQty }}"
+                                    data-completed-qty="{{ $completedQty }}"
                                     data-available-stock="{{ $totalStock }}"
                                     data-transferable-qty="{{ $transferableQty }}"
                                     data-unit="{{ $unit }}"
                                     data-sloc="{{ !empty($batchInfo) ? ($batchInfo[0]['sloc'] ?? '') : '' }}"
                                     data-can-transfer="{{ $isTransferable ? 'true' : 'false' }}"
                                     data-force-completed="{{ $isForceCompleted ? 'true' : 'false' }}"
+                                    data-is-completed="{{ $isCompleted ? 'true' : 'false' }}"
                                     data-batch-info="{{ htmlspecialchars(json_encode($batchInfo), ENT_QUOTES, 'UTF-8') }}"
-                                    style="cursor: {{ $isTransferable ? 'move' : 'default' }}; background-color: {{ $isForceCompleted ? 'rgba(40, 167, 69, 0.05)' : 'transparent' }};">
+                                    style="cursor: {{ $isTransferable ? 'move' : 'default' }}; background-color: {{ $isForceCompleted ? 'rgba(40, 167, 69, 0.05)' : ($isCompleted ? 'rgba(40, 167, 69, 0.02)' : 'transparent') }};">
 
                                     <td class="align-middle py-1 px-1">
                                         <input type="checkbox" class="form-check-input row-select"
@@ -520,6 +530,16 @@
                                     <td class="align-middle text-center py-1 px-1">
                                         <span class="fw-bold small {{ $remainingQty > 0 ? 'text-primary' : 'text-success' }}">
                                             {{ \App\Helpers\NumberHelper::formatQuantity($remainingQty) }}
+                                        </span>
+                                    </td>
+
+                                    <td class="align-middle text-center py-1 px-1">
+                                        <span class="fw-medium small {{ $transferredQty > $requestedQty ? 'text-warning' : ($transferredQty > 0 ? 'text-info' : 'text-muted') }}"
+                                              title="{{ $transferredQty > $requestedQty ? 'Transfer melebihi request' : 'Total transferred' }}">
+                                            {{ \App\Helpers\NumberHelper::formatQuantity($transferredQty) }}
+                                            @if($transferredQty > $requestedQty)
+                                                <i class="fas fa-exclamation-triangle ms-1 text-warning small"></i>
+                                            @endif
                                         </span>
                                     </td>
 
@@ -646,27 +666,27 @@
         </div>
 
         <!-- Transfer List -->
-        <div class="col-lg-3">
-            <div class="card border-0 shadow-sm h-100">
+        <div class="col-lg-2">
+            <div class="card border-0 shadow-sm h-100 transfer-list-card">
                 <div class="card-header border-bottom bg-light py-2 px-3">
-                    <h6 class="card-title mb-0">
+                    <h6 class="card-title mb-0" style="font-size: 0.9rem;">
                         <i class="fas fa-truck-loading me-2 text-primary"></i>Transfer List
                         <span class="badge bg-primary ms-2 small" id="transferCount">0</span>
                     </h6>
-                    <p class="text-muted small mb-0 mt-1">
+                    <p class="text-muted small mb-0 mt-1" style="font-size: 0.8rem;">
                         <i class="fas fa-info-circle me-1"></i>Drag items or select from list
                     </p>
                 </div>
                 <div class="card-body p-0">
                     <div class="transfer-container" id="transferContainer"
-                         style="min-height: 400px; max-height: 500px; overflow-y: auto;">
+                         style="min-height: 350px; max-height: 400px; overflow-y: auto;">
                         <div id="transferSlots" class="p-2">
                             <div class="empty-state text-center text-muted py-4">
                                 <div class="mb-2">
-                                    <i class="fas fa-arrow-left fa-2x opacity-25"></i>
+                                    <i class="fas fa-arrow-left fa-lg opacity-25"></i>
                                 </div>
-                                <h6 class="mb-1 small">No items added</h6>
-                                <p class="small mb-0">Drag items here or select from list</p>
+                                <h6 class="mb-1 small" style="font-size: 0.85rem;">No items added</h6>
+                                <p class="small mb-0" style="font-size: 0.8rem;">Drag items here or select from list</p>
                             </div>
                         </div>
                     </div>
@@ -674,14 +694,14 @@
                 <div class="card-footer bg-light border-top py-2 px-3">
                     <div class="d-grid gap-2">
                         @if($hasTransferableItems && $canGenerateTransfer)
-                        <button type="button" class="btn btn-primary btn-sm" id="generateTransferList">
+                        <button type="button" class="btn btn-primary btn-sm" id="generateTransferList" style="padding: 5px 10px; font-size: 0.85rem;">
                             <i class="fas fa-file-export me-1"></i> Generate Transfer
                         </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="clearTransferList">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="clearTransferList" style="padding: 5px 10px; font-size: 0.85rem;">
                             <i class="fas fa-trash me-1"></i> Clear All
                         </button>
                         @else
-                        <button type="button" class="btn btn-secondary btn-sm" disabled>
+                        <button type="button" class="btn btn-secondary btn-sm" disabled style="padding: 5px 10px; font-size: 0.85rem;">
                             <i class="fas fa-ban me-1"></i>
                             @if(!$hasTransferableItems)
                                 No Transferable Items
@@ -815,22 +835,48 @@ body {
     background: rgba(var(--primary-color-rgb), 0.02);
 }
 
-/* Transfer Container - Smaller width */
+/* STICKY HEADER ONLY */
+#stickyTable {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* Transfer List Card - Smaller */
+.transfer-list-card {
+    font-size: 0.85rem;
+}
+
+.transfer-list-card .card-header {
+    padding: 0.5rem 0.75rem;
+}
+
+.transfer-list-card .card-footer {
+    padding: 0.5rem 0.75rem;
+}
+
 .transfer-container {
     background: rgba(0,0,0,0.02);
     border-radius: 6px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .transfer-item {
     background: white;
     border: 1px solid rgba(0,0,0,0.08);
     border-radius: 6px;
-    padding: 10px;
-    margin-bottom: 6px;
+    padding: 8px;
+    margin-bottom: 5px;
     transition: all 0.2s ease;
     border-left: 3px solid var(--primary-color);
-    font-size: 0.88rem;
+    font-size: 0.82rem;
 }
 
 .transfer-item:hover {
@@ -842,13 +888,13 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
 }
 
 .transfer-item-code {
     font-weight: 600;
     color: var(--primary-color);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .transfer-item-remove {
@@ -856,7 +902,7 @@ body {
     cursor: pointer;
     opacity: 0.7;
     transition: opacity 0.2s;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .transfer-item-remove:hover {
@@ -1038,6 +1084,7 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     transition: all 0.2s ease;
 }
+
 /* Cursor untuk row yang transferable */
 .draggable-row[data-can-transfer="true"] {
     cursor: grab !important;
@@ -1178,6 +1225,11 @@ body {
     background-color: rgba(40, 167, 69, 0.05) !important;
 }
 
+/* Completed row style */
+.completed-row {
+    background-color: rgba(40, 167, 69, 0.02) !important;
+}
+
 /* Modal fixes */
 .modal-content {
     border-radius: 8px;
@@ -1208,22 +1260,18 @@ body {
 }
 
 /* Empty state adjustments */
-.empty-state .fa-2x {
-    font-size: 1.75rem;
+.empty-state .fa-lg {
+    font-size: 1.5rem;
 }
 
 .empty-state h6 {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
 }
 
 /* Specific for transfer list column */
-.col-lg-3 .card {
-    width: 100%;
-}
-
-.col-lg-3 .transfer-container {
-    min-height: 400px;
-    max-height: 500px;
+.transfer-list-card .transfer-container {
+    min-height: 350px;
+    max-height: 400px;
 }
 
 /* Ensure proper text size in all elements */
@@ -1945,10 +1993,11 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
 
                 const canTransfer = row.dataset.canTransfer === 'true';
                 const isForceCompleted = row.dataset.forceCompleted === 'true';
+                const isCompleted = row.dataset.isCompleted === 'true';
                 const itemId = row.dataset.itemId;
 
-                // Jika transferable dan tidak force completed, tambahkan ke transfer list
-                if (canTransfer && !isForceCompleted) {
+                // Jika transferable dan tidak force completed dan belum completed, tambahkan ke transfer list
+                if (canTransfer && !isForceCompleted && !isCompleted) {
                     addItemById(itemId);
                 }
             });
@@ -2167,9 +2216,10 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         rows.forEach(function(row) {
             const canTransfer = row.dataset.canTransfer === 'true';
             const isForceCompleted = row.dataset.forceCompleted === 'true';
+            const isCompleted = row.dataset.isCompleted === 'true';
 
-            // Force completed items tidak bisa didrag
-            if (canTransfer && !isForceCompleted) {
+            // Force completed items dan completed items tidak bisa didrag
+            if (canTransfer && !isForceCompleted && !isCompleted) {
                 row.draggable = true;
 
                 row.addEventListener('dragstart', function(e) {
@@ -2351,9 +2401,10 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
     function getItemDataFromRow(rowElement) {
         const row = rowElement;
         const isForceCompleted = row.dataset.forceCompleted === 'true';
+        const isCompleted = row.dataset.isCompleted === 'true';
 
-        // Jika force completed, return null
-        if (isForceCompleted) {
+        // Jika force completed atau sudah completed, return null
+        if (isForceCompleted || isCompleted) {
             return null;
         }
 
@@ -2388,11 +2439,13 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             requestedQty: parseFloat(row.dataset.requestedQty || 0),
             transferredQty: parseFloat(row.dataset.transferredQty || 0),
             remainingQty: parseFloat(row.dataset.remainingQty || 0),
+            completedQty: parseFloat(row.dataset.completedQty || 0),
             availableStock: parseFloat(row.dataset.availableStock || 0),
             unit: row.dataset.unit || 'PC',
             sloc: row.dataset.sloc || '',
             batchInfo: batchInfo,
-            canTransfer: row.dataset.canTransfer === 'true'
+            canTransfer: row.dataset.canTransfer === 'true',
+            isCompleted: isCompleted
         };
     }
 
@@ -2412,15 +2465,22 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         let addedCount = 0;
         let alreadyAddedCount = 0;
         let forceCompletedCount = 0;
+        let completedCount = 0;
 
         selectedItems.forEach(function(itemId) {
             const itemRow = document.querySelector('.draggable-row[data-item-id="' + itemId + '"]');
             if (itemRow) {
                 const isForceCompleted = itemRow.dataset.forceCompleted === 'true';
+                const isCompleted = itemRow.dataset.isCompleted === 'true';
 
-                // Skip jika force completed
+                // Skip jika force completed atau sudah completed
                 if (isForceCompleted) {
                     forceCompletedCount++;
+                    return;
+                }
+
+                if (isCompleted) {
+                    completedCount++;
                     return;
                 }
 
@@ -2457,7 +2517,11 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             showToast(forceCompletedCount + ' force completed items skipped', 'warning');
         }
 
-        if (addedCount === 0 && alreadyAddedCount === 0 && forceCompletedCount === 0) {
+        if (completedCount > 0) {
+            showToast(completedCount + ' completed items skipped', 'info');
+        }
+
+        if (addedCount === 0 && alreadyAddedCount === 0 && forceCompletedCount === 0 && completedCount === 0) {
             showToast('No transferable items selected', 'warning');
         }
     }
@@ -2477,10 +2541,16 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         }
 
         const isForceCompleted = itemRow.dataset.forceCompleted === 'true';
+        const isCompleted = itemRow.dataset.isCompleted === 'true';
 
-        // Skip jika force completed
+        // Skip jika force completed atau sudah completed
         if (isForceCompleted) {
             showToast('Cannot add force completed item to transfer list', 'error');
+            return;
+        }
+
+        if (isCompleted) {
+            showToast('Cannot add completed item to transfer list', 'error');
             return;
         }
 
@@ -2535,7 +2605,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         }
 
         // PERBAIKAN: Calculate transferable quantity hanya berdasarkan batchQty
-        const maxTransferable = batchQty > 0 ? batchQty : 0;
+        const maxTransferable = batchQty > 0 ? Math.min(batchQty, item.remainingQty) : 0;
 
         // Add to transfer items array
         const transferItem = {
@@ -2544,6 +2614,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             materialDesc: item.materialDesc,
             maxQty: maxTransferable,
             remainingQty: item.remainingQty,
+            completedQty: item.completedQty,
             availableStock: item.availableStock,
             batchQty: batchQty,
             qty: maxTransferable,
@@ -2600,7 +2671,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                 </span>
             </div>
             <div class="transfer-item-desc small text-muted mb-2">
-                ${item.materialDesc.length > 40 ? item.materialDesc.substring(0, 40) + '...' : item.materialDesc}
+                ${item.materialDesc.length > 30 ? item.materialDesc.substring(0, 30) + '...' : item.materialDesc}
             </div>
             <div class="transfer-item-qty d-flex justify-content-between align-items-center">
                 <div>
@@ -2647,10 +2718,10 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             transferSlots.innerHTML = `
                 <div class="empty-state text-center text-muted py-4">
                     <div class="mb-2">
-                        <i class="fas fa-arrow-left fa-2x opacity-25"></i>
+                        <i class="fas fa-arrow-left fa-lg opacity-25"></i>
                     </div>
-                    <h6 class="mb-1 small">No items added</h6>
-                    <p class="small mb-0">Drag items here or select from list</p>
+                    <h6 class="mb-1 small" style="font-size: 0.85rem;">No items added</h6>
+                    <p class="small mb-0" style="font-size: 0.8rem;">Drag items here or select from list</p>
                 </div>
             `;
         }
@@ -2722,7 +2793,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             row.innerHTML = `
                 <td class="text-center align-middle small">${index + 1}</td>
                 <td class="align-middle"><div class="fw-medium small">${item.materialCode}</div></td>
-                <td class="align-middle"><div class="text-truncate-2 small" title="${item.materialDesc}">${item.materialDesc.length > 30 ? item.materialDesc.substring(0, 30) + '...' : item.materialDesc}</div></td>
+                <td class="align-middle"><div class="text-truncate-2 small" title="${item.materialDesc}">${item.materialDesc.length > 25 ? item.materialDesc.substring(0, 25) + '...' : item.materialDesc}</div></td>
                 <td class="text-center align-middle"><div class="fw-medium small">${formatAngka(item.remainingQty)}</div></td>
                 <td class="text-center align-middle">
                     <div class="fw-medium small text-primary selected-batch-qty"
@@ -2742,7 +2813,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                     <input type="text" class="form-control form-control-sm sloc-tujuan-input uppercase-input" value="${item.slocTujuan || ''}" placeholder="SLOC" data-index="${index}" required style="width: 60px;">
                 </td>
                 <td class="text-center align-middle">
-                    <select class="form-control form-control-sm batch-source-select" data-index="${index}" required style="min-width: 150px;">
+                    <select class="form-control form-control-sm batch-source-select" data-index="${index}" required style="min-width: 140px;">
                         <option value="">Select Batch *</option>
                         ${batchOptions}
                     </select>
@@ -2791,6 +2862,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                 let value = this.value.trim();
                 let parsedValue = parseAngka(value);
                 const batchQty = transferItems[index].batchQty || 0;
+                const remainingQty = transferItems[index].remainingQty || 0;
 
                 if (isNaN(parsedValue) || parsedValue < 0) {
                     this.value = '';
@@ -2802,6 +2874,11 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                     transferItems[index].qty = batchQty;
                     transferItems[index].quantity = batchQty;
                     showToast('Quantity cannot exceed batch quantity', 'warning');
+                } else if (parsedValue > remainingQty) {
+                    this.value = formatAngka(remainingQty);
+                    transferItems[index].qty = remainingQty;
+                    transferItems[index].quantity = remainingQty;
+                    showToast('Quantity cannot exceed remaining quantity', 'warning');
                 } else {
                     this.value = formatAngka(parsedValue);
                     transferItems[index].qty = parsedValue;
@@ -2897,10 +2974,13 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                 if (qtyInput) {
                     // Jika quantity sebelumnya lebih besar dari batchQty yang baru, adjust ke batchQty
                     const currentQty = parseAngka(qtyInput.value);
-                    if (currentQty > batchQty && batchQty > 0) {
-                        qtyInput.value = formatAngka(batchQty);
-                        transferItems[index].qty = batchQty;
-                        transferItems[index].quantity = batchQty;
+                    const remainingQty = transferItems[index].remainingQty || 0;
+                    const maxAllowed = Math.min(batchQty, remainingQty);
+
+                    if (currentQty > maxAllowed && maxAllowed > 0) {
+                        qtyInput.value = formatAngka(maxAllowed);
+                        transferItems[index].qty = maxAllowed;
+                        transferItems[index].quantity = maxAllowed;
                     } else {
                         // Jika tidak, tetap gunakan currentQty
                         qtyInput.value = formatAngka(currentQty);
@@ -3416,3 +3496,4 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
 });
 </script>
 @endsection
+
