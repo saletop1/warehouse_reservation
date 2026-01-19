@@ -301,14 +301,6 @@
                         @endif
                     </div>
 
-                    <div class="mb-2">
-                        <label class="form-label text-muted small mb-1">Total Completed</label>
-                        <p class="fw-medium mb-0 small">
-                            {{ number_format($document->total_transferred ?? 0) }} / {{ number_format($document->total_qty) }}
-                            ({{ min(round($document->completion_rate ?? 0, 2), 100) }}%)
-                        </p>
-                    </div>
-
                     @if($canGenerateTransfer)
                     <div class="alert alert-info border-0 py-1 small mt-2 mb-0">
                         <i class="fas fa-info-circle me-2"></i>
