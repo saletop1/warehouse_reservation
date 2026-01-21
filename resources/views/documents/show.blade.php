@@ -1920,16 +1920,17 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         document.getElementById('loadingOverlay').classList.remove('show');
     }
 
-    // Toast notification
+    // Toast notification dengan warna yang lebih baik
     function showToast(message, type = 'info') {
         const toastContainer = document.getElementById('toastContainer');
         const toastId = 'toast-' + Date.now();
 
+        // PERBAIKAN: Gunakan warna yang lebih gelap untuk warning
         const bgClass = {
-            'success': 'bg-success',
-            'error': 'bg-danger',
-            'warning': 'bg-warning',
-            'info': 'bg-primary'
+            'success': 'bg-success',        // Hijau
+            'error': 'bg-danger',           // Merah
+            'warning': 'bg-warning text-dark', // Kuning dengan teks gelap (PERBAIKAN)
+            'info': 'bg-primary'            // Biru
         }[type] || 'bg-primary';
 
         const iconClass = {
@@ -1939,12 +1940,16 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             'info': 'fa-info-circle'
         }[type] || 'fa-info-circle';
 
+        // PERBAIKAN: Tambahkan styling khusus untuk warning toast
+        const textClass = type === 'warning' ? 'text-dark' : 'text-white';
+        const borderClass = type === 'warning' ? 'border border-warning' : '';
+
         const toastHTML = `
-            <div id="${toastId}" class="toast fade-in ${bgClass} text-white border-0" role="alert">
+            <div id="${toastId}" class="toast fade-in ${bgClass} ${textClass} ${borderClass}" role="alert">
                 <div class="toast-body d-flex align-items-center">
                     <i class="fas ${iconClass} me-3 fs-5"></i>
                     <div class="flex-grow-1">${message}</div>
-                    <button type="button" class="btn-close btn-close-white ms-3" data-bs-dismiss="toast"></button>
+                    <button type="button" class="btn-close ${type === 'warning' ? '' : 'btn-close-white'} ms-3" data-bs-dismiss="toast"></button>
                 </div>
             </div>
         `;
@@ -2597,25 +2602,24 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         }
 
         // PERBAIKAN: Calculate transferable quantity hanya berdasarkan batchQty
-        const maxTransferable = batchQty > 0 ? Math.min(batchQty, item.remainingQty) : 0;
+        const maxTransferable = batchQty > 0 ? batchQty : 0;
 
         // Add to transfer items array
         const transferItem = {
             id: item.id,
             materialCode: item.materialCode,
             materialDesc: item.materialDesc,
-            maxQty: maxTransferable,
-            remainingQty: item.remainingQty,
+            maxQty: maxTransferable, // Ini adalah batch quantity
+            remainingQty: item.remainingQty, // Ini tetap ada untuk informasi
             completedQty: item.completedQty,
             availableStock: item.availableStock,
             batchQty: batchQty,
-            qty: maxTransferable,
+            qty: maxTransferable, // Default quantity = batch quantity
             quantity: maxTransferable,
             unit: item.unit,
             sloc: item.sloc,
             batchInfo: item.batchInfo,
             selectedBatch: selectedBatch,
-            batchQty: batchQty,
             batchSloc: batchSloc,
             plantTujuan: defaultPlant,
             plant_dest: defaultPlant,
@@ -2653,6 +2657,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         itemDiv.className = 'transfer-item fade-in';
         itemDiv.dataset.itemId = item.id;
 
+        // PERBAIKAN: Tampilkan informasi yang lebih jelas
         itemDiv.innerHTML = `
             <div class="transfer-item-header">
                 <div>
@@ -2665,14 +2670,14 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             <div class="transfer-item-desc small text-muted mb-2">
                 ${item.materialDesc.length > 30 ? item.materialDesc.substring(0, 30) + '...' : item.materialDesc}
             </div>
-            <div class="transfer-item-qty d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="badge bg-soft-primary text-primary me-1 small">
-                        ${formatAngka(item.remainingQty)} remaining
-                    </span>
-                    <span class="badge bg-soft-success text-success small">
-                        Max: ${formatAngka(item.maxQty)} ${item.unit}
-                    </span>
+            <div class="transfer-item-info mb-1 small">
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Remaining:</span>
+                    <span class="fw-medium">${formatAngka(item.remainingQty)} ${item.unit}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Batch Stock:</span>
+                    <span class="fw-bold text-primary">${formatAngka(item.batchQty)} ${item.unit}</span>
                 </div>
             </div>
         `;
@@ -2836,7 +2841,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             const batchQty = batch.qty || batch.clabs || 0;
             const batchSloc = batch.sloc || batch.lgort || batchValue;
             const displayQty = formatAngka(batchQty);
-            const batchLabel = `${batchSloc} | ${batchValue} | ${displayQty}`;
+            const batchLabel = `${batchSloc} | ${batchValue} | Stock: ${displayQty}`;
             const selected = batchValue === selectedBatch ? 'selected' : '';
 
             options += `<option value="${batchValue}" data-qty="${batchQty}" data-sloc="${batchSloc}" ${selected}>${batchLabel}</option>`;
@@ -2845,42 +2850,58 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
         return options;
     }
 
-    // Setup modal event listeners
+    // ==============================================
+    // PERBAIKAN UTAMA: VALIDASI QUANTITY TIDAK BOLEH MELEBIHI BATCH QTY
+    // ==============================================
+
+    // Setup modal event listeners dengan validasi yang diperbaiki
     function setupModalEventListeners() {
-        // Quantity input change
+        // PERBAIKAN: Fungsi validasi quantity yang hanya memeriksa batch quantity
+        function validateAndAdjustQuantity(input, index) {
+            const value = input.value.trim();
+            let parsedValue = parseAngka(value);
+            
+            if (isNaN(parsedValue) || parsedValue < 0) {
+                // Jika tidak valid, reset ke 0
+                input.value = '';
+                transferItems[index].qty = 0;
+                transferItems[index].quantity = 0;
+                showToast('Quantity must be a valid number', 'error');
+                return false;
+            }
+            
+            // Ambil batch quantity dari transferItems
+            const batchQty = transferItems[index].batchQty || 0;
+            
+            // PERBAIKAN UTAMA: Quantity tidak boleh melebihi batch quantity
+            if (parsedValue > batchQty) {
+                // Auto-adjust ke batch quantity
+                input.value = formatAngka(batchQty);
+                transferItems[index].qty = batchQty;
+                transferItems[index].quantity = batchQty;
+                
+                // Tampilkan pesan yang sesuai
+                showToast(`Quantity adjusted to batch quantity (${formatAngka(batchQty)})`, 'warning');
+                return true;
+            }
+            
+            // Jika quantity valid, simpan
+            input.value = formatAngka(parsedValue);
+            transferItems[index].qty = parsedValue;
+            transferItems[index].quantity = parsedValue;
+            return true;
+        }
+
+        // Quantity input change - PERBAIKAN: hanya validasi vs batch quantity
         document.querySelectorAll('.qty-transfer-input').forEach(function(input) {
             input.addEventListener('blur', function() {
                 const index = parseInt(this.dataset.index);
-                let value = this.value.trim();
-                let parsedValue = parseAngka(value);
-                const batchQty = transferItems[index].batchQty || 0;
-                const remainingQty = transferItems[index].remainingQty || 0;
-
-                if (isNaN(parsedValue) || parsedValue < 0) {
-                    this.value = '';
-                    transferItems[index].qty = 0;
-                    transferItems[index].quantity = 0;
-                    showToast('Quantity is required', 'error');
-                } else if (parsedValue > batchQty) {
-                    this.value = formatAngka(batchQty);
-                    transferItems[index].qty = batchQty;
-                    transferItems[index].quantity = batchQty;
-                    showToast('Quantity cannot exceed batch quantity', 'warning');
-                } else if (parsedValue > remainingQty) {
-                    this.value = formatAngka(remainingQty);
-                    transferItems[index].qty = remainingQty;
-                    transferItems[index].quantity = remainingQty;
-                    showToast('Quantity cannot exceed remaining quantity', 'warning');
-                } else {
-                    this.value = formatAngka(parsedValue);
-                    transferItems[index].qty = parsedValue;
-                    transferItems[index].quantity = parsedValue;
-                }
-
+                validateAndAdjustQuantity(this, index);
                 updateModalTotals();
             });
 
             input.addEventListener('input', function() {
+                // Hanya izinkan angka dan koma/titik desimal
                 this.value = this.value.replace(/[^\d.,]/g, '');
             });
 
@@ -2888,6 +2909,28 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                 const index = parseInt(this.dataset.index);
                 if (transferItems[index].qty > 0) {
                     this.value = transferItems[index].qty.toString().replace('.', ',');
+                }
+            });
+            
+            // PERBAIKAN: Tambahkan real-time validation
+            input.addEventListener('keyup', function() {
+                const index = parseInt(this.dataset.index);
+                const value = this.value.trim();
+                
+                if (value) {
+                    const parsedValue = parseAngka(value);
+                    const batchQty = transferItems[index].batchQty || 0;
+                    
+                    // Jika melebihi batch quantity, warn user
+                    if (parsedValue > batchQty && batchQty > 0) {
+                        this.style.borderColor = '#ffc107';
+                        this.style.backgroundColor = 'rgba(255, 193, 7, 0.1)';
+                        this.title = `Maximum batch quantity: ${formatAngka(batchQty)}`;
+                    } else {
+                        this.style.borderColor = '';
+                        this.style.backgroundColor = '';
+                        this.title = '';
+                    }
                 }
             });
         });
@@ -2928,7 +2971,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
             });
         });
 
-        // Batch select change - PERBAIKAN: Otomatis update Selected Batch Qty
+        // Batch select change - PERBAIKAN: Otomatis update quantity ke batch quantity
         document.querySelectorAll('.batch-source-select').forEach(function(select) {
             select.addEventListener('change', function() {
                 const index = parseInt(this.dataset.index);
@@ -2954,6 +2997,7 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                 transferItems[index].selectedBatch = selectedValue;
                 transferItems[index].batchQty = batchQty;
                 transferItems[index].batchSloc = batchSloc;
+                transferItems[index].maxQty = batchQty; // Update maxQty
 
                 // Update Selected Batch Qty display
                 const batchQtyDisplay = document.querySelector(`.selected-batch-qty[data-index="${index}"]`);
@@ -2961,23 +3005,19 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                     batchQtyDisplay.textContent = formatAngka(batchQty);
                 }
 
-                // Update quantity input dengan batch quantity yang baru
+                // PERBAIKAN UTAMA: Reset quantity input ke batch quantity
                 const qtyInput = document.querySelector(`.qty-transfer-input[data-index="${index}"]`);
                 if (qtyInput) {
-                    // Jika quantity sebelumnya lebih besar dari batchQty yang baru, adjust ke batchQty
                     const currentQty = parseAngka(qtyInput.value);
-                    const remainingQty = transferItems[index].remainingQty || 0;
-                    const maxAllowed = Math.min(batchQty, remainingQty);
-
-                    if (currentQty > maxAllowed && maxAllowed > 0) {
-                        qtyInput.value = formatAngka(maxAllowed);
-                        transferItems[index].qty = maxAllowed;
-                        transferItems[index].quantity = maxAllowed;
-                    } else {
-                        // Jika tidak, tetap gunakan currentQty
-                        qtyInput.value = formatAngka(currentQty);
-                        transferItems[index].qty = currentQty;
-                        transferItems[index].quantity = currentQty;
+                    const newQty = batchQty; // Selalu set ke batch quantity
+                    
+                    qtyInput.value = formatAngka(newQty);
+                    transferItems[index].qty = newQty;
+                    transferItems[index].quantity = newQty;
+                    
+                    // Tampilkan pesan jika batchQty berbeda dari previous value
+                    if (currentQty !== newQty) {
+                        showToast(`Quantity adjusted to batch quantity (${formatAngka(batchQty)})`, 'info');
                     }
                 }
 
@@ -3049,6 +3089,14 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
                         isValid = false;
                         input.classList.add('is-invalid');
                         errorMessages.push(`Quantity must be greater than 0 for item ${parseInt(index) + 1}`);
+                    }
+                    
+                    // PERBAIKAN: Validasi quantity vs batch quantity
+                    const batchQty = transferItems[index].batchQty || 0;
+                    if (qty > batchQty) {
+                        isValid = false;
+                        input.classList.add('is-invalid');
+                        errorMessages.push(`Quantity cannot exceed batch quantity (${formatAngka(batchQty)}) for item ${parseInt(index) + 1}`);
                     }
                 }
             }
@@ -3488,4 +3536,3 @@ Completed At: ${transfer.completed_at ? new Date(transfer.completed_at).toLocale
 });
 </script>
 @endsection
-
