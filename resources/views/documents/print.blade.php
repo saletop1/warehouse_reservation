@@ -365,45 +365,62 @@
                             </div>
                         </div>
                         <div class="col-5 text-end">
-                            <div class="document-title text-black" style="font-size: 14pt;">
+                            <!-- Nomor Dokumen -->
+                            <div class="document-title text-black" style="font-size: 14pt; margin-bottom: 10px; text-align: right;">
                                 {{ $document->document_no }}
                             </div>
-                            <div class="mt-1">
-                                <table class="table table-sm table-borderless compact-text" style="margin-bottom: 0;">
-                                    <tr>
-                                        <td style="padding: 1px; text-align: right;"><strong>Plant Request:</strong></td>
-                                        <td style="padding: 1px;">{{ $document->plant }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding: 1px; text-align: right;"><strong>Plant Supply:</strong></td>
-                                        <td style="padding: 1px;">
-                                            @if(!empty($document->sloc_supply) && $document->sloc_supply !== '-' && $document->sloc_supply !== 'null' && $document->sloc_supply !== 'NULL')
-                                                {{ strtoupper($document->sloc_supply) }}
-                                            @else
-                                                <span style="font-style: italic; color: #6c757d;">Not set</span>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding: 1px; text-align: right;"><strong>Date:</strong></td>
-                                        <td style="padding: 1px;">{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y') }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding: 1px; text-align: right;"><strong>Status:</strong></td>
-                                        <td style="padding: 1px;">
-                                            @if($document->status == 'booked')
-                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #ffc107; color: #000;">Booked</span>
-                                            @elseif($document->status == 'partial')
-                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #0dcaf0; color: #000;">Partial</span>
-                                            @elseif($document->status == 'closed')
-                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #198754; color: #fff;">Closed</span>
-                                            @elseif($document->status == 'cancelled')
-                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #dc3545; color: #fff;">Cancelled</span>
-                                            @else
-                                                <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #6c757d; color: #fff;">{{ $document->status }}</span>
-                                            @endif
-                                        </td>
-                                    </tr>
+                            
+                            <!-- Informasi Dokumen dengan label rata kanan dan nilai rata kiri -->
+                            <div style="font-size: 8pt; line-height: 1.2; text-align: left; display: inline-block; margin-left: auto;">
+                                <table style="border: none; border-collapse: collapse; width: auto; margin-left: auto;">
+                                    <tbody>
+                                        <tr>
+                                            <td style="text-align: right; font-weight: bold; padding-right: 8px; white-space: nowrap; vertical-align: top;">
+                                                Plant Request:
+                                            </td>
+                                            <td style="text-align: left; white-space: nowrap; vertical-align: top;">
+                                                {{ $document->plant }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="text-align: right; font-weight: bold; padding-right: 8px; white-space: nowrap; vertical-align: top;">
+                                                Plant Supply:
+                                            </td>
+                                            <td style="text-align: left; white-space: nowrap; vertical-align: top;">
+                                                @if(!empty($document->sloc_supply) && $document->sloc_supply !== '-' && $document->sloc_supply !== 'null' && $document->sloc_supply !== 'NULL')
+                                                    {{ strtoupper($document->sloc_supply) }}
+                                                @else
+                                                    <span style="font-style: italic; color: #6c757d;">Not set</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="text-align: right; font-weight: bold; padding-right: 8px; white-space: nowrap; vertical-align: top;">
+                                                Date:
+                                            </td>
+                                            <td style="text-align: left; white-space: nowrap; vertical-align: top;">
+                                                {{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y') }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="text-align: right; font-weight: bold; padding-right: 8px; white-space: nowrap; vertical-align: top;">
+                                                Status:
+                                            </td>
+                                            <td style="text-align: left; white-space: nowrap; vertical-align: top;">
+                                                @if($document->status == 'booked')
+                                                    <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #ffc107; color: #000;">Booked</span>
+                                                @elseif($document->status == 'partial')
+                                                    <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #0dcaf0; color: #000;">Partial</span>
+                                                @elseif($document->status == 'closed')
+                                                    <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #198754; color: #fff;">Closed</span>
+                                                @elseif($document->status == 'cancelled')
+                                                    <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #dc3545; color: #fff;">Cancelled</span>
+                                                @else
+                                                    <span class="badge" style="font-size: 7pt; padding: 1px 4px; background-color: #6c757d; color: #fff;">{{ $document->status }}</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    </tbody>
                                 </table>
                             </div>
                         </div>

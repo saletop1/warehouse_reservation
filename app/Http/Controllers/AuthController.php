@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
+use Illuminate\Auth\Events\PasswordReset;
 use App\Models\User;
 
 class AuthController extends Controller
@@ -114,70 +117,11 @@ class AuthController extends Controller
      *
      * @return \Illuminate\View\View
      */
-
     public function showRegistrationForm()
     {
         return view('auth.register');
     }
 
-    // Add these methods to AuthController
-
-    /**
-     * Show forgot password form
-     */
-    public function showForgotPasswordForm()
-    {
-        return view('auth.forgot-password');
-    }
-
-    /**
-     * Send reset link email
-     */
-    public function sendResetLinkEmail(Request $request)
-    {
-        // Implementation for sending reset link
-        // You can use Laravel's built-in functionality
-    }
-
-    /**
-     * Show reset password form
-     */
-    public function showResetPasswordForm(Request $request, $token = null)
-    {
-        return view('auth.reset-password', ['token' => $token, 'email' => $request->email]);
-    }
-
-    /**
-     * Reset password
-     */
-    public function resetPassword(Request $request)
-    {
-        // Implementation for resetting password
-    }
-
-    /**
-     * Show email verification notice
-     */
-    public function showVerifyEmail()
-    {
-        return view('auth.verify-email');
-    }
-
-    /**
-     * Verify email
-     */
-    public function verifyEmail(Request $request)
-    {
-        // Implementation for email verification
-    }
-
-    /**
-     * Send verification email
-     */
-    public function sendVerificationEmail(Request $request)
-    {
-        // Implementation for sending verification email
-    }
     /**
      * Handle a registration request for the application (optional feature).
      *
@@ -220,5 +164,137 @@ class AuthController extends Controller
 
         return redirect('/dashboard')
             ->with('success', 'Registration successful! Welcome to the system.');
+    }
+
+    /**
+     * Show forgot password form
+     */
+    public function showForgotPasswordForm()
+    {
+        // LANGKAH PENTING: Coba cek view mana yang tersedia
+        if (view()->exists('auth.forgot-password')) {
+            return view('auth.forgot-password');
+        } elseif (view()->exists('auth.email')) {
+            return view('auth.email');
+        } else {
+            // Fallback: tampilkan form sederhana
+            return view('auth.passwords.email'); // Coba format Laravel default
+        }
+    }
+
+    /**
+     * Send reset link email
+     */
+    public function sendResetLinkEmail(Request $request)
+    {
+        // Validasi
+        $request->validate([
+            'email' => 'required|email|exists:users,email'
+        ]);
+        
+        // Kirim reset link
+        $status = Password::sendResetLink(
+            $request->only('email')
+        );
+        
+        return $status === Password::RESET_LINK_SENT
+            ? back()->with(['status' => __($status)])
+            : back()->withErrors(['email' => __($status)]);
+    }
+
+    /**
+     * Show reset password form
+     */
+    public function showResetPasswordForm(Request $request, $token = null)
+    {
+        return view('auth.reset', [
+            'token' => $token,
+            'email' => $request->email
+        ]);
+    }
+
+    /**
+     * Reset password
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'token' => 'required',
+            'email' => 'required|email',
+            'password' => 'required|confirmed|min:8',
+        ]);
+        
+        $status = Password::reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function ($user, $password) {
+                $user->forceFill([
+                    'password' => Hash::make($password)
+                ])->setRememberToken(Str::random(60));
+                
+                $user->save();
+                
+                event(new PasswordReset($user));
+            }
+        );
+        
+        return $status == Password::PASSWORD_RESET
+            ? redirect()->route('login')->with('status', __($status))
+            : back()->withErrors(['email' => [__($status)]]);
+    }
+
+    /**
+     * Show email verification notice
+     */
+    public function showVerifyEmail()
+    {
+        return view('auth.verify');
+    }
+
+    /**
+     * Verify email
+     */
+    public function verifyEmail(Request $request, $id, $hash)
+    {
+        // Get the user by ID
+        $user = User::findOrFail($id);
+        
+        // Check if the hash matches
+        if (!hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
+            abort(403, 'Invalid verification link.');
+        }
+        
+        // Mark email as verified
+        if (!$user->hasVerifiedEmail()) {
+            $user->markEmailAsVerified();
+            
+            Log::info('Email verified', [
+                'user_id' => $user->id,
+                'email' => $user->email
+            ]);
+        }
+        
+        return redirect()->route('dashboard')
+            ->with('success', 'Email verified successfully!');
+    }
+
+    /**
+     * Send verification email
+     */
+    public function sendVerificationEmail(Request $request)
+    {
+        $user = $request->user();
+        
+        if ($user->hasVerifiedEmail()) {
+            return redirect()->route('dashboard');
+        }
+        
+        $user->sendEmailVerificationNotification();
+        
+        Log::info('Verification email sent', [
+            'user_id' => $user->id,
+            'email' => $user->email
+        ]);
+        
+        return back()->with('status', 'Verification link sent!');
     }
 }
