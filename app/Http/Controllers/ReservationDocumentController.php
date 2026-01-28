@@ -572,7 +572,7 @@ class ReservationDocumentController extends Controller
             $item = ReservationDocumentItem::find($itemData['id']);
             if ($item && $item->document_id == $document->id) {
                 $isQtyEditable = true;
-                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'D22', 'GF1', 'CH4', 'D26', 'D28', 'D23', 'DR1', 'DR2', 'WE2', 'GW2'];
+                $allowedMRP = ['PN1', 'PV1', 'PV2', 'CP1', 'CP2', 'EB2', 'UH1', 'D21', 'D22', 'GF1', 'CH4', 'D26', 'D28', 'D23', 'DR1', 'DR2', 'WE2', 'GW2', 'MW1', 'MW2', 'MW3'];
 
                 if ($item->dispo && !in_array($item->dispo, $allowedMRP)) {
                     $isQtyEditable = false;

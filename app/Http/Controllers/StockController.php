@@ -31,15 +31,17 @@ class StockController extends Controller
             $existingStocks = ReservationStock::where('document_no', $documentNo)->count();
 
             if ($existingStocks > 0 && !$request->has('refresh')) {
-                // Return existing data
+                // Return existing data - hanya yang memiliki SLOC (lgort tidak kosong)
                 $stocks = ReservationStock::where('document_no', $documentNo)
+                    ->whereNotNull('lgort') // Hanya yang memiliki SLOC
+                    ->where('lgort', '!=', '') // Pastikan bukan string kosong
                     ->orderBy('matnr')
                     ->orderBy('lgort')
                     ->get();
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Stock data retrieved from cache',
+                    'message' => 'Stock data retrieved from cache (filtered to show only with SLOC)',
                     'document' => $document,
                     'stocks' => $stocks,
                     'total_stocks' => $stocks->count(),
@@ -95,9 +97,19 @@ class StockController extends Controller
                     $stockData = $this->callSAPStockRFC($document->plant, $matnr);
 
                     if (!empty($stockData)) {
-                        $saved = $this->saveStockData($document->document_no, $stockData);
-                        $totalStocks += $saved;
-                        Log::info("Saved $saved stock records for material $matnr");
+                        // Filter data stock: hanya simpan yang memiliki SLOC (LGORT tidak kosong)
+                        $filteredStockData = array_filter($stockData, function($stock) {
+                            return !empty($stock['LGORT']) && trim($stock['LGORT']) !== '';
+                        });
+
+                        if (!empty($filteredStockData)) {
+                            $saved = $this->saveStockData($document->document_no, $filteredStockData);
+                            $totalStocks += $saved;
+                            Log::info("Saved $saved stock records for material $matnr (after SLOC filter)");
+                        } else {
+                            $errors[] = "No stock data with SLOC for material $matnr";
+                            Log::warning("No stock data with SLOC returned for material $matnr");
+                        }
                     } else {
                         $errors[] = "No stock data for material $matnr";
                         Log::warning("No stock data returned for material $matnr");
@@ -115,8 +127,10 @@ class StockController extends Controller
 
             $processingTime = round(microtime(true) - $startTime, 2);
 
-            // Ambil semua data stock yang berhasil disimpan
+            // Ambil semua data stock yang berhasil disimpan (hanya yang memiliki SLOC)
             $stocks = ReservationStock::where('document_no', $document->document_no)
+                ->whereNotNull('lgort') // Hanya yang memiliki SLOC
+                ->where('lgort', '!=', '') // Pastikan bukan string kosong
                 ->orderBy('matnr')
                 ->orderBy('lgort')
                 ->get();
@@ -125,7 +139,7 @@ class StockController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Stock data fetched successfully',
+                'message' => 'Stock data fetched successfully (filtered to show only with SLOC)',
                 'document' => $document,
                 'stocks' => $stocks,
                 'summary' => $summary,
@@ -186,6 +200,11 @@ class StockController extends Controller
 
         foreach ($stockData as $stock) {
             try {
+                // Pastikan LGORT tidak kosong (sudah difilter sebelumnya, tapi double-check)
+                if (empty($stock['LGORT']) || trim($stock['LGORT']) === '') {
+                    continue;
+                }
+
                 // Pastikan CLABS adalah numeric
                 $clabsValue = isset($stock['CLABS']) ? (is_numeric($stock['CLABS']) ? floatval($stock['CLABS']) : 0) : 0;
 
@@ -222,21 +241,26 @@ class StockController extends Controller
      */
     private function generateStockSummary($stocks)
     {
+        // Filter hanya stock yang memiliki SLOC (seharusnya sudah difilter, tapi double-check)
+        $filteredStocks = $stocks->filter(function($stock) {
+            return !empty($stock->lgort) && trim($stock->lgort) !== '';
+        });
+
         // Hitung total_quantity dengan aman
         $totalQuantity = 0;
-        foreach ($stocks as $stock) {
+        foreach ($filteredStocks as $stock) {
             $totalQuantity += is_numeric($stock->clabs) ? floatval($stock->clabs) : 0;
         }
 
         $summary = [
-            'total_materials' => $stocks->groupBy('matnr')->count(),
-            'total_storage_locations' => $stocks->groupBy('lgort')->count(),
+            'total_materials' => $filteredStocks->groupBy('matnr')->count(),
+            'total_storage_locations' => $filteredStocks->groupBy('lgort')->count(),
             'total_quantity' => $totalQuantity,
             'materials' => []
         ];
 
         // Group by material
-        $groupedByMaterial = $stocks->groupBy('matnr');
+        $groupedByMaterial = $filteredStocks->groupBy('matnr');
 
         foreach ($groupedByMaterial as $matnr => $materialStocks) {
             $materialQty = 0;
@@ -295,12 +319,16 @@ class StockController extends Controller
     public function getStockSummary($documentNo)
     {
         try {
-            $stocks = ReservationStock::where('document_no', $documentNo)->get();
+            // Hanya ambil stock yang memiliki SLOC
+            $stocks = ReservationStock::where('document_no', $documentNo)
+                ->whereNotNull('lgort')
+                ->where('lgort', '!=', '')
+                ->get();
 
             if ($stocks->isEmpty()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No stock data found for document'
+                    'message' => 'No stock data with SLOC found for document'
                 ], 404);
             }
 
@@ -359,9 +387,19 @@ class StockController extends Controller
                     $stockData = $this->callSAPStockRFC($plant, $matnr);
 
                     if (!empty($stockData)) {
-                        $saved = $this->saveStockDataForPlant($document->document_no, $plant, $stockData);
-                        $totalStocks += $saved;
-                        Log::info("Saved $saved stock records for material $matnr in plant $plant");
+                        // Filter data stock: hanya simpan yang memiliki SLOC (LGORT tidak kosong)
+                        $filteredStockData = array_filter($stockData, function($stock) {
+                            return !empty($stock['LGORT']) && trim($stock['LGORT']) !== '';
+                        });
+
+                        if (!empty($filteredStockData)) {
+                            $saved = $this->saveStockDataForPlant($document->document_no, $plant, $filteredStockData);
+                            $totalStocks += $saved;
+                            Log::info("Saved $saved stock records for material $matnr in plant $plant (after SLOC filter)");
+                        } else {
+                            $errors[] = "No stock data with SLOC for material $matnr in plant $plant";
+                            Log::warning("No stock data with SLOC returned for material $matnr in plant $plant");
+                        }
                     } else {
                         $errors[] = "No stock data for material $matnr in plant $plant";
                         Log::warning("No stock data returned for material $matnr in plant $plant");
@@ -379,10 +417,10 @@ class StockController extends Controller
 
             if ($totalStocks > 0) {
                 return redirect()->route('documents.show', $document->id)
-                    ->with('success', 'Successfully fetched ' . $totalStocks . ' stock records from SAP for plant ' . $plant);
+                    ->with('success', 'Successfully fetched ' . $totalStocks . ' stock records (with SLOC) from SAP for plant ' . $plant);
             } else {
                 return redirect()->route('documents.show', $document->id)
-                    ->with('error', 'No stock data found for any materials in plant ' . $plant . '. Please check SAP connection.');
+                    ->with('error', 'No stock data with SLOC found for any materials in plant ' . $plant . '. Please check SAP connection.');
             }
 
         } catch (\Exception $e) {
@@ -401,6 +439,11 @@ class StockController extends Controller
 
         foreach ($stockData as $stock) {
             try {
+                // Pastikan LGORT tidak kosong (sudah difilter sebelumnya, tapi double-check)
+                if (empty($stock['LGORT']) || trim($stock['LGORT']) === '') {
+                    continue;
+                }
+
                 // Pastikan CLABS adalah numeric
                 $clabsValue = isset($stock['CLABS']) ? (is_numeric($stock['CLABS']) ? floatval($stock['CLABS']) : 0) : 0;
 
@@ -439,10 +482,15 @@ class StockController extends Controller
     {
         try {
             $document = ReservationDocument::where('document_no', $documentNo)->firstOrFail();
-            $stocks = ReservationStock::where('document_no', $documentNo)->get();
+            
+            // Hanya ambil stock yang memiliki SLOC
+            $stocks = ReservationStock::where('document_no', $documentNo)
+                ->whereNotNull('lgort')
+                ->where('lgort', '!=', '')
+                ->get();
 
             if ($stocks->isEmpty()) {
-                return redirect()->back()->with('error', 'No stock data found for export');
+                return redirect()->back()->with('error', 'No stock data with SLOC found for export');
             }
 
             // Create CSV
