@@ -22,34 +22,44 @@ class ReservationDocumentController extends Controller
     }
 
     public function index(Request $request)
-    {
-        $query = ReservationDocument::withCount(['transfers', 'items']);
+{
+    $query = ReservationDocument::withCount(['transfers', 'items']);
 
-        if ($request->filled('document_no')) {
-            $query->where('document_no', 'like', '%' . $request->document_no . '%');
-        }
+    if ($request->filled('document_no')) {
+        $query->where('document_no', 'like', '%' . $request->document_no . '%');
+    }
 
-        if ($request->filled('plant')) {
-            $query->where('plant', $request->plant);
-        }
+    if ($request->filled('plant')) {
+        $query->where('plant', $request->plant);
+    }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
+    if ($request->filled('status') && $request->status !== 'all') {
+        $query->where('status', $request->status);
+    }
 
-        if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
-        }
+    if ($request->filled('date_from')) {
+        $query->whereDate('created_at', '>=', $request->date_from);
+    }
 
-        if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
-        }
+    if ($request->filled('date_to')) {
+        $query->whereDate('created_at', '<=', $request->date_to);
+    }
 
-        $totalCount = $query->count();
-        $perPage = $request->get('per_page', 20);
-        $documents = $query->orderBy('created_at', 'desc')
-            ->paginate($perPage)
-            ->appends($request->except('page'));
+    // Add search functionality
+    if ($request->filled('search')) {
+        $searchTerm = $request->search;
+        $query->where(function($q) use ($searchTerm) {
+            $q->where('document_no', 'like', '%' . $searchTerm . '%')
+              ->orWhere('remarks', 'like', '%' . $searchTerm . '%')
+              ->orWhere('created_by_name', 'like', '%' . $searchTerm . '%');
+        });
+    }
+
+    $totalCount = $query->count();
+    $perPage = $request->get('per_page', 20);
+    $documents = $query->orderBy('created_at', 'desc')
+        ->paginate($perPage)
+        ->appends($request->except('page'));
 
         // REKALKULASI STATUS UNTUK SEMUA DOKUMEN DI HALAMAN INI
         foreach ($documents as $document) {

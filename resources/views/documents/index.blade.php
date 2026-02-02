@@ -23,6 +23,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
 
+                {{-- Set session flag untuk create page --}}
                 @php
                     session(['accessed_reservations_index' => true]);
                 @endphp
@@ -51,191 +52,247 @@
                     </div>
                     <div class="d-flex flex-column align-items-end">
                         <!-- Search and Filter Controls -->
-                        <div class="d-flex align-items-center mb-2">
+                        <form method="GET" action="{{ route('documents.index') }}" class="d-flex align-items-center mb-2">
                             <!-- Search Box -->
-                            <form id="searchForm" method="GET" action="{{ route('documents.index') }}" class="d-flex align-items-center">
-                                <div class="input-group input-group-sm me-2" style="width: 250px;">
-                                    <span class="input-group-text bg-transparent border-end-0">
-                                        <i class="fas fa-search text-muted"></i>
-                                    </span>
-                                    <input type="text"
-                                           class="form-control border-start-0 ps-0"
-                                           id="liveSearch"
-                                           name="search"
-                                           value="{{ request('search') }}"
-                                           placeholder="Search documents..."
-                                           autocomplete="off">
-                                    @if(request('search'))
-                                        <button type="button" class="btn btn-outline-secondary border-start-0" id="clearSearch">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    @endif
-                                </div>
-
-                                <!-- Status Filter Dropdown -->
-                                <div class="dropdown me-2">
-                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="statusFilterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-filter me-1"></i>
-                                        @if(request('status') && in_array(request('status'), ['booked', 'partial', 'closed', 'cancelled']))
-                                            {{ ucfirst(request('status')) }}
-                                        @else
-                                            All Status
-                                        @endif
-                                    </button>
-                                    <ul class="dropdown-menu" aria-labelledby="statusFilterDropdown">
-                                        <li>
-                                            <a class="dropdown-item status-filter {{ !request('status') || request('status') == 'all' || !in_array(request('status'), ['booked', 'partial', 'closed', 'cancelled']) ? 'active' : '' }}"
-                                               href="#"
-                                               data-status="all">
-                                                All Status
-                                            </a>
-                                        </li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li>
-                                            <a class="dropdown-item status-filter {{ request('status') == 'booked' ? 'active' : '' }}"
-                                               href="#"
-                                               data-status="booked">
-                                                Booked
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item status-filter {{ request('status') == 'partial' ? 'active' : '' }}"
-                                               href="#"
-                                               data-status="partial">
-                                                Partial
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item status-filter {{ request('status') == 'closed' ? 'active' : '' }}"
-                                               href="#"
-                                               data-status="closed">
-                                                Closed
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item status-filter {{ request('status') == 'cancelled' ? 'active' : '' }}"
-                                               href="#"
-                                               data-status="cancelled">
-                                                Cancelled
-                                            </a>
-                                        </li>
-                                    </ul>
-                                    <input type="hidden" name="status" id="statusFilter" value="{{ request('status', 'all') }}">
-                                </div>
-
-                                <!-- Per Page Dropdown -->
-                                <div class="dropdown">
-                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="perPageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-list-ol me-1"></i>
-                                        {{ request('per_page', 50) }} per page
-                                    </button>
-                                    <ul class="dropdown-menu" aria-labelledby="perPageDropdown">
-                                        <li><a class="dropdown-item per-page-filter {{ request('per_page', 50) == 25 ? 'active' : '' }}" href="#" data-perpage="25">25 per page</a></li>
-                                        <li><a class="dropdown-item per-page-filter {{ request('per_page', 50) == 50 ? 'active' : '' }}" href="#" data-perpage="50">50 per page</a></li>
-                                        <li><a class="dropdown-item per-page-filter {{ request('per_page', 50) == 100 ? 'active' : '' }}" href="#" data-perpage="100">100 per page</a></li>
-                                        <li><a class="dropdown-item per-page-filter {{ request('per_page', 50) == 200 ? 'active' : '' }}" href="#" data-perpage="200">200 per page</a></li>
-                                    </ul>
-                                    <input type="hidden" name="per_page" id="perPageFilter" value="{{ request('per_page', 50) }}">
-                                </div>
-
-                                <!-- Hidden submit button for form -->
-                                <button type="submit" class="d-none" id="formSubmit"></button>
-                            </form>
-                        </div>
+                            <div class="input-group input-group-sm me-2" style="width: 250px;">
+                                <span class="input-group-text bg-transparent border-end-0">
+                                    <i class="fas fa-search text-muted"></i>
+                                </span>
+                                <input type="text"
+                                       class="form-control border-start-0 ps-0"
+                                       name="search"
+                                       placeholder="Search documents..."
+                                       value="{{ request('search') }}">
+                                @if(request('search'))
+                                    <a href="{{ route('documents.index', request()->except(['search', 'page'])) }}" 
+                                       class="input-group-text text-danger">
+                                        <i class="fas fa-times"></i>
+                                    </a>
+                                @endif
+                            </div>
+                            <!-- Status Filter Dropdown -->
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="statusFilterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-filter me-1"></i> 
+                                    {{ request('status', 'all') == 'all' ? 'Status' : ucfirst(request('status')) }}
+                                </button>
+                                <ul class="dropdown-menu" aria-labelledby="statusFilterDropdown">
+                                    <li><a class="dropdown-item {{ !request('status') || request('status') == 'all' ? 'active' : '' }}" 
+                                           href="{{ route('documents.index', array_merge(request()->except(['status', 'page']), ['status' => 'all'])) }}">
+                                        All Status</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item {{ request('status') == 'booked' ? 'active' : '' }}" 
+                                           href="{{ route('documents.index', array_merge(request()->except(['status', 'page']), ['status' => 'booked'])) }}">
+                                        Booked</a></li>
+                                    <li><a class="dropdown-item {{ request('status') == 'partial' ? 'active' : '' }}" 
+                                           href="{{ route('documents.index', array_merge(request()->except(['status', 'page']), ['status' => 'partial'])) }}">
+                                        Partial</a></li>
+                                    <li><a class="dropdown-item {{ request('status') == 'closed' ? 'active' : '' }}" 
+                                           href="{{ route('documents.index', array_merge(request()->except(['status', 'page']), ['status' => 'closed'])) }}">
+                                        Closed</a></li>
+                                    <li><a class="dropdown-item {{ request('status') == 'cancelled' ? 'active' : '' }}" 
+                                           href="{{ route('documents.index', array_merge(request()->except(['status', 'page']), ['status' => 'cancelled'])) }}">
+                                        Cancelled</a></li>
+                                </ul>
+                            </div>
+                            @foreach(request()->except(['search', 'status', 'page']) as $key => $value)
+                                <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                            @endforeach
+                        </form>
                         <!-- Document Counter -->
                         <div class="text-muted small" id="documentCounter">
                             <i class="fas fa-file-alt me-1"></i>
-                            Showing {{ $documents->firstItem() ?? 0 }}-{{ $documents->lastItem() ?? 0 }} of {{ $documents->total() }} documents
-                            @if(request('search'))
-                                <span class="text-primary ms-2">
-                                    <i class="fas fa-search me-1"></i>Search: "{{ request('search') }}"
-                                </span>
-                            @endif
-                            @if(request('status') && in_array(request('status'), ['booked', 'partial', 'closed', 'cancelled']))
-                                <span class="text-info ms-2">
-                                    <i class="fas fa-filter me-1"></i>Status: {{ ucfirst(request('status')) }}
-                                </span>
+                            @if($documents instanceof \Illuminate\Pagination\LengthAwarePaginator)
+                                <span id="visibleCount">Showing {{ $documents->firstItem() }} to {{ $documents->lastItem() }}</span> of {{ $documents->total() }} documents
+                            @else
+                                <span id="visibleCount">{{ $documents->count() }}</span> of {{ $documents->count() }} documents
                             @endif
                         </div>
                     </div>
                 </div>
 
                 <div class="card-body p-0 position-relative">
-                    <div class="table-responsive">
+                    <div class="table-container">
                         <table class="table table-hover mb-0" id="documentsTable">
-                            <thead class="table-light">
+                            <thead class="table-light sticky-header">
                                 <tr>
-                                    <th class="ps-4">
-                                        <a href="{{ request()->fullUrlWithQuery(['sort' => 'document_no', 'direction' => request('direction') == 'asc' ? 'desc' : 'asc']) }}" class="text-decoration-none text-dark">
-                                            Document No
-                                            @if(request('sort') == 'document_no')
-                                                <i class="fas fa-sort-{{ request('direction', 'asc') == 'asc' ? 'up' : 'down' }} ms-1"></i>
-                                            @else
-                                                <i class="fas fa-sort ms-1 text-muted"></i>
-                                            @endif
-                                        </a>
-                                    </th>
-                                    <th>
-                                        <a href="{{ request()->fullUrlWithQuery(['sort' => 'plant', 'direction' => request('direction') == 'asc' ? 'desc' : 'asc']) }}" class="text-decoration-none text-dark">
-                                            Plant
-                                            @if(request('sort') == 'plant')
-                                                <i class="fas fa-sort-{{ request('direction', 'asc') == 'asc' ? 'up' : 'down' }} ms-1"></i>
-                                            @else
-                                                <i class="fas fa-sort ms-1 text-muted"></i>
-                                            @endif
-                                        </a>
-                                    </th>
-                                    <th>
-                                        <a href="{{ request()->fullUrlWithQuery(['sort' => 'status', 'direction' => request('direction') == 'asc' ? 'desc' : 'asc']) }}" class="text-decoration-none text-dark">
-                                            Status
-                                            @if(request('sort') == 'status')
-                                                <i class="fas fa-sort-{{ request('direction', 'asc') == 'asc' ? 'up' : 'down' }} ms-1"></i>
-                                            @else
-                                                <i class="fas fa-sort ms-1 text-muted"></i>
-                                            @endif
-                                        </a>
-                                    </th>
-                                    <th>
-                                        <a href="{{ request()->fullUrlWithQuery(['sort' => 'completion_rate', 'direction' => request('direction') == 'asc' ? 'desc' : 'asc']) }}" class="text-decoration-none text-dark">
-                                            Completion
-                                            @if(request('sort') == 'completion_rate')
-                                                <i class="fas fa-sort-{{ request('direction', 'asc') == 'asc' ? 'up' : 'down' }} ms-1"></i>
-                                            @else
-                                                <i class="fas fa-sort ms-1 text-muted"></i>
-                                            @endif
-                                        </a>
-                                    </th>
+                                    <th class="ps-4">Document No</th>
+                                    <th>Plant Request</th>
+                                    <th>Plant Supply</th>
+                                    <th>Status</th>
+                                    <th>Completion</th>
                                     <th>Remarks</th>
-                                    <th>
-                                        <a href="{{ request()->fullUrlWithQuery(['sort' => 'created_by_name', 'direction' => request('direction') == 'asc' ? 'desc' : 'asc']) }}" class="text-decoration-none text-dark">
-                                            Created By
-                                            @if(request('sort') == 'created_by_name')
-                                                <i class="fas fa-sort-{{ request('direction', 'asc') == 'asc' ? 'up' : 'down' }} ms-1"></i>
-                                            @else
-                                                <i class="fas fa-sort ms-1 text-muted"></i>
-                                            @endif
-                                        </a>
-                                    </th>
-                                    <th class="pe-4">
-                                        <a href="{{ request()->fullUrlWithQuery(['sort' => 'created_at', 'direction' => request('direction') == 'asc' ? 'desc' : 'asc']) }}" class="text-decoration-none text-dark">
-                                            Created At
-                                            @if(request('sort') == 'created_at')
-                                                <i class="fas fa-sort-{{ request('direction', 'asc') == 'asc' ? 'up' : 'down' }} ms-1"></i>
-                                            @else
-                                                <i class="fas fa-sort ms-1 text-muted"></i>
-                                            @endif
-                                        </a>
-                                    </th>
+                                    <th>Created By</th>
+                                    <th class="pe-4">Created At</th>
                                 </tr>
                             </thead>
-                            <tbody id="documentsTableBody">
-                                @include('documents.partials.table', ['documents' => $documents])
+                            <tbody>
+                                @forelse($documents as $document)
+                                    <tr class="align-middle document-row" data-status="{{ $document->status }}">
+                                        <td class="ps-4">
+                                            <a href="{{ route('documents.show', $document->id) }}"
+                                               class="document-link {{ $document->plant == '3000' ? 'text-primary' : 'text-success' }} fw-bold d-flex align-items-center">
+                                                <div class="document-icon me-2">
+                                                    <i class="fas fa-file-alt"></i>
+                                                </div>
+                                                <div class="document-info">
+                                                    <div class="fw-bold">{{ $document->document_no }}</div>
+                                                    <small class="text-muted d-block">ID: {{ $document->id }}</small>
+                                                </div>
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <div class="plant-badge d-flex align-items-center">
+                                                <div class="plant-indicator me-2
+                                                    {{ $document->plant == '3000' ? 'bg-primary' : 'bg-success' }}"></div>
+                                                <span class="fw-medium">{{ $document->plant }}</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if($document->sloc_supply)
+                                                <div class="plant-badge d-flex align-items-center">
+                                                    <div class="plant-indicator me-2
+                                                        {{ $document->sloc_supply == '3000' ? 'bg-primary' : 'bg-success' }}"></div>
+                                                    <span class="fw-medium">{{ $document->sloc_supply }}</span>
+                                                </div>
+                                            @else
+                                                <span class="text-muted">
+                                                    <i class="fas fa-warehouse me-1"></i>
+                                                    Not set
+                                                </span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <div class="status-container">
+                                                @if($document->status == 'booked')
+                                                    <span class="badge status-badge booked">
+                                                        <i class="fas fa-clock me-1"></i> Booked
+                                                    </span>
+                                                @elseif($document->status == 'partial')
+                                                    <span class="badge status-badge partial">
+                                                        <i class="fas fa-sync-alt me-1"></i> Partial
+                                                    </span>
+                                                @elseif($document->status == 'closed')
+                                                    <span class="badge status-badge closed">
+                                                        <i class="fas fa-check-circle me-1"></i> Closed
+                                                    </span>
+                                                @else
+                                                    <span class="badge status-badge cancelled">
+                                                        <i class="fas fa-times-circle me-1"></i> Cancelled
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="completion-container">
+                                                @php
+                                                    $completionRate = $document->completion_rate ?? 0;
+                                                    $color = $completionRate == 100 ? 'success' :
+                                                             ($completionRate > 0 ? 'info' : 'secondary');
+                                                    $icon = $completionRate == 100 ? 'fa-check-circle' :
+                                                           ($completionRate > 50 ? 'fa-spinner' : 'fa-hourglass-start');
+                                                @endphp
+                                                <div class="d-flex align-items-center">
+                                                    <div class="completion-chart me-3">
+                                                        <div class="chart-circle" data-percent="{{ $completionRate }}">
+                                                            <svg class="chart-svg" width="40" height="40" viewBox="0 0 40 40">
+                                                                <circle class="chart-bg" cx="20" cy="20" r="18"></circle>
+                                                                <circle class="chart-progress chart-{{ $color }}"
+                                                                        cx="20" cy="20" r="18"
+                                                                        style="stroke-dasharray: {{ $completionRate * 1.13 }} 113;"></circle>
+                                                                <text class="chart-text" x="20" y="23" text-anchor="middle">
+                                                                    {{ round($completionRate) }}%
+                                                                </text>
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+                                                    <div class="completion-text">
+                                                        <div class="fw-medium">{{ round($completionRate, 1) }}% Complete</div>
+                                                        @if($completionRate == 100)
+                                                            <small class="text-success">Fully Completed</small>
+                                                        @elseif($completionRate > 0)
+                                                            <small class="text-info">In Progress</small>
+                                                        @else
+                                                            <small class="text-secondary">Not Started</small>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="remarks-container">
+                                                @if($document->remarks && trim($document->remarks) != '')
+                                                    <div class="remarks-text"
+                                                         data-bs-toggle="tooltip"
+                                                         title="{{ $document->remarks }}">
+                                                        <i class="fas fa-comment me-2 text-muted"></i>
+                                                        {{ Str::limit($document->remarks, 40) }}
+                                                    </div>
+                                                @else
+                                                    <span class="text-muted">
+                                                        <i class="fas fa-comment-slash me-2"></i>
+                                                        No remarks
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="creator-info">
+                                                <div class="fw-medium">{{ $document->created_by_name }}</div>
+                                                <small class="text-muted">Creator</small>
+                                            </div>
+                                        </td>
+                                        <td class="pe-4">
+                                            <div class="timestamp">
+                                                <div class="date">{{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('d/m/Y') }}</div>
+                                                <div class="time text-muted">
+                                                    {{ \Carbon\Carbon::parse($document->created_at)->setTimezone('Asia/Jakarta')->format('H:i') }} WIB
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted py-5">
+                                            <div class="empty-state">
+                                                <i class="fas fa-file-alt fa-4x mb-4 text-light"></i>
+                                                <h4 class="mb-2">No documents found</h4>
+                                                <p class="text-muted">Start by creating your first reservation document</p>
+                                                <button class="btn btn-primary mt-3">
+                                                    <i class="fas fa-plus me-2"></i>Create Document
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforelse
                             </tbody>
+                            
+                            {{-- Pagination Footer --}}
+                            @if($documents instanceof \Illuminate\Pagination\LengthAwarePaginator && $documents->hasPages())
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="8" class="bg-light border-0">
+                                            <div class="d-flex justify-content-between align-items-center px-3 py-3">
+                                                <div class="text-muted small">
+                                                    Showing {{ $documents->firstItem() }} to {{ $documents->lastItem() }} 
+                                                    of {{ $documents->total() }} documents
+                                                </div>
+                                                <div>
+                                                    {{ $documents->onEachSide(1)->links('pagination::bootstrap-5') }}
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            @endif
                         </table>
                     </div>
 
-                    <div id="paginationContainer">
-                        @include('documents.partials.pagination', ['documents' => $documents])
+                    {{-- Empty search results message --}}
+                    <div id="noResults" class="d-none text-center py-5">
+                        <i class="fas fa-search fa-4x mb-4 text-muted"></i>
+                        <h4 class="text-muted">No matching documents</h4>
+                        <p class="text-muted">Try adjusting your search terms</p>
                     </div>
                 </div>
             </div>
@@ -244,9 +301,18 @@
 </div>
 
 <style>
-    .table-responsive {
+    .table-container {
         max-height: 70vh;
         overflow-y: auto;
+        position: relative;
+    }
+
+    .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
 
     .document-row:hover {
@@ -320,12 +386,6 @@
         background-color: rgba(220, 53, 69, 0.1);
         color: #dc3545;
         border: 1px solid rgba(220, 53, 69, 0.2);
-    }
-
-    .status-badge.secondary {
-        background-color: rgba(108, 117, 125, 0.1);
-        color: #6c757d;
-        border: 1px solid rgba(108, 117, 125, 0.2);
     }
 
     .completion-chart {
@@ -404,6 +464,16 @@
         padding: 40px 0;
     }
 
+    #noResults {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 5;
+        background: white;
+        width: 100%;
+    }
+
     th {
         font-weight: 600;
         font-size: 0.85rem;
@@ -413,10 +483,6 @@
         padding-top: 16px !important;
         padding-bottom: 16px !important;
         border-bottom: 2px solid #e9ecef !important;
-        position: sticky;
-        top: 0;
-        background-color: white;
-        z-index: 10;
     }
 
     td {
@@ -430,26 +496,106 @@
         color: white;
     }
 
+    /* Pagination Styles */
+    .pagination {
+        margin-bottom: 0;
+        flex-wrap: wrap;
+    }
+
+    .page-item:first-child .page-link,
+    .page-item:last-child .page-link {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
     .page-link {
+        border: 1px solid #dee2e6;
         color: #0d6efd;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        min-width: 32px;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 32px;
     }
 
     .page-item.active .page-link {
         background-color: #0d6efd;
         border-color: #0d6efd;
+        color: white;
+        font-weight: 600;
     }
 
-    .loading-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(255, 255, 255, 0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
+    .page-item.disabled .page-link {
+        color: #6c757d;
+        pointer-events: none;
+        opacity: 0.6;
+    }
+
+    .page-link:hover {
+        background-color: #e9ecef;
+        border-color: #dee2e6;
+        color: #0a58ca;
+    }
+
+    /* Pagination container */
+    .pagination-container {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .pagination-container .pagination {
+        padding: 0;
+        margin: 0;
+    }
+
+    /* Responsive for mobile */
+    @media (max-width: 768px) {
+        .page-link {
+            padding: 0.15rem 0.3rem;
+            font-size: 0.7rem;
+            min-width: 28px;
+            height: 28px;
+        }
+        
+        .pagination {
+            justify-content: center !important;
+        }
+        
+        .table-container {
+            max-height: 60vh;
+        }
+        
+        th, td {
+            font-size: 0.8rem;
+        }
+        
+        .plant-badge {
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 4px 8px;
+        }
+        
+        .plant-indicator {
+            margin-bottom: 2px;
+        }
+    }
+
+    /* Dark mode adjustments */
+    @media (prefers-color-scheme: dark) {
+        .page-link {
+            background-color: #2b3035;
+            border-color: #495057;
+            color: #adb5bd;
+        }
+        
+        .page-item.active .page-link {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            color: white;
+        }
     }
 </style>
 
@@ -461,234 +607,48 @@ document.addEventListener('DOMContentLoaded', function() {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 
-    // Elements
-    const searchForm = document.getElementById('searchForm');
-    const liveSearch = document.getElementById('liveSearch');
-    const statusFilter = document.getElementById('statusFilter');
-    const perPageFilter = document.getElementById('perPageFilter');
-    const clearSearchBtn = document.getElementById('clearSearch');
-    const statusFilterItems = document.querySelectorAll('.status-filter');
-    const perPageItems = document.querySelectorAll('.per-page-filter');
-    const statusFilterButton = document.getElementById('statusFilterDropdown');
-    const perPageButton = document.getElementById('perPageDropdown');
-
-    // Debounce function untuk delay search
-    let searchTimeout;
-    let isSearching = false;
-
-    // Clear search button
-    if (clearSearchBtn) {
-        clearSearchBtn.addEventListener('click', function() {
-            liveSearch.value = '';
-            submitForm();
+    // Add hover effects to table rows
+    document.querySelectorAll('.document-row').forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
         });
-    }
 
-    // Status filter event
-    statusFilterItems.forEach(item => {
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-
-            // Update active state
-            statusFilterItems.forEach(i => i.classList.remove('active'));
-            this.classList.add('active');
-
-            // Update filter value
-            const statusValue = this.getAttribute('data-status');
-            statusFilter.value = statusValue;
-
-            // Update button text
-            const filterText = this.textContent;
-            statusFilterButton.innerHTML = `<i class="fas fa-filter me-1"></i> ${filterText}`;
-
-            submitForm();
+        row.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
         });
     });
 
-    // Per page filter event
-    perPageItems.forEach(item => {
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-
-            // Update active state
-            perPageItems.forEach(i => i.classList.remove('active'));
-            this.classList.add('active');
-
-            // Update filter value
-            const perPageValue = this.getAttribute('data-perpage');
-            perPageFilter.value = perPageValue;
-
-            // Update button text
-            perPageButton.innerHTML = `<i class="fas fa-list-ol me-1"></i> ${perPageValue} per page`;
-
-            submitForm();
-        });
-    });
-
-    // Live search dengan debounce
-    liveSearch.addEventListener('input', function() {
-        clearTimeout(searchTimeout);
-
-        // Show/hide clear button
-        if (this.value.trim() !== '') {
-            if (!clearSearchBtn) {
-                const clearBtn = document.createElement('button');
-                clearBtn.type = 'button';
-                clearBtn.className = 'btn btn-outline-secondary border-start-0';
-                clearBtn.id = 'clearSearch';
-                clearBtn.innerHTML = '<i class="fas fa-times"></i>';
-                clearBtn.addEventListener('click', function() {
-                    liveSearch.value = '';
-                    submitForm();
-                });
-                liveSearch.parentNode.appendChild(clearBtn);
-            }
-        } else if (clearSearchBtn) {
-            clearSearchBtn.remove();
-        }
-
-        // Debounce search untuk mengurangi request ke server
-        searchTimeout = setTimeout(() => {
-            submitForm();
-        }, 500); // 500ms delay
-    });
-
-    // Submit form function
-    function submitForm() {
-        // Show loading indicator
-        showLoading();
-
-        // Build URL with all parameters
-        const url = new URL(searchForm.action);
-        const params = new URLSearchParams();
-
-        params.append('search', liveSearch.value);
-        params.append('status', statusFilter.value);
-        params.append('per_page', perPageFilter.value);
-        params.append('sort', '{{ request("sort", "created_at") }}');
-        params.append('direction', '{{ request("direction", "desc") }}');
-        params.append('page', 1); // Reset to page 1 when filtering
-
-        url.search = params.toString();
-
-        // AJAX request untuk server-side search
-        fetch(url, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                // Update table body
-                if (data.table) {
-                    document.getElementById('documentsTableBody').innerHTML = data.table;
+    // Auto submit form on Enter key in search box
+    const searchInput = document.querySelector('input[name="search"]');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                // Remove page parameter when searching to go back to page 1
+                const form = this.closest('form');
+                const pageInput = form.querySelector('input[name="page"]');
+                if (pageInput) {
+                    pageInput.remove();
                 }
-
-                // Update pagination
-                if (data.pagination) {
-                    document.getElementById('paginationContainer').innerHTML = data.pagination;
-                } else {
-                    document.getElementById('paginationContainer').innerHTML = '';
-                }
-
-                // Update document counter
-                if (data.counter) {
-                    document.getElementById('documentCounter').innerHTML = data.counter;
-                }
-
-                // Update URL without page reload
-                window.history.pushState({}, '', url);
-
-                // Reinitialize tooltips
-                tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-                tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                    return new bootstrap.Tooltip(tooltipTriggerEl);
-                });
-
-                // Hide loading indicator
-                hideLoading();
-            } else {
-                throw new Error('Server returned error');
+                form.submit();
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            hideLoading();
-            // Fallback to normal form submission
-            searchForm.submit();
         });
     }
 
-    // Loading indicator functions
-    function showLoading() {
-        if (isSearching) return;
-
-        isSearching = true;
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'loading-overlay';
-        loadingDiv.innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <p class="mt-2 text-muted">Searching...</p>
-            </div>
-        `;
-        document.querySelector('.card-body').style.position = 'relative';
-        document.querySelector('.card-body').appendChild(loadingDiv);
-    }
-
-    function hideLoading() {
-        isSearching = false;
-        const loadingOverlay = document.querySelector('.loading-overlay');
-        if (loadingOverlay) {
-            loadingOverlay.remove();
-        }
-    }
-
-    // Handle browser back/forward buttons
-    window.addEventListener('popstate', function() {
-        location.reload();
-    });
-
-    // Click event untuk pagination links (menangani AJAX)
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.page-link') && !e.target.closest('.page-item.disabled')) {
-            e.preventDefault();
-            const pageUrl = e.target.closest('.page-link').href;
-            if (pageUrl) {
-                showLoading();
-                fetch(pageUrl + '&ajax=1', {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('documentsTableBody').innerHTML = data.table;
-                        document.getElementById('paginationContainer').innerHTML = data.pagination;
-                        document.getElementById('documentCounter').innerHTML = data.counter;
-                        window.history.pushState({}, '', pageUrl);
-                        hideLoading();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    hideLoading();
-                    window.location.href = pageUrl;
-                });
+    // Animate completion charts on scroll
+    function animateChartsOnScroll() {
+        const charts = document.querySelectorAll('.chart-circle');
+        charts.forEach(chart => {
+            const rect = chart.getBoundingClientRect();
+            if (rect.top < window.innerHeight - 100) {
+                chart.classList.add('animated');
             }
-        }
-    });
+        });
+    }
+
+    window.addEventListener('scroll', animateChartsOnScroll);
+    animateChartsOnScroll(); // Initial check
 });
 </script>
 @endsection
