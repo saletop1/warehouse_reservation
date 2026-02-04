@@ -359,33 +359,23 @@
                         $hasZeinr = false;
                         $hasMrpComp = false;
 
-                        // Check each item for data
+                        // Check each item for data - PERBAIKAN: ambil langsung dari field di tabel
                         foreach ($items as $item) {
-                            // Decode pro_details to check for data
-                            $proDetails = [];
-                            if (is_string($item->pro_details)) {
-                                $proDetails = json_decode($item->pro_details, true) ?? [];
-                            } elseif (is_array($item->pro_details)) {
-                                $proDetails = $item->pro_details;
+                            // Check for data in direct fields (not from pro_details)
+                            if (!empty($item->sortf) && $item->sortf != '-' && $item->sortf != 'null' && !$hasAddInfo) {
+                                $hasAddInfo = true;
+                            }
+                            if (!empty($item->groes) && $item->groes != '-' && $item->groes != 'null' && !$hasGroes) {
+                                $hasGroes = true;
+                            }
+                            if (!empty($item->ferth) && $item->ferth != '-' && $item->ferth != 'null' && !$hasFerth) {
+                                $hasFerth = true;
+                            }
+                            if (!empty($item->zeinr) && $item->zeinr != '-' && $item->zeinr != 'null' && !$hasZeinr) {
+                                $hasZeinr = true;
                             }
 
-                            // Check for data in pro_details for other columns
-                            foreach ($proDetails as $proDetail) {
-                                if (!empty($proDetail['sortf']) && $proDetail['sortf'] != '-' && !$hasAddInfo) {
-                                    $hasAddInfo = true;
-                                }
-                                if (!empty($proDetail['groes']) && $proDetail['groes'] != '-' && !$hasGroes) {
-                                    $hasGroes = true;
-                                }
-                                if (!empty($proDetail['ferth']) && $proDetail['ferth'] != '-' && !$hasFerth) {
-                                    $hasFerth = true;
-                                }
-                                if (!empty($proDetail['zeinr']) && $proDetail['zeinr'] != '-' && !$hasZeinr) {
-                                    $hasZeinr = true;
-                                }
-                            }
-
-                            // Check for MRP COMP from dispc column in reservation_document_items
+                            // Check for MRP COMP from dispc column
                             if (!empty($item->dispc) && $item->dispc != '-' && $item->dispc != 'null' && $item->dispc != '0' && !$hasMrpComp) {
                                 $hasMrpComp = true;
                             }
@@ -449,51 +439,36 @@
                                         $salesOrders = $item->sales_orders;
                                     }
 
-                                    // Ambil data dari pro_details jika ada (untuk kolom lainnya)
-                                    $addInfo = '-';
-                                    $groes = '-';
-                                    $ferth = '-';
-                                    $zeinr = '-';
-
-                                    // Decode pro_details JSON
-                                    $proDetails = [];
-                                    if (is_string($item->pro_details)) {
-                                        $proDetails = json_decode($item->pro_details, true) ?? [];
-                                    } elseif (is_array($item->pro_details)) {
-                                        $proDetails = $item->pro_details;
-                                    }
-
-                                    // Ambil data dari pro_details pertama yang ada data
-                                    foreach ($proDetails as $proDetail) {
-                                        if (!empty($proDetail['sortf']) && $proDetail['sortf'] != '-' && $proDetail['sortf'] != 'null' && $proDetail['sortf'] != '0') {
-                                            $addInfo = $proDetail['sortf'];
-                                            break;
+                                    // AMBIL SOURCES (PRO NUMBERS) DENGAN CARA YANG SAMA SEPERTI DI PRINT.BLADE.PHP
+                                    $sources = [];
+                                    if (isset($item->sources) && !empty($item->sources)) {
+                                        if (is_string($item->sources)) {
+                                            $decoded = json_decode($item->sources, true);
+                                            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                                                $sources = $decoded;
+                                            } elseif (!empty($item->sources)) {
+                                                $sources = array_map('trim', explode(',', $item->sources));
+                                            }
+                                        } elseif (is_array($item->sources)) {
+                                            $sources = $item->sources;
                                         }
                                     }
 
-                                    foreach ($proDetails as $proDetail) {
-                                        if (!empty($proDetail['groes']) && $proDetail['groes'] != '-' && $proDetail['groes'] != 'null' && $proDetail['groes'] != '0') {
-                                            $groes = $proDetail['groes'];
-                                            break;
-                                        }
-                                    }
+                                    $addInfo = (!empty($item->sortf) && $item->sortf != '-' && $item->sortf != 'null' && $item->sortf != '0')
+                                                ? $item->sortf : '-';
 
-                                    foreach ($proDetails as $proDetail) {
-                                        if (!empty($proDetail['ferth']) && $proDetail['ferth'] != '-' && $proDetail['ferth'] != 'null' && $proDetail['ferth'] != '0') {
-                                            $ferth = $proDetail['ferth'];
-                                            break;
-                                        }
-                                    }
+                                    $groes = (!empty($item->groes) && $item->groes != '-' && $item->groes != 'null' && $item->groes != '0')
+                                                ? $item->groes : '-';
 
-                                    foreach ($proDetails as $proDetail) {
-                                        if (!empty($proDetail['zeinr']) && $proDetail['zeinr'] != '-' && $proDetail['zeinr'] != 'null' && $proDetail['zeinr'] != '0') {
-                                            $zeinr = $proDetail['zeinr'];
-                                            break;
-                                        }
-                                    }
+                                    $ferth = (!empty($item->ferth) && $item->ferth != '-' && $item->ferth != 'null' && $item->ferth != '0')
+                                                ? $item->ferth : '-';
+
+                                    $zeinr = (!empty($item->zeinr) && $item->zeinr != '-' && $item->zeinr != 'null' && $item->zeinr != '0')
+                                                ? $item->zeinr : '-';
 
                                     // Ambil data MRP COMP langsung dari kolom dispc di tabel reservation_document_items
-                                    $mrpComp = (!empty($item->dispc) && $item->dispc != '-' && $item->dispc != 'null' && $item->dispc != '0') ? $item->dispc : '-';
+                                    $mrpComp = (!empty($item->dispc) && $item->dispc != '-' && $item->dispc != 'null' && $item->dispc != '0')
+                                                ? $item->dispc : '-';
                                 @endphp
                                 <tr>
                                     <td style="font-size: 8pt;">{{ $index + 1 }}</td>
@@ -513,9 +488,10 @@
                                             <span style="font-size: 8pt; color: #6c757d;">-</span>
                                         @endif
                                     </td>
+                                    <!-- PERBAIKAN KOLOM PRO NUMBERS DI SINI - SAMA DENGAN PRINT.BLADE.PHP -->
                                     <td style="font-size: 8pt;">
-                                        @if(!empty($item->processed_sources))
-                                            @foreach($item->processed_sources as $source)
+                                        @if(!empty($sources))
+                                            @foreach($sources as $source)
                                                 <span class="badge bg-light text-dark border compact-badge">{{ $source }}</span>
                                             @endforeach
                                         @else
@@ -630,7 +606,10 @@
             };
 
             // Tambahkan event listener untuk tombol close
-            document.querySelector('.btn-secondary').addEventListener('click', closeWindow);
+            const closeBtn = document.querySelector('.btn-secondary');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', closeWindow);
+            }
         });
     </script>
 </body>

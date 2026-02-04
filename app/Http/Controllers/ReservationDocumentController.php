@@ -691,6 +691,25 @@ class ReservationDocumentController extends Controller
         }
 
         $items = $document->items()->whereIn('id', $selectedItems)->get();
+        
+        // Proses sources untuk setiap item
+        $items->each(function ($item) {
+            // Proses sources sama seperti di print.blade.php
+            if (isset($item->sources) && !empty($item->sources)) {
+                if (is_string($item->sources)) {
+                    $decoded = json_decode($item->sources, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        $item->processed_sources = $decoded;
+                    } elseif (!empty($item->sources)) {
+                        $item->processed_sources = array_map('trim', explode(',', $item->sources));
+                    }
+                } elseif (is_array($item->sources)) {
+                    $item->processed_sources = $item->sources;
+                }
+            } else {
+                $item->processed_sources = [];
+            }
+        });
 
         return view('documents.print-selected', compact('document', 'items'));
     }
